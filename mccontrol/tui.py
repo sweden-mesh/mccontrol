@@ -26,6 +26,21 @@ HEIGHT = 24
 EXIT_KEYS = (curses.KEY_F3, curses.KEY_F12, 27)
 
 
+def exit_key(win, key):
+    """Was that F3, F12 or Esc? When a terminal sends F3 as Esc O R and curses hands over
+    only the Esc, the rest would land in the next field; it is drained here."""
+    if key not in EXIT_KEYS:
+        return False
+    if key == 27:
+        win.nodelay(True)
+        try:
+            while win.getch() != -1:
+                pass
+        finally:
+            win.nodelay(False)
+    return True
+
+
 def cursor(visible):
     """Show or hide the cursor where the terminal allows it, and carry on where it does not."""
     try:
@@ -74,7 +89,7 @@ class Screen:
             self.win.move(y, min(x + len(buf), x + width - 1))
             self.win.refresh()
             key = self.win.getch()
-            if key in EXIT_KEYS:
+            if exit_key(self.win, key):
                 cursor(False)
                 return None
             if key in (curses.KEY_ENTER, 10, 13):
@@ -95,7 +110,7 @@ class Screen:
         self.win.refresh()
         while True:
             key = self.win.getch()
-            if key in EXIT_KEYS or key in (curses.KEY_ENTER, 10, 13):
+            if exit_key(self.win, key) or key in (curses.KEY_ENTER, 10, 13):
                 return key
 
 
@@ -193,7 +208,7 @@ class App:
             s.keys("F3=Exit   F5=Refresh   F12=Cancel")
             self.win.refresh()
             key = self.win.getch()
-            if key in EXIT_KEYS:
+            if exit_key(self.win, key):
                 return
             if key == curses.KEY_F5:
                 opts = {}
@@ -468,7 +483,7 @@ class App:
             s.keys("F3=Exit   F12=Cancel   PageUp/PageDown=Scroll")
             self.win.refresh()
             key = self.win.getch()
-            if key in EXIT_KEYS or key in (curses.KEY_ENTER, 10, 13):
+            if exit_key(self.win, key) or key in (curses.KEY_ENTER, 10, 13):
                 return
             if key == curses.KEY_NPAGE and top + 18 < len(lines):
                 top += 18
@@ -494,7 +509,7 @@ def run(store):
         print("mccontrol: the screens need a terminal; use the subcommands instead "
               "(mccontrol --help)", file=sys.stderr)
         return 2
-    os.environ.setdefault("ESCDELAY", "25")       # Esc answers at once instead of after a second
+    os.environ.setdefault("ESCDELAY", "150")      # long enough to read F3 as one key, short enough for Esc
     try:
         return curses.wrapper(_main)
     except curses.error as exc:
