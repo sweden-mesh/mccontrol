@@ -192,6 +192,15 @@ class App:
             self.send()
         elif action == "discover":
             self.discover()
+        elif action == "edit":
+            self.edit()
+        elif action == "regions":
+            d = self.cursor_device
+            if d:
+                self.list.tags = set()
+                self.send(initial="region", immediate=True)
+        elif action == "forget":
+            self.forget()
         elif action == "all":
             region = self.ask_region("Send to every node in which region?")
             if region:
@@ -217,7 +226,41 @@ class App:
             lines.append(f"{line['at'][:16]}  {line['command'][:28]:28} {out[:30]}")
         notice(self.screen, f"History: {d.get('name') or d['node']}", lines or ["Nothing sent yet."], self.draw)
 
-    def send(self, region=None, initial=""):
+    def edit(self):
+        """F4: name, region and notes of the cursor device."""
+        d = self.cursor_device
+        if not d:
+            return
+        name, region, notes = Field("Name", d.get("name") or "", width=30), Field("Region", d.get("region") or "", width=8), Field("Notes", d.get("notes") or "", width=40)
+        dialog = Dialog(f"Edit {d.get('name') or d['node']}", fields=[name, region, notes],
+                        body=[f"Node {d['node']}, added {d.get('added', '?')}"], width=64)
+        if dialog.run(self.screen, self.draw) is None:
+            return
+        try:
+            self.store.update_device(d["node"], name=name.value.strip(), region=region.value.strip().upper(),
+                                     notes=notes.value.strip())
+        except _store.StoreError as exc:
+            self.message.say(str(exc), error=True)
+            return
+        self.reload()
+        self.show_history(self.cursor_device)
+        self.message.say("Saved.")
+
+    def forget(self):
+        """F8: forget the cursor device, after a confirm. Its history file stays."""
+        d = self.cursor_device
+        if not d:
+            return
+        if not confirm(self.screen, "Forget device", [f"{d.get('name') or d['node']}  ({d['node']}, {d.get('region') or '?'})",
+                                                       "Nothing is sent to it; its history file stays."],
+                       "removes it from your list.", yes="Forget", redraw_under=self.draw):
+            return
+        self.store.remove_device(d["node"])
+        self.reload()
+        self.show_history(self.cursor_device)
+        self.message.say("Forgotten.")
+
+    def send(self, region=None, initial="", immediate=False):
         """F2: one dialog, then the signed publish, then the results in the right panel."""
         targets = [] if region else self.targets
         if not region and not targets:
@@ -242,6 +285,9 @@ class App:
                               "Up/Down recall earlier commands. A tree line with '|' cannot travel."],
                         buttons=[Button("Send", True, default=True), Button("Cancel", None)])
         while True:
+            if immediate:
+                command = initial
+                break
             if not dialog.run(self.screen, self.draw):
                 return
             command = field.value.strip()

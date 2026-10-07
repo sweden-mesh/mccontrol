@@ -142,3 +142,25 @@ def test_f5_again_adds_the_tagged_and_asks_for_a_name(tmp_path):
                       env={"MCCONTROL_FAKE_RESULTS": fake})
     assert "Name the device" in text
     assert {d["name"] for d in json.loads((home / "devices.json").read_text())} >= {"UGO"}
+
+
+def test_f4_edits_the_cursor_device(tmp_path):
+    # cursor on Far: rename it, Tab past region, Tab to notes, Enter saves
+    text, home = walk(tmp_path, [(b"\x08\x08\x08Near", 0.3), (F[4], 0.5), (b"\x08\x08\x08Near", 0.3), (b"\r", 0.8)])
+    names = {d["node"]: d["name"] for d in json.loads((home / "devices.json").read_text())}
+    assert names["FD700369"] == "Near"
+    assert "Saved." in text
+
+
+def test_f6_reads_the_regions_of_the_cursor_device(tmp_path):
+    fake = json.dumps({"FD700369": [0, "> * F\n se-jkp F"]})
+    text, home = walk(tmp_path, [(F[6], 1.5)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "Results: region" in text and "1 of 1 answered" in text
+    assert '"command": "region"' in (home / "history" / "FD700369.jsonl").read_text()
+
+
+def test_f8_forgets_after_a_confirm(tmp_path):
+    text, home = walk(tmp_path, [(F[8], 0.5), (b"\x1bOD", 0.3), (b"\r", 0.8)])
+    nodes = {d["node"] for d in json.loads((home / "devices.json").read_text())}
+    assert "FD700369" not in nodes and len(nodes) == 2
+    assert "Forgotten." in text
