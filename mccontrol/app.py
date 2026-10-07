@@ -30,8 +30,9 @@ class App:
         self.left.active = True
         self.list = ListView(self.left, header=1)
         self.view = ListView(self.right)
-        self.right_rows = []
-        self.right_mode = "history"          # what the right panel shows
+        self.right_rows = []                 # (line, full_text) pairs behind the right panel
+        self.right_mode = "history"          # "history" | "results" | "found" | "regions"
+        self.right_node = None               # whose history the panel shows
         self.menu = MenuBar([
             Menu("Devices", [MenuItem("Discover", "discover", "F5"), MenuItem("Edit", "edit", "F4"),
                              MenuItem("Forget", "forget", "F8"), MenuItem("Sort by name", "sort:name"),
@@ -59,6 +60,37 @@ class App:
                 if d["node"] == cursor_node:
                     self.list.cursor = i
         self.left.footer = directory.tag_footer(len(self.list.tags), len(self.devices))
+
+    def show_history(self, device):
+        """The right panel follows the cursor: the device's history, newest first."""
+        self.right_mode, self.right_node = "history", device["node"] if device else None
+        self.right.title = f"History: {(device.get('name') or device['node']) if device else '-'}"
+        rows = []
+        for line in reversed(self.store.history(device["node"], limit=200)) if device else []:
+            out = (line["reply"] or "OK") if line["code"] == 0 else (
+                f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
+            short = f"{line['at'][5:16]} {line['command'][:14]:14} {out}"
+            full = [f"{line['at']}  {line['command']}", f"topic {line['topic']}", "", out]
+            rows.append((short, full))
+        self.right_rows = rows
+        self.view.set_rows([r[0] for r in rows], keep=False)
+        if not rows:
+            self.view.set_rows(["(nothing sent yet)"], keep=False)
+            self.right_rows = [("", ["Nothing has been sent to this device yet."])]
+
+    def show_results(self, title, lines, details=None):
+        """After a send or a discovery: what came back, until the cursor moves."""
+        self.right_mode, self.right_node = "results", None
+        self.right.title = title
+        self.right_rows = [(line, (details or {}).get(line, [line])) for line in lines]
+        self.view.set_rows(lines, keep=False)
+
+    def follow_cursor(self):
+        d = self.cursor_device
+        if self.right_mode == "history" and (d or {}).get("node") != self.right_node:
+            self.show_history(d)
+        elif self.right_mode == "results" and (d or {}).get("node") != self.right_node:
+            pass
 
     @property
     def cursor_device(self):
@@ -90,6 +122,7 @@ class App:
 
     def run(self):
         self.reload()
+        self.show_history(self.cursor_device)
         while True:
             self.draw()
             key = self.screen.key()
@@ -108,8 +141,10 @@ class App:
                 self.do("help")
             elif key == curses.KEY_F2:
                 self.do("send")
-            elif key in (curses.KEY_F3,) or key in KEY_ENTER:
+            elif key == curses.KEY_F3 or (key in KEY_ENTER and self.left.active):
                 self.do("history")
+            elif key in KEY_ENTER and self.right.active:
+                self.open_line()
             elif key == curses.KEY_F4:
                 self.do("edit")
             elif key == curses.KEY_F5:
@@ -126,6 +161,9 @@ class App:
                 self.do("tag:" + chr(key))
             elif self.left.active and self.list.handle(key):
                 self.left.footer = directory.tag_footer(len(self.list.tags), len(self.devices))
+                if self.right_mode != "history":
+                    self.right_mode = "history"        # a moved cursor ends a result view
+                self.show_history(self.cursor_device)
             elif self.right.active and self.view.handle(key):
                 pass
 
@@ -140,8 +178,28 @@ class App:
             self.tag_region(action[4:] == "+")
         elif action == "help":
             self.help()
+        elif action == "history":
+            self.history_window()
         else:
             self.message.say(f"{action}: not built yet.", error=True)
+
+    def open_line(self):
+        """Enter on the right panel: the whole reply in a dialog."""
+        if not self.right_rows or self.view.cursor >= len(self.right_rows):
+            return
+        notice(self.screen, "Reply", self.right_rows[self.view.cursor][1], self.draw)
+
+    def history_window(self):
+        """F3: the cursor device's history as a window over the work."""
+        d = self.cursor_device
+        if not d:
+            return
+        lines = []
+        for line in reversed(self.store.history(d["node"], limit=200)):
+            out = (line["reply"] or "OK") if line["code"] == 0 else (
+                f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
+            lines.append(f"{line['at'][:16]}  {line['command'][:28]:28} {out[:30]}")
+        notice(self.screen, f"History: {d.get('name') or d['node']}", lines or ["Nothing sent yet."], self.draw)
 
     def tag_region(self, on):
         region = self.ask_region("Tag every device in which region?" if on else "Untag which region?")

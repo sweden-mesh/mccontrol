@@ -76,3 +76,11 @@ def test_the_directory_shows_every_device_with_its_columns_and_tags(tmp_path):
 def test_f1_shows_the_keys_and_f10_quits(tmp_path):
     text, _ = walk(tmp_path, [(F[1], 0.5), (b"\r", 0.3), (F[10], 0.3)])
     assert "F5  discover a region" in text
+
+
+def test_the_right_panel_follows_the_cursor_and_opens_a_reply(tmp_path):
+    # the cursor starts on Far (sorted by name), moves down to Gisebo, whose history has one line
+    text, _ = walk(tmp_path, [(DOWN, 0.4), (b"\t", 0.3), (b"\r", 0.5)])
+    assert "History: Gisebo" in text
+    assert "region" in text and "> * F" in text
+    assert "topic t" in text                      # the reply dialog shows the topic line
