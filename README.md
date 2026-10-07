@@ -54,6 +54,7 @@ library. 80x24 is the minimum; wider terminals get wider panels.
 | Alt+1..9 | a command per key to the tagged or cursor device, no dialog: `region`, `ver`, `get name`, `get autoreply`, `get radio`, `get repeat` as shipped; Options > Shortcuts edits them |
 | Ins, Space, `*`, `+`, `-` | tag a row, invert, tag or untag a region |
 | Tab | switch panels |
+| mouse | optional: click a row, a key-bar label or a menu title |
 
 Commands that take something away (`region denyf *`, `region remove`, `set repeat off`, ...)
 say what they do and ask first; a command that transmits is refused as a broadcast, as the

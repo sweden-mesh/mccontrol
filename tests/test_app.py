@@ -229,3 +229,16 @@ def test_an_unset_shortcut_says_so_and_options_edits_the_slots(tmp_path):
 def test_f9_opens_the_menu(tmp_path):
     text, _ = walk(tmp_path, [(F[9], 0.5), (b"\x1b", 0.3)])
     assert "Sort by name" in text
+
+
+def _click(x, y):
+    """An SGR (1006) mouse report, press then release, as xterm sends it; x and y zero-based."""
+    return f"\x1b[<0;{x + 1};{y + 1}M\x1b[<0;{x + 1};{y + 1}m".encode()
+
+
+def test_a_click_moves_the_cursor_presses_a_key_bar_label_and_opens_a_menu(tmp_path):
+    # rows: Far(GOT) on row 3 (frame at 1, header at 2); a click on row 4 lands on Gisebo
+    text, _ = walk(tmp_path, [(_click(10, 4), 0.6), (_click(58, 23), 0.6), (b"\x1b", 0.4), (_click(3, 0), 0.6), (b"\x1b", 0.3)])
+    assert "History: Gisebo" in text                  # the right panel followed the click
+    assert "Forget device" in text                    # key 8 (Del) at column 58 asked
+    assert "Sort by name" in text                     # the Devices menu opened by a click on its title

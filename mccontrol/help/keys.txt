@@ -14,6 +14,8 @@ Keys on the main screen
   Ins Space tag the row and move down;  * invert;  + - tag or untag a region
   Tab       switch panels;  Enter  open;  Esc  close a dialog or menu
   Ctrl+L    redraw the screen
+  Mouse     where the terminal has one: a row takes the cursor, a key-bar
+            label presses it, a menu title opens it. Never needed.
 
 In a dialog: Tab and Shift+Tab move between fields and buttons, Enter
 presses the highlighted default button from anywhere, Esc cancels. See

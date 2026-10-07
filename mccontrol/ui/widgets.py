@@ -84,6 +84,17 @@ class ListView:
             for i in range(h):
                 screen.put(y + i, x + w, "▓" if y + i == thumb else "░", c.desktop)
 
+    def click(self, y, x):
+        """A click on a row moves the cursor there; True when the point was a row."""
+        ay, ax, w, h = self.area
+        if not (ay <= y < ay + h and ax <= x < ax + w):
+            return False
+        idx = self.top + (y - ay)
+        if idx >= len(self.rows):
+            return False
+        self.cursor = idx
+        return True
+
     def handle(self, key):
         """Move or tag; returns True when the key was consumed."""
         n = len(self.rows)
@@ -133,6 +144,14 @@ class KeyBar:
             x = i * cell
             screen.put(y, x, f"{i + 1:>2}", screen.colors.key_number)
             screen.put(y, x + 2, label.ljust(cell - 2)[: cell - 2], screen.colors.bar)
+
+
+    @staticmethod
+    def hit(x, width):
+        """Which key (1..10) a click at column x on the bar means."""
+        cell = max(6, width // 10)
+        n = x // cell + 1
+        return n if 1 <= n <= 10 else None
 
 
 class Message:

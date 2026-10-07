@@ -61,9 +61,19 @@ class MenuBar:
             return True
         return key < 0 and any(m.hotkey == chr(-key).lower() for m in self.menus)
 
-    def run(self, screen, key, redraw_under):
-        """Open on `key`, interact until Enter or Esc; returns the chosen action or None."""
-        if key == curses.KEY_F10:
+    def hit(self, x):
+        """Which menu a click at column x on row 0 opens, or None."""
+        for i, (start, m) in enumerate(zip(getattr(self, "positions", []), self.menus)):
+            if start <= x < start + len(m.title) + 2:
+                return i
+        return None
+
+    def run(self, screen, key, redraw_under, index=None):
+        """Open on `key` (or the menu at `index`), interact until Enter or Esc; returns the
+        chosen action or None."""
+        if index is not None:
+            self.open = index
+        elif key == curses.KEY_F10:
             self.open = 0
         else:
             self.open = next(i for i, m in enumerate(self.menus) if m.hotkey == chr(-key).lower())
@@ -87,6 +97,17 @@ class MenuBar:
                     self.item = (self.item - 1) % len(items)
                 elif k in KEY_ENTER:
                     return items[self.item].action
+                elif k == curses.KEY_MOUSE and screen.mouse:
+                    my, mx = screen.mouse
+                    if my == 0:
+                        i = self.hit(mx)
+                        if i is None:
+                            return None
+                        self.open, self.item = i, 0
+                    elif 2 <= my < 2 + len(items) and self.positions[self.open] <= mx:
+                        return items[my - 2].action
+                    else:
+                        return None
                 elif k < 0 and any(m.hotkey == chr(-k).lower() for m in self.menus):
                     self.open = next(i for i, m in enumerate(self.menus) if m.hotkey == chr(-k).lower())
                     self.item = 0

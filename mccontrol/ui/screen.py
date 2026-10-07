@@ -112,6 +112,13 @@ class Screen:
             win.bkgd(" ", self.colors.desktop)
         except curses.error:
             pass
+        # The mouse where the terminal offers one; nothing needs it. A click arrives as
+        # KEY_MOUSE from key(), with its position in `self.mouse`.
+        self.mouse = None
+        try:
+            curses.mousemask(curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)
+        except (curses.error, AttributeError):
+            pass
 
     # -- geometry ----------------------------------------------------------------------
 
@@ -184,6 +191,15 @@ class Screen:
         """One key. An Esc that a terminal sends as the start of a function-key sequence the
         library did not recognise is drained, so its tail never lands in a field."""
         key = self.win.getch()
+        if key == curses.KEY_MOUSE:
+            try:
+                _id, x, y, _z, state = curses.getmouse()
+            except curses.error:
+                return self.key()
+            if state & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED):
+                self.mouse = (y, x)
+                return key
+            return self.key()                               # a release on its own: nothing
         if key != 27:
             return key
         self.win.nodelay(True)

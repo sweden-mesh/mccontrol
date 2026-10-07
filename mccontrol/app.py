@@ -201,6 +201,8 @@ class App:
                 self.right_mode = "history"
                 self.left.active, self.right.active = True, False
                 self.show_history(self.cursor_device)
+            elif key == curses.KEY_MOUSE:
+                self.click()
             elif key == ord("+") or key == ord("-"):
                 self.do("tag:" + chr(key))
             elif key < 0 and chr(-key) in "123456789":          # Alt+digit
@@ -212,6 +214,30 @@ class App:
                 self.show_history(self.cursor_device)
             elif self.right.active and self.view.handle(key):
                 pass
+
+    def click(self):
+        """A click: a menu title opens it, a key-bar label presses it, a row takes the cursor."""
+        if not self.screen.mouse:
+            return
+        y, x = self.screen.mouse
+        w, h = self.screen.size
+        if y == 0:
+            i = self.menu.hit(x)
+            if i is not None:
+                action = self.menu.run(self.screen, None, self.draw, index=i)
+                if action:
+                    self.do(action)
+        elif y == h - 1:
+            n = KeyBar.hit(x, w)
+            if n:
+                curses.ungetch(curses.KEY_F0 + n)
+        elif self.list.click(y, x):
+            self.left.active, self.right.active = True, False
+            if self.right_mode != "history":
+                self.right_mode = "history"
+            self.show_history(self.cursor_device)
+        elif self.view.click(y, x):
+            self.right.active, self.left.active = True, False
 
     def do(self, action):
         if action == "quit":
