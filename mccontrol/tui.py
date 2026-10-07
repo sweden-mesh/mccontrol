@@ -285,9 +285,9 @@ class App:
         cursor_row, opts, top = 0, {}, 0
         while True:
             s.frame()
-            s.put(2, 1, f"{len(found)} node(s) in {region} answered a command signed with your key. "
-                        f"Type 1 on a row to remember it, Enter.")
-            s.put(3, 3, "Only a node that verified your signature answers; silence says nothing.")
+            s.put(2, 1, f"{len(found)} node(s) in {region} answered a command signed with your key.")
+            s.put(3, 3, "F6=Add this one   F7=Add all   or type 1 on rows and press Enter. "
+                        "Silence says nothing.")
             s.put(5, 1, "Opt  Node      Region  Answer")
             page = found[top:top + 14]
             for i, e in enumerate(page):
@@ -298,11 +298,20 @@ class App:
             if not found:
                 s.put(7, 6, "(no answer: no node there holds your key, or its control plane is off)")
             s.put(21, 70, "More..." if top + 14 < len(found) else "Bottom")
-            s.keys("F3=Exit   F12=Cancel   PageUp/PageDown=Scroll")
+            s.keys("F3=Exit   F6=Add one   F7=Add all   F12=Cancel   PageUp/PageDown=Scroll")
             self.win.refresh()
             key = self.win.getch()
             if exit_key(self.win, key):
                 return
+            if key == curses.KEY_F6 and found:
+                added = self.remember(found, [cursor_row])
+                s.message = f"{found[cursor_row]['node']} remembered." if added else \
+                            f"{found[cursor_row]['node']} is already {found[cursor_row]['known_as']}."
+                continue
+            if key == curses.KEY_F7 and found:
+                added = self.remember(found, range(len(found)))
+                s.message = f"{added} device(s) remembered; {len(found) - added} already known."
+                continue
             if key == curses.KEY_DOWN and cursor_row < len(found) - 1:
                 cursor_row += 1
                 if cursor_row >= top + 14:
@@ -322,14 +331,19 @@ class App:
             elif key in (curses.KEY_BACKSPACE, 127, 8, 32):
                 opts.pop(cursor_row, None)
             elif key in (curses.KEY_ENTER, 10, 13):
-                added = 0
-                for i in sorted(opts):
-                    if not found[i]["known_as"]:
-                        entry = actions.adopt(self.store, found[i])
-                        found[i]["known_as"] = entry["name"]
-                        added += 1
+                added = self.remember(found, sorted(opts))
                 opts = {}
                 s.message = f"{added} device(s) remembered." if added else ""
+
+    def remember(self, found, rows):
+        """Add the discovered rows not already known; returns how many were added."""
+        added = 0
+        for i in rows:
+            if not found[i]["known_as"]:
+                entry = actions.adopt(self.store, found[i])
+                found[i]["known_as"] = entry["name"]
+                added += 1
+        return added
 
     def add_device_screen(self):
         s = Screen(self.win, "Add Device")

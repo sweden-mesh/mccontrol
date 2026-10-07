@@ -50,8 +50,9 @@ Python 3.10 or newer; depends on `pycryptodome` (Ed25519) and `paho-mqtt`. The i
   repeaters in. **F6 discovers them**: one harmless read (`get autoreply`) is signed with your
   key and broadcast to a region on the control broker, and every node that answers is listed.
   Only a node that verified your signature publishes a result, so an answer of any kind --
-  even a refusal -- is proof the node is yours; a node with another key says nothing. `1` on a
-  row remembers it. The command line does the same with `mccontrol discover <region>` and
+  even a refusal -- is proof the node is yours; a node with another key says nothing. **F6**
+  remembers the node under the cursor, **F7** remembers them all, or type `1` on rows and
+  press Enter. The command line does the same with `mccontrol discover <region>` and
   `--add`.
 - **Sending.** A command is signed for exactly one topic -- one node, or `all` for every node
   in one region -- and published; the tool waits for the node's reply on its result topic and
