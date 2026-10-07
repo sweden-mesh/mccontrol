@@ -154,3 +154,35 @@ def test_discover_lists_status_publishers_and_marks_the_ones_you_have(store, mon
     entry = actions.adopt(store, found[1])
     assert entry["name"] == "SE-JKG-UGORptr" and entry["node"] == "B" * 64
     assert actions.adopt(store, dict(found[1], node="C" * 64))["name"] == "SE-JKG-UGORptr-2"
+
+
+def test_the_connection_test_reports_each_step_and_stops_at_the_first_failure(monkeypatch):
+    from mccontrol import transport
+
+    class _Echo(_FakeClient):
+        def subscribe(self, topic, qos=0):
+            self._topic = topic
+        def publish(self, topic, payload, qos=0):
+            import types
+            self.on_message(self, None, types.SimpleNamespace(topic=topic, payload=payload.encode()))
+            return types.SimpleNamespace(wait_for_publish=lambda timeout=0: None)
+
+    steps = transport.test_connection({"broker": "b", "port": 1, "username": "u", "password": "p",
+                                       "region": "JKG"}, client_factory=_Echo, timeout=0.2)
+    assert [(s, ok) for s, ok, _d in steps] == [("connect and sign in", True),
+                                                ("subscribe to a result topic", True),
+                                                ("publish", True),
+                                                ("receive what we published", True)]
+    assert "JKG/mccontrol-test/res" in steps[1][2]
+
+    class _Refuse(_FakeClient):
+        def loop_start(self):
+            class _RC:
+                is_failure = True
+                def __str__(self):
+                    return "Not authorized"
+            self.on_connect(self, None, None, _RC())
+
+    steps = transport.test_connection({"broker": "b", "port": 1, "username": "u", "password": "p"},
+                                      client_factory=_Refuse, timeout=0.2)
+    assert steps == [("connect and sign in", False, "b refused the connection: Not authorized")]

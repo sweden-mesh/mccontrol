@@ -133,3 +133,43 @@ def discover(config, seconds=5.0, client_factory=None):
         client.loop_stop()
         client.disconnect()
     return sorted(found.values(), key=lambda d: (d["name"].lower(), d["node"]))
+
+
+def test_connection(config, client_factory=None, timeout=10.0):
+    """Can we reach the control broker, sign in, subscribe to a result topic and publish?
+
+    Returns a list of `(step, ok, detail)` in the order tried, stopping at the first failure.
+    The publish goes to a test topic under the region, not to any node's command topic, so
+    nothing a repeater listens on is touched.
+    """
+    steps = []
+    client = (client_factory or _client)(config)
+    try:
+        _connect(client, config, timeout=timeout)
+    except BrokerError as exc:
+        steps.append(("connect and sign in", False, str(exc)))
+        return steps
+    steps.append(("connect and sign in", True,
+                  f"{config['broker']}:{config['port']} as {config.get('username') or '(no username)'}"))
+    region = (config.get("region") or "TEST").upper()
+    try:
+        topic = f"{envelope.TOPIC_PREFIX}{region}/mccontrol-test/res"
+        got = threading.Event()
+        client.on_message = lambda _c, _u, msg: got.set() if msg.topic == topic else None
+        info = client.subscribe(topic, qos=1)
+        steps.append(("subscribe to a result topic", True, topic))
+        info = client.publish(topic, "mccontrol connection test", qos=1)
+        info.wait_for_publish(timeout=timeout)
+        steps.append(("publish", True, "accepted by the broker"))
+        if got.wait(timeout):
+            steps.append(("receive what we published", True, "the broker relays this topic"))
+        else:
+            steps.append(("receive what we published", False,
+                          f"nothing came back in {timeout:.0f} s: the broker accepts publishes "
+                          f"but does not deliver them to subscribers, or drops this topic"))
+    except Exception as exc:        # paho raises several types; the step name says where
+        steps.append(("subscribe or publish", False, str(exc)))
+    finally:
+        client.loop_stop()
+        client.disconnect()
+    return steps

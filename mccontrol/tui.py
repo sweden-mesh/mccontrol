@@ -140,7 +140,7 @@ class App:
             items = [("1", "Work with devices"), ("2", "Send a command to a device"),
                      ("3", "Send a command to all devices"), ("4", "Work with signing key"),
                      ("5", "Change configuration"), ("6", "Display command history"),
-                     ("90", "Sign off")]
+                     ("7", "Test the control broker connection"), ("90", "Sign off")]
             for i, (n, label) in enumerate(items):
                 s.put(4 + i, 6, f"{n:>2}. {label}")
             cfg = self.store.config()
@@ -168,6 +168,8 @@ class App:
                 self.config_screen()
             elif choice == "6":
                 self.history_screen(None)
+            elif choice == "7":
+                self.test_screen()
             elif choice.startswith("send ") or choice.startswith("region"):
                 # The command line accepts what the shell does: "send <device> <command>".
                 words = choice.split()
@@ -457,6 +459,23 @@ class App:
                 f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
             rows.append(f"{line['at'][:16]}  {line['command'][:30]:30}  {out[:28]}")
         self.show_lines(s.title, rows or ["(nothing sent yet)"])
+
+    def test_screen(self):
+        s = Screen(self.win, "Test Control Broker Connection")
+        cfg = self.store.config()
+        s.frame()
+        s.put(2, 1, f"Trying {cfg.get('broker')}:{cfg.get('port')} as {cfg.get('username') or '(no username)'}...")
+        self.win.refresh()
+        steps = transport.test_connection(cfg)
+        lines = [f"{'ok  ' if ok else 'FAIL'}  {step:30} {detail}" for step, ok, detail in steps]
+        lines.append(f"{'ok  ' if self.store.has_key() else 'FAIL'}  {'signing key':30} "
+                     f"{'present' if self.store.has_key() else 'none: select 4 on the main menu'}")
+        lines.append(f"{'ok  ' if cfg.get('region') else 'FAIL'}  {'region':30} "
+                     f"{cfg.get('region') or 'not set: select 5 on the main menu'}")
+        lines.append("")
+        lines.append("A node that stays silent after this passes has a different key, or a different")
+        lines.append("broker on its command slot, or the control plane switched off.")
+        self.show_lines(s.title, lines)
 
     def keys_screen(self):
         s = Screen(self.win, "Work with Signing Key")

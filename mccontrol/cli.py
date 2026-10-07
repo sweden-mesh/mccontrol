@@ -10,6 +10,7 @@
     mccontrol regions <device>
     mccontrol history <device>
     mccontrol discover [--add]     the nodes publishing a status in your region
+    mccontrol test                 connect, sign in, subscribe and publish on the control broker
 """
 
 import argparse
@@ -44,6 +45,7 @@ def build_parser():
     s.add_argument("--yes", action="store_true", help="do not ask about a command that takes something away")
     g = sub.add_parser("regions", help="read a device's region map")
     g.add_argument("device")
+    sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
     d = sub.add_parser("discover", help="list the nodes publishing a status in your region")
     d.add_argument("--add", action="store_true", help="remember every node not yet in your list")
     d.add_argument("--seconds", type=float, default=5.0)
@@ -143,6 +145,19 @@ def _regions(store, args):
     return _send(store, args, command="region")
 
 
+def _test(store, _args):
+    steps = transport.test_connection(store.config())
+    for step, ok, detail in steps:
+        print(f"{'ok  ' if ok else 'FAIL'} {step:28} {detail}")
+    if store.has_key():
+        print(f"ok   signing key                  public {store.public_key()[:16]}...")
+    else:
+        print("FAIL signing key                  none: run 'mccontrol keygen'")
+    if not store.config().get("region"):
+        print("FAIL region                       not set: 'mccontrol config --region <IATA>'")
+    return 0 if all(ok for _s, ok, _d in steps) else 1
+
+
 def _discover(store, args):
     found = actions.discover(store, seconds=args.seconds)
     if not found:
@@ -167,7 +182,7 @@ def _history(store, args):
 
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
             "remove": _remove, "send": _send, "regions": _regions, "history": _history,
-            "discover": _discover}
+            "discover": _discover, "test": _test}
 
 if __name__ == "__main__":
     sys.exit(main())

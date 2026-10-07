@@ -55,6 +55,12 @@ Python 3.10 or newer; depends on `pycryptodome` (Ed25519) and `paho-mqtt`. The i
   firmware refuses it.
 - **History.** Every command sent to a device and what came back, kept per device.
 
+**Test the connection first.** Menu 7, or `mccontrol test`, connects to the control broker with
+the configured username and password, subscribes to a test result topic under your region,
+publishes to it and checks the broker delivers it back -- each step reported, the first failure
+named (`Not authorized` is the broker rejecting the username or password). Nothing a repeater
+listens on is touched.
+
 The command line does the same without the screens: `mccontrol send loutest region put se-jkp '*'`,
 `mccontrol send all region allowf se-jkp --all`, `mccontrol regions loutest`,
 `mccontrol history loutest`, `--dry-run` to sign and print without sending.
