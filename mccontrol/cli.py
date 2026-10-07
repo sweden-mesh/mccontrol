@@ -1,6 +1,6 @@
 """mccontrol: the command line, and the door to the screens.
 
-    mccontrol                      the green screen
+    mccontrol                      the screens
     mccontrol keygen               make a signing key and print what to provision
     mccontrol key                  print the public key
     mccontrol config [--broker host] [--username u] [--password p]
@@ -15,7 +15,6 @@
 """
 
 import argparse
-import os
 import sys
 
 from . import actions, envelope, store as _store, transport
@@ -66,9 +65,6 @@ def main(argv=None):
     store = _store.Store()
     try:
         if args.command is None:
-            if os.environ.get("MCCONTROL_OLD_UI"):
-                from . import tui
-                return tui.run(store)
             from . import app
             return app.run(store)
         return COMMANDS[args.command](store, args)
