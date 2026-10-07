@@ -30,12 +30,14 @@ def walk(tmp_path, keys, seconds=3.0, env=None, cols=80, rows=24):
     home = _home(tmp_path)
     pid, fd = pty.fork()
     if pid == 0:
+        # the size is set in the child, before anything reads it: setting it from the parent
+        # after the fork races the application's own start-up
+        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         os.environ["TERM"] = "xterm"
         os.environ["MCCONTROL_HOME"] = str(home)
         os.environ.update(env or {})
         sys.path.insert(0, os.getcwd())
         os.execvp(sys.executable, [sys.executable, "-c", "import sys; sys.path.insert(0, %r); from mccontrol import cli; sys.exit(cli.main([]))" % os.getcwd()])
-    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
     time.sleep(0.8)
     for k, delay in keys:
         os.write(fd, k)
@@ -180,3 +182,4 @@ def test_setup_saves_the_control_broker(tmp_path):
     cfg = json.loads((home / "config.json").read_text())
     assert cfg["broker"] == "mqtt.example" and cfg["username"] == "mcoar" and cfg["password"] == "pw"
     assert "Saved." in text
+
