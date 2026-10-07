@@ -55,9 +55,11 @@ def _fake(topic, command, counter, nodes):
         return None
     scripted = json.loads(spec)
     answers = {}
+    nodes = list(nodes) or [k.split("|")[0] for k in scripted]      # a broadcast: everyone scripted
     for node in nodes:
-        if node in scripted:
-            code, reply = scripted[node]
+        hit = scripted.get(f"{node}|{command}", scripted.get(node))
+        if hit is not None:
+            code, reply = hit
             answers[node] = envelope.Result(node, counter, code, command, reply)
     return answers
 
@@ -124,6 +126,10 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
     topic = envelope.command_topic(region)
     payload = envelope.build(seed_hex, topic, counter, DISCOVERY_COMMAND,
                              ttl_secs=config.get("ttl_secs", envelope.DEFAULT_TTL_SECS))
+    faked = _fake(topic, DISCOVERY_COMMAND, counter, ())
+    if faked is not None:
+        return [{"node": n, "region": region.upper(), "code": r.code, "reply": r.reply}
+                for n, r in sorted(faked.items())]
     found = {}
     lock = threading.Lock()
 

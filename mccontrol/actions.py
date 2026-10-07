@@ -83,6 +83,21 @@ def discover(store, region, wait_secs=None):
         entry["known_as"] = known.get(entry["node"])
         entry["outcome"] = outcome_line(envelope.Result(entry["node"], 0, entry["code"],
                                                         transport.DISCOVERY_COMMAND, entry["reply"]))
+        entry["name"] = ""
+    if found:
+        # A second read for the names, which only firmware that admits `get name` answers;
+        # the rest stay unnamed and are named by hand.
+        try:
+            _p, names = transport.send(dict(config, region=region.upper()), store.seed(),
+                                       envelope.command_topic(region), "get name",
+                                       nodes_to_hear=[e["node"] for e in found],
+                                       wait_secs=min(10, wait_secs or config.get("wait_secs", 20)))
+        except transport.BrokerError:
+            names = {}
+        for entry in found:
+            r = names.get(entry["node"])
+            if r is not None and r.ok and r.reply:
+                entry["name"] = r.reply.lstrip("> ").strip()[:40]
     return found
 
 

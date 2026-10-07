@@ -30,6 +30,7 @@ class App:
         self.left.active = True
         self.list = ListView(self.left, header=1)
         self.view = ListView(self.right)
+        self.found = []                      # the last discovery's entries
         self.right_rows = []                 # (line, full_text) pairs behind the right panel
         self.right_mode = "history"          # "history" | "results" | "found" | "regions"
         self.right_node = None               # whose history the panel shows
@@ -152,11 +153,18 @@ class App:
             elif key == curses.KEY_F6:
                 self.do("regions")
             elif key == curses.KEY_F7:
-                self.do("all")
+                if self.right_mode == "found":
+                    self.adopt_found(range(len(self.found)))
+                else:
+                    self.do("all")
             elif key == curses.KEY_F8:
                 self.do("forget")
             elif key == 9:
                 self.left.active, self.right.active = self.right.active, self.left.active
+            elif key == 27 and self.right_mode == "found":
+                self.right_mode = "history"
+                self.left.active, self.right.active = True, False
+                self.show_history(self.cursor_device)
             elif key == ord("+") or key == ord("-"):
                 self.do("tag:" + chr(key))
             elif self.left.active and self.list.handle(key):
@@ -182,6 +190,8 @@ class App:
             self.history_window()
         elif action == "send":
             self.send()
+        elif action == "discover":
+            self.discover()
         elif action == "all":
             region = self.ask_region("Send to every node in which region?")
             if region:
@@ -262,6 +272,61 @@ class App:
         self.reload()
         self.show_results(f"Results: {command[:30]}", lines)
         self.message.say(f"{len(answers)} of {asked} answered.", error=(len(answers) < asked))
+
+    def discover(self):
+        """F5: ask a region which nodes accept the key; the found list lands in the right panel.
+        There, Ins tags, F5 adds the tagged (asking for a name where none came back), F7 adds all."""
+        if self.right_mode == "found":
+            self.adopt_found(self.view.selected)
+            return
+        region = self.ask_region("Find the nodes that accept your key in which region?")
+        if not region:
+            return
+        self.message.say(f"Asking every node in {region} with one signed read...")
+        self.draw()
+        try:
+            found = actions.discover(self.store, region)
+        except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
+            self.message.say(str(exc), error=True)
+            return
+        self.found = found
+        lines = [self.found_line(e) for e in found]
+        self.show_results(f"Found in {region}: {len(found)}", lines or ["(no node answered)"])
+        self.right_mode = "found" if found else "results"
+        self.right.active, self.left.active = True, False
+        self.message.say(f"{len(found)} answered. Ins tags, F5 adds the tagged, F7 adds all, Esc returns."
+                         if found else "No node answered: none there holds your key, or its control plane is off.",
+                         error=not found)
+
+    @staticmethod
+    def found_line(e):
+        """node  name-or-reply  = known: fits the right panel at 80 columns."""
+        middle = e["name"] or e["outcome"]
+        tail = f" = {e['known_as']}" if e["known_as"] else ""
+        return f"{e['node']} {middle[:36 - len(tail)]:{36 - len(tail)}}{tail}"
+
+    def adopt_found(self, rows):
+        added = 0
+        for i in rows:
+            if i >= len(self.found) or self.found[i]["known_as"]:
+                continue
+            e = self.found[i]
+            name = e["name"]
+            if not name:
+                f = Field("Name", "", width=30)
+                d = Dialog("Name the device", fields=[f], body=[f"{e['node']} in {e['region']} ({e['outcome'][:30]})",
+                                                                "Leave empty to name it later."], width=56)
+                if d.run(self.screen, self.draw) is None:
+                    continue
+                name = f.value
+            entry = actions.adopt(self.store, e, name)
+            e["known_as"] = entry["name"] or entry["node"]
+            added += 1
+        self.reload()
+        lines = [self.found_line(e) for e in self.found]
+        self.view.set_rows(lines, keep=False)
+        self.right_rows = [(l, [l]) for l in lines]
+        self.message.say(f"{added} device(s) remembered.")
 
     def tag_region(self, on):
         region = self.ask_region("Tag every device in which region?" if on else "Untag which region?")

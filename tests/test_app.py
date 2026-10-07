@@ -120,3 +120,25 @@ def test_f7_sends_to_every_node_in_a_region_and_hears_that_regions_devices(tmp_p
     assert "2 of 2 answered" in text                 # Far is in GOT and is not asked
     assert '"note": "broadcast"' in (home / "history" / "4AC61A7F.jsonl").read_text()
     assert not (home / "history" / "FD700369.jsonl").exists()
+
+
+def test_f5_discovers_a_region_and_f7_remembers_everyone_with_names_where_the_fleet_gives_them(tmp_path):
+    fake = json.dumps({"AB6B9285": [0, "> on"], "AB6B9285|get name": [0, "> SE-JKG-UGORptr"],
+                       "4AC61A7F": [0, "> on"], "4AC61A7F|get name": [14, ""],
+                       "13B58595": [17, ""], "13B58595|get name": [14, ""]})
+    text, home = walk(tmp_path, [(DOWN, 0.3), (F[5], 0.5), (b"\r", 1.5), (F[7], 1.0)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "Found in JKG: 3" in text
+    assert "= Gisebo" in text                               # the known one is marked
+    assert "SE-JKG-UGORptr" in text
+    devices = json.loads((home / "devices.json").read_text())
+    names = {d["node"]: d["name"] for d in devices}
+    assert names["AB6B9285"] == "SE-JKG-UGORptr" and names["13B58595"] == "" and len(devices) == 5
+    assert "2 device(s) remembered" in text
+
+
+def test_f5_again_adds_the_tagged_and_asks_for_a_name(tmp_path):
+    fake = json.dumps({"AB6B9285": [0, "> on"], "AB6B9285|get name": [14, ""]})
+    text, home = walk(tmp_path, [(DOWN, 0.3), (F[5], 0.5), (b"\r", 1.5), (INS, 0.3), (F[5], 0.6), (b"UGO\r", 0.8)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "Name the device" in text
+    assert {d["name"] for d in json.loads((home / "devices.json").read_text())} >= {"UGO"}
