@@ -1,6 +1,7 @@
 """Walks of the second interface under a pseudo-terminal, against a store in a temp dir."""
 import json
 import os
+import pathlib
 import pty
 import re
 import select
@@ -263,3 +264,10 @@ def test_options_defines_a_set(tmp_path):
     assert "Saved reads." in text
     cfg = json.loads((home / "config.json").read_text())
     assert cfg["sets"]["reads"][0] == "ver"
+
+
+def test_s_shows_the_cursor_devices_statistics_from_beacon_and_says_when_there_are_none(tmp_path):
+    fake = str(pathlib.Path(__file__).parent / "data" / "beacon-fake.json")
+    text, _ = walk(tmp_path, [(DOWN, 0.3), (b"s", 1.0), (b"\x1bOA", 0.3), (b"s", 1.0)], env={"MCCONTROL_FAKE_BEACON": fake})
+    assert "Stats: Gisebo" in text and "sampled" in text and "4261 mV" in text and "dd hh:mm" in text
+    assert "Stats: Far" in text and "no statistics" in text

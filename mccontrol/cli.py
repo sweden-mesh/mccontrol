@@ -63,6 +63,10 @@ def build_parser():
     st = sub.add_parser("sets", help="list the command sets, define one, or remove one")
     st.add_argument("--set", nargs="+", metavar="X", help="NAME then the steps in order: --set add-scope 'region put {arg} *' ...")
     st.add_argument("--remove", metavar="NAME")
+    sts = sub.add_parser("stats", help="a device's statistics from Beacon: the latest status and the telemetry history")
+    sts.add_argument("device")
+    sts.add_argument("--range", default="24h", choices=("24h", "48h", "168h"))
+    sts.add_argument("--interval", default="6h", choices=("1h", "6h", "24h"))
     sc = sub.add_parser("shortcuts", help="list the Alt+1..9 shortcuts, or set one")
     sc.add_argument("--set", nargs=2, metavar=("N", "COMMAND"), help="put COMMAND on Alt+N ('' frees it)")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
@@ -206,6 +210,17 @@ def _sets(store, args):
     return 0
 
 
+def _stats(store, args):
+    from . import beacon
+    device = _device(store, args.device)
+    try:
+        print("\n".join(actions.statistics(store, device, args.range, args.interval)))
+    except beacon.BeaconError as exc:
+        print(f"no statistics: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _shortcuts(store, args):
     if args.set:
         n, command = args.set
@@ -268,7 +283,7 @@ def _history(store, args):
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
             "remove": _remove, "send": _send, "regions": _regions, "history": _history,
             "discover": _discover, "test": _test, "help": _help, "alt": _alt, "shortcuts": _shortcuts,
-            "run": _run, "sets": _sets}
+            "run": _run, "sets": _sets, "stats": _stats}
 
 if __name__ == "__main__":
     sys.exit(main())

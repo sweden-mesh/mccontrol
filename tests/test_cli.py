@@ -59,3 +59,20 @@ def test_command_sets_from_the_command_line(tmp_path, monkeypatch, capsys):
     assert cli.main(["sets", "--remove", "add-scope"]) == 0
     assert "add-scope" not in capsys.readouterr().out
     assert cli.main(["run", "nothing", "loutest"]) == 1
+
+
+def test_stats_from_the_command_line(tmp_path, monkeypatch, capsys):
+    import pathlib
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    monkeypatch.setenv("MCCONTROL_FAKE_BEACON", str(pathlib.Path(__file__).parent / "data" / "beacon-fake.json"))
+    assert cli.main(["add", "Gisebo", "4AC61A7F", "jkg", ""]) == 0
+    assert cli.main(["add", "Braneryd", "FD700369", "jkg", ""]) == 0
+    capsys.readouterr()
+    assert cli.main(["stats", "gisebo"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("sampled ") and "battery            4261 mV" in out and "last 24h at 6h:" in out
+    assert out.count("\n") >= 17
+    assert cli.main(["stats", "braneryd"]) == 1
+    assert "never published" in capsys.readouterr().err
+    assert cli.main(["config", "--beacon-url", "https://beacon.example/api/v1"]) == 0
+    assert "beacon.example" in capsys.readouterr().out

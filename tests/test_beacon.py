@@ -54,7 +54,7 @@ def test_telemetry_is_bucketed_and_the_bounds_are_checked(store):
     points = beacon.telemetry(store, store.device("gisebo"), "24h", "6h")
     assert len(points) == 5 and points[0]["batteryMv"] == 3982
     lines = beacon.telemetry_lines(points)
-    assert lines[0].startswith("time") and len(lines) == 6 and "3982" in lines[1]
+    assert lines[0].startswith("dd hh:mm") and len(lines) == 6 and "3982" in lines[1] and len(lines[1]) <= 38
     with pytest.raises(beacon.BeaconError, match="range"):
         beacon.telemetry(store, store.device("gisebo"), "1h", "6h")
 

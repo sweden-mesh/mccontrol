@@ -1,6 +1,6 @@
 """What the screens and the command line both do, so they cannot disagree."""
 
-from . import envelope, transport
+from . import beacon, envelope, transport
 
 # Commands that take something away from a repeater. Each is sent only after the person has
 # been told what it does; the node itself does not second-guess a signed command.
@@ -100,6 +100,18 @@ def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=Non
                          f"{len(steps) - i - 1} step(s) not sent")
             break
     return lines, stopped
+
+
+def statistics(store, device, range_="24h", interval="6h"):
+    """The lines to show for a device's statistics: the sample with its age, then the
+    telemetry buckets. Raises `beacon.BeaconError` with the reason when there are none."""
+    sample = beacon.stats(store, device)
+    lines = beacon.stat_lines(sample)
+    try:
+        points = beacon.telemetry(store, device, range_, interval)
+    except beacon.BeaconError as exc:
+        return lines + ["", f"no telemetry: {exc}"]
+    return lines + ["", f"last {range_} at {interval}:"] + beacon.telemetry_lines(points)
 
 
 def regions_asked(text, store):

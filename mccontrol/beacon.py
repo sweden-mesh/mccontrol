@@ -165,11 +165,12 @@ def stat_lines(sample):
 
 
 def telemetry_lines(points):
-    """One line per bucket: time, battery, noise floor, tx/rx airtime, receive errors."""
-    lines = [f"{'time':13} {'batt':>5} {'noise':>6} {'tx s':>6} {'rx s':>6} {'rxerr':>6}"]
+    """One line per bucket, 38 columns: day and time, battery, noise floor, tx/rx airtime,
+    receive errors."""
+    lines = [f"{'dd hh:mm':8} {'batt':>5} {'noise':>5} {'tx s':>5} {'rx s':>5} {'rxerr':>5}"]
     for p in points:
-        t = time.strftime("%m-%d %H:%M", time.localtime(int(p.get("t", 0)) / 1000))
+        t = time.strftime("%d %H:%M", time.localtime(int(p.get("t", 0)) / 1000))
         nf = p.get("noiseFloorDb")
-        lines.append(f"{t:13} {p.get('batteryMv', '-'):>5} {('%.0f' % nf) if nf is not None else '-':>6} "
-                     f"{p.get('airtimeTxSecs', '-'):>6} {p.get('airtimeRxSecs', '-'):>6} {p.get('receiveErrors', '-'):>6}")
+        lines.append(f"{t:8} {p.get('batteryMv', '-'):>5} {('%.0f' % nf) if nf is not None else '-':>5} "
+                     f"{p.get('airtimeTxSecs', '-'):>5} {p.get('airtimeRxSecs', '-'):>5} {p.get('receiveErrors', '-'):>5}")
     return lines

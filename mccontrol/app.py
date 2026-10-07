@@ -7,7 +7,7 @@ matters is in the store; the screen is redrawn from it after every key.
 
 import curses
 
-from . import actions, directory, envelope, helptext, store as _store, transport
+from . import actions, beacon, directory, envelope, helptext, store as _store, transport
 from .ui import (Button, Dialog, Field, HelpWindow, KeyBar, ListView, Menu, MenuBar, MenuItem,
                  Message, Panel, confirm, notice)
 from .ui.screen import KEY_ENTER, run as _run
@@ -42,6 +42,8 @@ class App:
                              MenuItem("Sort by region", "sort:region"), MenuItem("Sort by last sent", "sort:last sent"),
                              MenuItem("Tag all in region", "tag:+", "+"), MenuItem("Untag region", "tag:-", "-")]),
             self.send_menu(),
+            Menu("View", [MenuItem("Statistics", "stats:24h:6h", "s"), MenuItem("Last 48 hours", "stats:48h:6h"),
+                          MenuItem("Last 7 days", "stats:168h:24h")]),
             Menu("Keys", [MenuItem("Show public key", "keys")]),
             Menu("Options", [MenuItem("Broker", "setup"), MenuItem("Test the broker", "test"),
                              MenuItem("Shortcuts", "shortcuts"), MenuItem("Command sets", "sets")]),
@@ -203,6 +205,8 @@ class App:
                 self.show_history(self.cursor_device)
             elif key == curses.KEY_MOUSE:
                 self.click()
+            elif key == ord("s") and self.left.active:
+                self.do("stats:24h:6h")
             elif key == ord("+") or key == ord("-"):
                 self.do("tag:" + chr(key))
             elif key < 0 and chr(-key) in "123456789":          # Alt+digit
@@ -277,6 +281,9 @@ class App:
             self.shortcuts_dialog()
         elif action == "sets":
             self.sets_dialog()
+        elif action.startswith("stats:"):
+            _s, range_, interval = action.split(":")
+            self.statistics(range_, interval)
         elif action == "runset":
             self.run_set()
         elif action.startswith("alt:"):
@@ -345,13 +352,17 @@ class App:
         cfg = self.store.config()
         fields = [Field("Broker", cfg.get("broker", ""), width=40), Field("Port", str(cfg.get("port", 1883)), width=6),
                   Field("Username", cfg.get("username", ""), width=30), Field("Password", cfg.get("password", ""), width=30, secret=True),
-                  Field("Wait seconds", str(cfg.get("wait_secs", 20)), width=4)]
-        d = Dialog("Control broker", fields=fields, body=["The broker a node's mqtt.cmd.slot points at, and its credentials."], width=66)
+                  Field("Wait seconds", str(cfg.get("wait_secs", 20)), width=4),
+                  Field("Statistics URL", cfg.get("beacon_url", ""), width=44, hotkey="t")]
+        d = Dialog("Control broker", fields=fields, width=70,
+                   body=["The broker a node's mqtt.cmd.slot points at, and its credentials.",
+                         "Statistics come from a Beacon server, read-only, no credentials."])
         if d.run(self.screen, self.draw) is None:
             return
         try:
             self.store.save_config(broker=fields[0].value.strip(), port=int(fields[1].value), username=fields[2].value.strip(),
-                                   password=fields[3].value, wait_secs=int(fields[4].value))
+                                   password=fields[3].value, wait_secs=int(fields[4].value),
+                                   beacon_url=fields[5].value.strip())
             self.message.say("Saved.")
         except ValueError:
             self.message.say("Port and wait seconds must be numbers.", error=True)
@@ -469,6 +480,24 @@ class App:
         self.show_results(f"Set: {name.value.strip()[:28]}", lines)
         self.message.say("Every step answered ok." if stopped is None else f"Stopped at step {stopped + 1}; see the right panel.",
                          error=stopped is not None)
+
+    def statistics(self, range_="24h", interval="6h"):
+        """s, or View > Statistics: what Beacon holds for the cursor device, in the right panel."""
+        d = self.cursor_device
+        if not d:
+            self.message.say("No device under the cursor.", error=True)
+            return
+        self.message.say("Asking Beacon...")
+        self.draw()
+        name = d.get("name") or d["node"]
+        try:
+            lines = actions.statistics(self.store, d, range_, interval)
+        except beacon.BeaconError as exc:
+            self.show_results(f"Stats: {name[:28]}", [f"no statistics: {exc}"])
+            self.message.say(f"No statistics: {exc}", error=True)
+            return
+        self.show_results(f"Stats: {name[:28]}", lines)
+        self.message.say(lines[0] + ". Enter opens a line; the cursor returns to history.")
 
     def sets_dialog(self):
         """Options > Command sets: one set at a time, by name; empty steps are dropped."""

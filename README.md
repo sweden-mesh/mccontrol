@@ -54,6 +54,7 @@ library. 80x24 is the minimum; wider terminals get wider panels.
 | Alt+1..9 | a command per key to the tagged or cursor device, no dialog: `region`, `ver`, `get name`, `get autoreply`, `get radio`, `get repeat` as shipped; Options > Shortcuts edits them |
 | Ins, Space, `*`, `+`, `-` | tag a row, invert, tag or untag a region |
 | Tab | switch panels |
+| `s` | the cursor device's statistics from Beacon (battery, uptime, noise floor, airtime, packets, errors, with the sample's age, and 24 h of history); View menu for 48 h and 7 d |
 | mouse | optional: click a row, a key-bar label or a menu title |
 
 Commands that take something away (`region denyf *`, `region remove`, `set repeat off`, ...)
@@ -76,6 +77,9 @@ firmware refuses it.
 - **Command sets.** A named list of steps (`region put`, `region allowf`, `region save`, `region`
   is the shipped example) sent in order to the targets, stopping at the first refusal or silence;
   Send > Command set runs one, Options > Command sets defines one.
+- **Statistics.** What the fleet knows about a device, from a Beacon server (read-only HTTP, no
+  credentials): the node's status block with the sample's age, and its telemetry history. The
+  node's own counters are serial-only in the firmware, so nothing here goes over the control plane.
 - **Help.** Topics with cross-links, a command reference, and the same text on the command line:
   `mccontrol help commands`.
 
@@ -88,6 +92,7 @@ mccontrol send loutest region --dry-run
 mccontrol regions loutest
 mccontrol alt 2 loutest                  # shortcut 2 (ver); mccontrol shortcuts lists and --set changes them
 mccontrol run add-scope loutest se-jkp   # a command set, step by step, stopping at the first refusal; mccontrol sets lists them
+mccontrol stats loutest --range 48h      # from Beacon (beacon.meshat.se by default; mccontrol config --beacon-url for another)
 mccontrol history loutest
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```
