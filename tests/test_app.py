@@ -202,3 +202,8 @@ def test_the_command_line_prints_a_topic(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "region put" in out and "[cautions]" in out
     assert cli.main(["help", "nothing"]) == 1
+
+
+def test_f3_opens_the_history_window(tmp_path):
+    text, _ = walk(tmp_path, [(DOWN, 0.3), (F[3], 0.6)])
+    assert "History: Gisebo" in text and "region" in text
