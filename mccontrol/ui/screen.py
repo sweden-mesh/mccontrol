@@ -19,8 +19,22 @@ def is_enter(key):
 
 
 class Colors:
-    """The sixteen-colour scheme of the era, as curses attribute bundles. Monochrome is a
-    valid terminal: every attribute degrades to normal or reverse video."""
+    """The Turbo Pascal scheme, as curses attribute bundles: a black menu bar and key bar
+    with red hot letters, a blue work area, grey dialogs, green for the open menu's cursor.
+    Monochrome is a valid terminal: every attribute degrades to normal, bold or reverse."""
+
+    PAIRS = [
+        (1, curses.COLOR_WHITE, curses.COLOR_BLUE),     # desktop, panel body
+        (2, curses.COLOR_WHITE, curses.COLOR_BLACK),    # menu bar, key bar labels
+        (3, curses.COLOR_YELLOW, curses.COLOR_BLUE),    # tagged rows, active title
+        (4, curses.COLOR_BLACK, curses.COLOR_WHITE),    # dialog body, pull-down body
+        (5, curses.COLOR_WHITE, curses.COLOR_RED),      # errors, cautions
+        (6, curses.COLOR_WHITE, curses.COLOR_GREEN),    # default button, ok
+        (7, curses.COLOR_RED, curses.COLOR_BLACK),      # hot letters, key bar numbers
+        (8, curses.COLOR_YELLOW, curses.COLOR_BLACK),   # message line
+        (9, curses.COLOR_BLACK, curses.COLOR_CYAN),     # list cursor bar
+        (10, curses.COLOR_BLACK, curses.COLOR_GREEN),   # open menu title and item
+    ]
 
     def __init__(self):
         self.ok = False
@@ -28,17 +42,7 @@ class Colors:
             if curses.has_colors():
                 curses.start_color()
                 curses.use_default_colors()
-                pairs = [
-                    (1, curses.COLOR_WHITE, curses.COLOR_BLUE),     # desktop, panel body
-                    (2, curses.COLOR_BLACK, curses.COLOR_CYAN),     # menu bar, key labels, cursor bar
-                    (3, curses.COLOR_YELLOW, curses.COLOR_BLUE),    # tagged rows, active title
-                    (4, curses.COLOR_BLACK, curses.COLOR_WHITE),    # dialog body
-                    (5, curses.COLOR_WHITE, curses.COLOR_RED),      # errors, cautions
-                    (6, curses.COLOR_WHITE, curses.COLOR_GREEN),    # default button, ok
-                    (7, curses.COLOR_BLACK, curses.COLOR_WHITE),    # key bar numbers
-                    (8, curses.COLOR_YELLOW, curses.COLOR_BLACK),   # message line
-                ]
-                for n, fg, bg in pairs:
+                for n, fg, bg in self.PAIRS:
                     curses.init_pair(n, fg, bg)
                 self.ok = True
         except curses.error:
@@ -53,7 +57,11 @@ class Colors:
 
     @property
     def bar(self):
-        return self._pair(2, curses.A_REVERSE)
+        return self._pair(2, curses.A_NORMAL)
+
+    @property
+    def hot(self):
+        return self._pair(7, curses.A_BOLD) | curses.A_BOLD
 
     @property
     def tagged(self):
@@ -73,7 +81,7 @@ class Colors:
 
     @property
     def key_number(self):
-        return self._pair(7, curses.A_NORMAL)
+        return self.hot
 
     @property
     def message(self):
@@ -81,7 +89,11 @@ class Colors:
 
     @property
     def cursor(self):
-        return self._pair(2, curses.A_REVERSE)
+        return self._pair(9, curses.A_REVERSE)
+
+    @property
+    def menu_cursor(self):
+        return self._pair(10, curses.A_REVERSE)
 
 
 class Screen:

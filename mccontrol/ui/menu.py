@@ -29,8 +29,13 @@ class MenuBar:
         x = 2
         self.positions = []
         for i, m in enumerate(self.menus):
-            attr = c.cursor | curses.A_REVERSE if self.open == i else c.bar
-            screen.put(0, x, f" {m.title} ", attr)
+            if self.open == i:
+                screen.put(0, x, f" {m.title} ", c.menu_cursor)
+            else:
+                screen.put(0, x, f" {m.title} ", c.bar)
+                hot = m.title.lower().find(m.hotkey)
+                if hot >= 0:
+                    screen.put(0, x + 1 + hot, m.title[hot], c.hot)
             self.positions.append(x)
             x += len(m.title) + 3
         if self.open is not None:
@@ -46,7 +51,7 @@ class MenuBar:
         screen.fill(y, x, width, len(m.items) + 2, c.dialog)
         screen.frame(y, x, width, len(m.items) + 2, c.dialog, box=None)
         for j, it in enumerate(m.items):
-            attr = c.cursor | curses.A_REVERSE if j == self.item else c.dialog
+            attr = c.menu_cursor if j == self.item else c.dialog
             line = f" {it.label}".ljust(width - 2 - len(it.key_label) - 1) + it.key_label + " "
             screen.put(y + 1 + j, x + 1, line[: width - 2], attr)
 

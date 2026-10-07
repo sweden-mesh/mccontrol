@@ -16,6 +16,10 @@ see what came back, and keep a history per device. One screen, every verb on a f
  1Help  2Send  3Hist  4Edit  5Disco  6Regns  7All  8Del  9Menu  10Quit
 ```
 
+The colours are Turbo Pascal's: a black menu bar and key bar with the hot letters and key
+numbers in red, a blue work area, grey dialogs, green for the open menu. A terminal without
+colour gets bold and reverse video instead.
+
 The left panel is your device directory; the right panel follows the cursor (history), or
 shows a send's results, or what a discovery found. Ins tags rows, `*` inverts, `+`/`-` tag a
 region. Dialogs take the one or two values a verb needs; Esc always cancels.

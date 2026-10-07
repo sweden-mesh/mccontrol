@@ -240,3 +240,74 @@ curses.wrapper(main)
     import json
     assert json.loads(m.group(1)) == ["forget", "disco", "send"]
     assert "Discover" in text and "F5" in text
+
+
+# ---- the Turbo Pascal scheme ----------------------------------------------------------
+
+def test_the_scheme_is_black_and_red_at_the_edges_and_blue_in_the_middle():
+    from mccontrol.ui.screen import Colors
+    pairs = {n: (fg, bg) for n, fg, bg in Colors.PAIRS}
+    assert pairs[2] == (curses.COLOR_WHITE, curses.COLOR_BLACK)     # menu bar, key bar
+    assert pairs[7] == (curses.COLOR_RED, curses.COLOR_BLACK)       # hot letters, key numbers
+    assert pairs[10] == (curses.COLOR_BLACK, curses.COLOR_GREEN)    # open menu
+    assert pairs[1][1] == curses.COLOR_BLUE and pairs[4][1] == curses.COLOR_WHITE
+
+
+def test_monochrome_degrades_to_bold_and_reverse(monkeypatch):
+    from mccontrol.ui.screen import Colors
+    monkeypatch.setattr(curses, "has_colors", lambda: False)
+    c = Colors()
+    assert not c.ok
+    assert c.hot == curses.A_BOLD and c.key_number == curses.A_BOLD
+    assert c.bar == curses.A_NORMAL
+    assert c.menu_cursor == curses.A_REVERSE and c.cursor == curses.A_REVERSE
+
+
+def test_the_menu_bar_paints_the_hot_letter_red_and_the_key_bar_its_numbers():
+    """Raw escape codes kept: the hot letter of each title and the key numbers are drawn
+    with pair 7 (SGR 31 red foreground on xterm), the labels with pair 2 (white, 37)."""
+    script = """
+import sys; sys.path.insert(0, %r)
+import curses
+from mccontrol.ui import Screen, KeyBar
+from mccontrol.ui.menu import MenuBar, Menu, MenuItem
+def main(win):
+    s = Screen(win)
+    MenuBar([Menu("Devices", [MenuItem("Forget", "f", "F8")], hotkey="v")]).draw(s)
+    KeyBar(["Help", "Send"]).draw(s)
+    s.refresh(); win.getch()
+curses.wrapper(main)
+""" % os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    raw = _pty_run_raw(script)
+    red = rb"\x1b\[31m(\x1b\[[0-9;]*m)*"
+    assert re.search(red + rb"v", raw), raw                      # the hot letter of Devices
+    assert re.search(red + rb" 1", raw), raw                     # key number 1
+    assert re.search(rb"\x1b\[37m(\x1b\[[0-9;]*m)*Help", raw), raw   # the label, white
+
+
+def _pty_run_raw(script, cols=80, rows=24, seconds=2.0):
+    import fcntl
+    import signal
+    import struct
+    import termios
+
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.environ["TERM"] = "xterm"
+        os.execvp(sys.executable, [sys.executable, "-c", script])
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+    out = b""
+    end = time.time() + seconds
+    while time.time() < end:
+        r, _, _ = select.select([fd], [], [], 0.1)
+        if r:
+            try:
+                out += os.read(fd, 65536)
+            except OSError:
+                break
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    os.waitpid(pid, 0)
+    return out

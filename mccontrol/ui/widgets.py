@@ -127,7 +127,7 @@ class KeyBar:
     def draw(self, screen):
         w, h = screen.size
         y = h - 1
-        screen.put(y, 0, " " * w, screen.colors.key_number)
+        screen.put(y, 0, " " * w, screen.colors.bar)
         cell = max(6, w // 10)
         for i, label in enumerate(self.labels):
             x = i * cell
