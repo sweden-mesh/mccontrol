@@ -207,3 +207,25 @@ def test_the_command_line_prints_a_topic(tmp_path, capsys):
 def test_f3_opens_the_history_window(tmp_path):
     text, _ = walk(tmp_path, [(DOWN, 0.3), (F[3], 0.6)])
     assert "History: Gisebo" in text and "region" in text
+
+
+def test_alt_digit_sends_the_shortcut_without_a_dialog_and_the_send_menu_lists_it(tmp_path):
+    fake = json.dumps({"FD700369": [0, "MeshCore Observer 1.2"]})
+    text, home = walk(tmp_path, [(b"\x1b2", 1.5), (b"\x1bs", 0.6), (b"\x1b", 0.3)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "Results: ver" in text and "1 of 1 answered" in text
+    assert '"command": "ver"' in (home / "history" / "FD700369.jsonl").read_text()
+    assert "Alt+2" in text and "get name" in text            # the Send menu, opened with Alt+S
+
+
+def test_an_unset_shortcut_says_so_and_options_edits_the_slots(tmp_path):
+    text, home = walk(tmp_path, [(b"\x1b9", 0.5), (b"\x1bo", 0.5), (DOWN, 0.2), (DOWN, 0.2), (b"\r", 0.5),
+                                 (b"\t" * 8, 0.4), (b"get flood.max", 0.3), (b"\r", 0.6), (b"\x1b9", 0.5)])
+    assert "Alt+9 is not set" in text
+    cfg = json.loads((home / "config.json").read_text())
+    assert cfg["shortcuts"][8] == "get flood.max" and cfg["shortcuts"][0] == "region"
+    assert "Shortcuts saved." in text
+
+
+def test_f9_opens_the_menu(tmp_path):
+    text, _ = walk(tmp_path, [(F[9], 0.5), (b"\x1b", 0.3)])
+    assert "Sort by name" in text

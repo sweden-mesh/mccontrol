@@ -10,6 +10,7 @@ Keys on the main screen
   F7        send a command to every node in a region
   F8        forget the cursor device
   F9 / F10  the menu / quit
+  Alt+1..9  a command per key, no dialog: see [[shortcuts]]
   Ins Space tag the row and move down;  * invert;  + - tag or untag a region
   Tab       switch panels;  Enter  open;  Esc  close a dialog or menu
   Ctrl+L    redraw the screen

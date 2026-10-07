@@ -47,6 +47,14 @@ def build_parser():
     s.add_argument("--yes", action="store_true", help="do not ask about a command that takes something away")
     g = sub.add_parser("regions", help="read a device's region map")
     g.add_argument("device")
+    al = sub.add_parser("alt", help="send shortcut n (Alt+n in the interface) to a device")
+    al.add_argument("n", type=int)
+    al.add_argument("device", help="a device name, or a region code with --all")
+    al.add_argument("--all", action="store_true", help="every node in that region at once")
+    al.add_argument("--dry-run", action="store_true", help="sign and print, send nothing")
+    al.add_argument("--yes", action="store_true", help="do not ask about a command that takes something away")
+    sc = sub.add_parser("shortcuts", help="list the Alt+1..9 shortcuts, or set one")
+    sc.add_argument("--set", nargs=2, metavar=("N", "COMMAND"), help="put COMMAND on Alt+N ('' frees it)")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
     d = sub.add_parser("discover", help="find the nodes in a region that accept your key")
     d.add_argument("region", help="the IATA code, e.g. JKG")
@@ -145,6 +153,25 @@ def _send(store, args, command=None):
     return 0
 
 
+def _alt(store, args):
+    slots = store.shortcuts()
+    if not 1 <= args.n <= len(slots) or not slots[args.n - 1]:
+        raise _store.StoreError(f"shortcut {args.n} is not set; see 'mccontrol shortcuts'")
+    return _send(store, args, command=slots[args.n - 1])
+
+
+def _shortcuts(store, args):
+    if args.set:
+        n, command = args.set
+        try:
+            store.set_shortcut(int(n), command)
+        except ValueError:
+            raise _store.StoreError("N is 1 to 9") from None
+    for n, command in enumerate(store.shortcuts(), 1):
+        print(f"Alt+{n}  {command or '-'}")
+    return 0
+
+
 def _regions(store, args):
     args.all, args.dry_run, args.yes = False, False, True
     return _send(store, args, command="region")
@@ -194,7 +221,7 @@ def _history(store, args):
 
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
             "remove": _remove, "send": _send, "regions": _regions, "history": _history,
-            "discover": _discover, "test": _test, "help": _help}
+            "discover": _discover, "test": _test, "help": _help, "alt": _alt, "shortcuts": _shortcuts}
 
 if __name__ == "__main__":
     sys.exit(main())

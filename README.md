@@ -51,6 +51,7 @@ library. 80x24 is the minimum; wider terminals get wider panels.
 | F7 | send a command to every node in a region |
 | F8 | forget the cursor device |
 | F9 / F10 | the menu / quit |
+| Alt+1..9 | a command per key to the tagged or cursor device, no dialog: `region`, `ver`, `get name`, `get autoreply`, `get radio`, `get repeat` as shipped; Options > Shortcuts edits them |
 | Ins, Space, `*`, `+`, `-` | tag a row, invert, tag or untag a region |
 | Tab | switch panels |
 
@@ -81,6 +82,7 @@ mccontrol send loutest region put se-jkp '*'
 mccontrol send JKG region allowf se-jkp --all
 mccontrol send loutest region --dry-run
 mccontrol regions loutest
+mccontrol alt 2 loutest                  # shortcut 2 (ver); mccontrol shortcuts lists and --set changes them
 mccontrol history loutest
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```

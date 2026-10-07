@@ -41,16 +41,44 @@ class App:
                              MenuItem("Forget", "forget", "F8"), MenuItem("Sort by name", "sort:name"),
                              MenuItem("Sort by region", "sort:region"), MenuItem("Sort by last sent", "sort:last sent"),
                              MenuItem("Tag all in region", "tag:+", "+"), MenuItem("Untag region", "tag:-", "-")]),
-            Menu("Send", [MenuItem("To tagged or cursor", "send", "F2"), MenuItem("To all in a region", "all", "F7"),
-                          MenuItem("Read regions", "regions", "F6")]),
+            self.send_menu(),
             Menu("Keys", [MenuItem("Show public key", "keys")]),
-            Menu("Options", [MenuItem("Control broker", "setup"), MenuItem("Test the broker", "test")]),
+            Menu("Options", [MenuItem("Control broker", "setup"), MenuItem("Test the broker", "test"),
+                             MenuItem("Shortcuts", "shortcuts")]),
             Menu("Help", [MenuItem("Contents", "help:index", "Shift+F1"), MenuItem("This screen", "help", "F1"),
                           MenuItem("Keys", "help:keys"), MenuItem("Commands", "help:commands"),
                           MenuItem("Quit", "quit", "F10")]),
         ])
 
     # -- state -------------------------------------------------------------------------
+
+    def send_menu(self):
+        """The Send menu lists the shortcuts with their keys, as Turbo Vision showed them."""
+        items = [MenuItem("To tagged or cursor", "send", "F2"), MenuItem("To all in a region", "all", "F7"),
+                 MenuItem("Read regions", "regions", "F6")]
+        items += [MenuItem(cmd[:28], f"alt:{n}", f"Alt+{n}")
+                  for n, cmd in enumerate(self.store.shortcuts(), 1) if cmd]
+        return Menu("Send", items)
+
+    def shortcut(self, n):
+        """Alt+n: the slot's command to the tagged or cursor device, no dialog."""
+        command = self.store.shortcuts()[n - 1]
+        if not command:
+            self.message.say(f"Alt+{n} is not set; Options > Shortcuts.", error=True)
+            return
+        self.send(initial=command, immediate=True)
+
+    def shortcuts_dialog(self):
+        slots = self.store.shortcuts()
+        fields = [Field(f"Alt+{n}", slots[n - 1], width=40, hotkey=str(n)) for n in range(1, len(slots) + 1)]
+        d = Dialog("Shortcuts", fields=fields, width=60,
+                   body=["A command per key, sent to the tagged or cursor device without a dialog.",
+                         "Leave a slot empty to free it."])
+        if d.run(self.screen, self.draw) is None:
+            return
+        self.store.save_config(shortcuts=[f.value.strip() for f in fields])
+        self.menu.menus[1] = self.send_menu()
+        self.message.say("Shortcuts saved.")
 
     def reload(self):
         """Rows from the store, keeping the cursor on the same device and tags on the same nodes."""
@@ -137,6 +165,8 @@ class App:
             if key == 12 or key == curses.KEY_RESIZE:        # Ctrl+L, or the terminal changed size
                 self.screen.repaint()
                 continue
+            if key == curses.KEY_F9:                            # the key bar's "9Menu"
+                key = curses.KEY_F10
             if self.menu.wants(key):
                 action = self.menu.run(self.screen, key, self.draw)
                 if action:
@@ -173,6 +203,8 @@ class App:
                 self.show_history(self.cursor_device)
             elif key == ord("+") or key == ord("-"):
                 self.do("tag:" + chr(key))
+            elif key < 0 and chr(-key) in "123456789":          # Alt+digit
+                self.shortcut(int(chr(-key)))
             elif self.left.active and self.list.handle(key):
                 self.left.footer = directory.tag_footer(len(self.list.tags), len(self.devices))
                 if self.right_mode != "history":
@@ -215,6 +247,10 @@ class App:
             self.setup_dialog()
         elif action == "test":
             self.test_dialog()
+        elif action == "shortcuts":
+            self.shortcuts_dialog()
+        elif action.startswith("alt:"):
+            self.shortcut(int(action[4:]))
         elif action == "all":
             region = self.ask_region("Send to every node in which region?")
             if region:

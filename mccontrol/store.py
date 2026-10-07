@@ -30,6 +30,12 @@ DEFAULT_CONFIG = {
     "wait_secs": 20,
 }
 
+# Alt+1..9 on the main screen and `mccontrol alt <n>` on the command line: a command each,
+# sent without a dialog. Reads by default; a user may put anything there, and a caution
+# still asks.
+SHORTCUT_SLOTS = 9
+DEFAULT_SHORTCUTS = ["region", "ver", "get name", "get autoreply", "get radio", "get repeat"]
+
 
 class StoreError(Exception):
     pass
@@ -107,6 +113,20 @@ class Store:
         data.update({k: v for k, v in changes.items() if v is not None})
         self._write_json(self.root / "config.json", data)
         return data
+
+    def shortcuts(self):
+        """Nine slots, Alt+1 first; an empty string is an unused slot."""
+        slots = list(self.config().get("shortcuts", DEFAULT_SHORTCUTS))
+        slots = [str(s).strip() for s in slots[:SHORTCUT_SLOTS]]
+        return slots + [""] * (SHORTCUT_SLOTS - len(slots))
+
+    def set_shortcut(self, n, command):
+        if not 1 <= n <= SHORTCUT_SLOTS:
+            raise StoreError(f"a shortcut is Alt+1 to Alt+{SHORTCUT_SLOTS}")
+        slots = self.shortcuts()
+        slots[n - 1] = (command or "").strip()
+        self.save_config(shortcuts=slots)
+        return slots
 
     # -- devices -----------------------------------------------------------------------
 
