@@ -297,3 +297,24 @@ def test_sets_are_saved_removed_and_the_shipped_one_can_go(store):
     assert "add-scope" not in store.sets() and "rollout" in store.sets()
     with pytest.raises(_store.StoreError):
         store.remove_set("nothing")
+
+
+def test_refresh_names_names_the_unnamed_and_stores_every_version(store, monkeypatch):
+    store.create_key()
+    store.add_device("", NODE, "JKG")
+    store.add_device("UGO", "BBBBBBBB", "JKG")
+
+    def fake_send(cfg, seed, topic, cmd, nodes_to_hear=(), **k):
+        node = topic.split("/")[2]
+        if node == "BBBBBBBB" and cmd == "get name":
+            return "p", {node: envelope.parse_result(f"r1|1|14|{cmd}|", node)}      # older firmware
+        reply = "> SE-JKG-Gisebo-4AC6" if cmd == "get name" else "> esp32s3-v1.17.1-ar-10-observer-42f48ce9"
+        return "p", {node: envelope.parse_result(f"r1|1|0|{cmd}|{reply}", node)}
+
+    monkeypatch.setattr(actions.transport, "send", fake_send)
+    named, versioned, lines = actions.refresh_names(store, store.devices())
+    assert (named, versioned) == (1, 2)
+    assert store.device(NODE)["name"] == "SE-JKG-Gisebo-4AC6"
+    assert store.device("ugo")["name"] == "UGO"                        # a name you gave is kept
+    assert store.device("ugo")["ver"].endswith("42f48ce9")
+    assert any("get name: refused: not-allowed" in l for l in lines)

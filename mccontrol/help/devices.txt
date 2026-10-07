@@ -14,3 +14,13 @@ belongs to the device, not to the program: you may run repeaters in
 several.
 
 Back to [[index]].
+
+Names and versions from the fleet. "n" (Devices > Names and versions)
+sends "get name" and "ver" to the tagged devices, or the cursor one: a
+device you have not named takes the name the node answers with, a name
+you gave is kept, and every device stores its firmware version, shown
+short in the Ver column (1.17.1-ar-10) and sortable. Two signed reads
+per device, each one of the node's command slots this hour; more than
+three devices asks first. Firmware that admits neither read answers
+not-allowed and the device keeps what it had. "mccontrol refresh" does
+the same from the command line.

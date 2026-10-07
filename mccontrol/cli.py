@@ -69,6 +69,8 @@ def build_parser():
     sts.add_argument("--interval", default="6h", choices=("1h", "6h", "24h"))
     fl = sub.add_parser("fleet", help="battery and last-seen for every device, refreshed from Beacon")
     fl.add_argument("device", nargs="*", help="only these devices (default: all)")
+    rf = sub.add_parser("refresh", help="read name and version from devices over the control plane")
+    rf.add_argument("device", nargs="*", help="devices (default: all)")
     sc = sub.add_parser("shortcuts", help="list the Alt+1..9 shortcuts, or set one")
     sc.add_argument("--set", nargs=2, metavar=("N", "COMMAND"), help="put COMMAND on Alt+N ('' frees it)")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
@@ -234,6 +236,14 @@ def _fleet(store, args):
     return 0 if not failed else 1
 
 
+def _refresh(store, args):
+    devices = [_device(store, ref) for ref in args.device] if args.device else store.devices()
+    named, versioned, lines = actions.refresh_names(store, devices)
+    print("\n".join(lines))
+    print(f"{versioned} of {len(devices)} gave a version; {named} named")
+    return 0 if versioned == len(devices) else 1
+
+
 def _shortcuts(store, args):
     if args.set:
         n, command = args.set
@@ -296,7 +306,7 @@ def _history(store, args):
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
             "remove": _remove, "send": _send, "regions": _regions, "history": _history,
             "discover": _discover, "test": _test, "help": _help, "alt": _alt, "shortcuts": _shortcuts,
-            "run": _run, "sets": _sets, "stats": _stats, "fleet": _fleet}
+            "run": _run, "sets": _sets, "stats": _stats, "fleet": _fleet, "refresh": _refresh}
 
 if __name__ == "__main__":
     sys.exit(main())

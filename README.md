@@ -54,6 +54,7 @@ library. 80x24 is the minimum; wider terminals get wider panels.
 | Alt+1..9 | a command per key to the tagged or cursor device, no dialog: `region`, `ver`, `get name`, `get autoreply`, `get radio`, `get repeat` as shipped; Options > Shortcuts edits them |
 | Ins, Space, `*`, `+`, `-` | tag a row, invert, tag or untag a region |
 | Tab | switch panels |
+| `n` | read `get name` and `ver` from the tagged or cursor devices: an unnamed device takes the fleet's name, the Ver column fills (sortable) |
 | `r` | refresh the directory's Batt and Seen columns from Beacon for the tagged devices, or all; never automatic |
 | `s` | the cursor device's statistics from Beacon (battery, uptime, noise floor, airtime, packets, errors, with the sample's age, and 24 h of history); View menu for 48 h and 7 d |
 | mouse | optional: click a row, a key-bar label or a menu title |
@@ -95,6 +96,7 @@ mccontrol alt 2 loutest                  # shortcut 2 (ver); mccontrol shortcuts
 mccontrol run add-scope loutest se-jkp   # a command set, step by step, stopping at the first refusal; mccontrol sets lists them
 mccontrol stats loutest --range 48h      # from Beacon (beacon.meshat.se by default; mccontrol config --beacon-url for another)
 mccontrol fleet                          # the directory with Batt and Seen refreshed from Beacon
+mccontrol refresh [device...]            # get name and ver over the control plane; names the unnamed
 mccontrol history loutest
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```

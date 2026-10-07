@@ -13,6 +13,7 @@ Keys on the main screen
   Alt+1..9  a command per key, no dialog: see [[shortcuts]]
   s         the cursor device's statistics from Beacon: see [[stats]]
   r         refresh the Batt and Seen columns from Beacon, tagged or all
+  n         read name and version from the tagged or cursor devices: [[devices]]
   Ins Space tag the row and move down;  * invert;  + - tag or untag a region
   Tab       switch panels;  Enter  open;  Esc  close a dialog or menu
   Ctrl+L    redraw the screen

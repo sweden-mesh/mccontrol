@@ -1,4 +1,5 @@
 import datetime
+import re
 
 from mccontrol import directory
 
@@ -31,7 +32,7 @@ def test_a_row_lays_out_the_columns_and_fits_the_width():
     assert r.startswith("(unnamed)          4AC61A7F JKG  -")
     assert len(r) == 37
     r = directory.row(_devs()[2], 90, NOW)
-    assert "FD700369 GOT  1 d                 refused: not-allowed" in r     # blank Batt and Seen
+    assert re.search(r"FD700369 GOT  1 d\s{20,}refused: not-allowed", r)    # blank Batt, Seen and Ver between
     assert directory.header(38).startswith("Name")
 
 
@@ -54,3 +55,12 @@ def test_the_fleet_columns_show_battery_in_volts_and_the_age_of_the_last_status(
     assert "4AC61A7F JKG  -       4.26  12 m" in r
     assert directory.header(100).split()[4:6] == ["Batt", "Seen"]
     assert "   " in directory.row(_devs()[1], 100, NOW)         # no fleet data: blank, never a guess
+
+
+def test_the_version_column_is_short_and_sorts():
+    assert directory.version_short("esp32s3-v1.17.1-ar-10-observer-42f48ce9") == "1.17.1-ar-10"
+    assert directory.version_short("MeshCore v1.16.0.37-observer-9670035") == "1.16.0.37"
+    assert directory.version_short(None) == ""
+    devs = [dict(_devs()[0], ver="v1.17.1-ar-10"), dict(_devs()[1], ver="v1.16.0"), _devs()[2]]
+    assert [d.get("ver") for d in directory.sorted_devices(devs, "version")] == ["v1.16.0", "v1.17.1-ar-10", None]
+    assert "1.17.1-ar-10" in directory.row(devs[0], 100, NOW)

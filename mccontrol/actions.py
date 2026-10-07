@@ -2,7 +2,7 @@
 
 import datetime
 
-from . import beacon, envelope, transport
+from . import beacon, envelope, store as _store, transport
 from .store import _now as _store_now
 
 # Commands that take something away from a repeater. Each is sent only after the person has
@@ -135,6 +135,38 @@ def refresh_fleet(store, devices, now=None):
                                                "fetched": _store_now()})
         updated += 1
     return updated, failed
+
+
+def refresh_names(store, devices, wait_secs=None):
+    """`get name` and `ver` to each device, one signed read each: an unnamed device takes the
+    fleet's name, every device stores `ver`. Returns `(named, versioned, lines)`. A node whose
+    firmware admits neither answers not-allowed and keeps what it had."""
+    named = versioned = 0
+    lines = []
+    for d in devices:
+        label = d.get("name") or d["node"]
+        changes = {}
+        for command in ("get name", "ver"):
+            try:
+                _t, _p, answers, _l = send(store, command, device=d, wait_secs=wait_secs)
+            except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
+                lines.append(f"{label[:12]:12} {command}: {exc}")
+                continue
+            r = answers.get(d["node"])
+            if r is None or not r.ok or not r.reply:
+                lines.append(f"{label[:12]:12} {command}: {outcome_line(r)}")
+                continue
+            value = r.reply.lstrip("> ").strip()
+            if command == "ver":
+                changes["ver"] = value[:40]
+                versioned += 1
+            elif not d.get("name") and value:
+                changes["name"] = value[:40]
+                named += 1
+            lines.append(f"{label[:12]:12} {command}: {value[:40]}")
+        if changes:
+            store.update_device(d["node"], **changes)
+    return named, versioned, lines
 
 
 def regions_asked(text, store):

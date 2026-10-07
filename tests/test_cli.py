@@ -89,3 +89,17 @@ def test_fleet_refreshes_battery_and_seen_from_beacon(tmp_path, monkeypatch, cap
     out = capsys.readouterr().out
     assert "Batt  Seen" in out and "4.26" in out and "refreshed 1 of 2; 1 without statistics" in out
     assert cli.main(["fleet", "gisebo"]) == 0
+
+
+def test_refresh_reads_name_and_version_over_the_control_plane(tmp_path, monkeypatch, capsys):
+    import json
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    monkeypatch.setenv("MCCONTROL_FAKE_RESULTS", json.dumps({f"{NODE}|get name": [0, "> Gisebo"], f"{NODE}|ver": [0, "> v1.17.1-ar-10"]}))
+    assert cli.main(["keygen"]) == 0
+    assert cli.main(["add", "", NODE, "jkg", ""]) == 0
+    capsys.readouterr()
+    assert cli.main(["refresh"]) == 0
+    out = capsys.readouterr().out
+    assert "get name: Gisebo" in out and "1 of 1 gave a version; 1 named" in out
+    assert cli.main(["devices"]) == 0
+    assert "Gisebo" in capsys.readouterr().out

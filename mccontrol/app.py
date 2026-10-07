@@ -40,6 +40,7 @@ class App:
             Menu("Devices", [MenuItem("Discover", "discover", "F5"), MenuItem("Edit", "edit", "F4"),
                              MenuItem("Forget", "forget", "F8"), MenuItem("Sort by name", "sort:name"),
                              MenuItem("Sort by region", "sort:region"), MenuItem("Sort by last sent", "sort:last sent"),
+                             MenuItem("Sort by version", "sort:version"), MenuItem("Names and versions", "names", "n"),
                              MenuItem("Tag all in region", "tag:+", "+"), MenuItem("Untag region", "tag:-", "-")]),
             self.send_menu(),
             Menu("View", [MenuItem("Statistics", "stats:24h:6h", "s"), MenuItem("Last 48 hours", "stats:48h:6h"),
@@ -209,6 +210,8 @@ class App:
                 self.do("stats:24h:6h")
             elif key == ord("r") and self.left.active:
                 self.do("fleet")
+            elif key == ord("n") and self.left.active:
+                self.do("names")
             elif key == ord("+") or key == ord("-"):
                 self.do("tag:" + chr(key))
             elif key < 0 and chr(-key) in "123456789":          # Alt+digit
@@ -285,6 +288,8 @@ class App:
             self.sets_dialog()
         elif action == "fleet":
             self.refresh_fleet()
+        elif action == "names":
+            self.refresh_names()
         elif action.startswith("stats:"):
             _s, range_, interval = action.split(":")
             self.statistics(range_, interval)
@@ -516,6 +521,23 @@ class App:
         self.reload()
         self.message.say(f"Refreshed {updated} of {len(devices)} from Beacon"
                          + (f"; {failed} without statistics." if failed else "."), error=bool(failed))
+
+    def refresh_names(self):
+        """n, or Devices > Names and versions: `get name` and `ver` to the tagged devices, or
+        the cursor one; an unnamed device takes the fleet's name, every one stores its version."""
+        devices = self.targets
+        if not devices:
+            self.message.say("No device under the cursor.", error=True)
+            return
+        if len(devices) > 3 and not confirm(self.screen, "Confirm", [f"{len(devices)} devices, two signed reads each."],
+                                            "Each read spends one of the node's command slots this hour.", redraw_under=self.draw):
+            return
+        self.message.say(f"Reading name and version from {len(devices)} device(s)...")
+        self.draw()
+        named, versioned, lines = actions.refresh_names(self.store, devices)
+        self.reload()
+        self.show_results("Names and versions", lines)
+        self.message.say(f"{versioned} of {len(devices)} gave a version; {named} named.", error=versioned < len(devices))
 
     def sets_dialog(self):
         """Options > Command sets: one set at a time, by name; empty steps are dropped."""
