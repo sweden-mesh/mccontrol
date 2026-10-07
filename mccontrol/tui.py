@@ -337,7 +337,7 @@ class App:
             s.frame()
             s.put(2, 1, "Type choices, press Enter.")
             s.put(4, 3, "Name . . . . . . . . . :")
-            s.put(5, 3, "Node public key, 64 hex:")
+            s.put(5, 3, "Node: first 8 hex of its public key (a whole key is fine)")
             s.put(7, 3, "Region (IATA)  . . . . :")
             s.put(8, 3, "Notes  . . . . . . . . :")
             s.keys("F3=Exit   F12=Cancel")

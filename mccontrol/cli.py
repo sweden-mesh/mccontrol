@@ -4,7 +4,7 @@
     mccontrol keygen               make a signing key and print what to provision
     mccontrol key                  print the public key
     mccontrol config [--broker host] [--username u] [--password p]
-    mccontrol add <name> <node-hex> <region> [notes...]
+    mccontrol add <name> <8-hex node> <region> [notes...]
     mccontrol devices
     mccontrol send <device> <command...>      (--dry-run to only sign)
     mccontrol send <region> <command...> --all   every node in that region
@@ -33,7 +33,7 @@ def build_parser():
     c.add_argument("--wait-secs", type=int)
     a = sub.add_parser("add", help="remember a device")
     a.add_argument("name")
-    a.add_argument("node", help="its 64-character public key")
+    a.add_argument("node", help="the first 8 hex characters of its public key (a whole key is fine)")
     a.add_argument("region", help="the IATA code its observers use, e.g. JKG")
     a.add_argument("notes", nargs="*")
     sub.add_parser("devices", help="list your devices")

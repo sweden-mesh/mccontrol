@@ -51,6 +51,9 @@ def test_only_triggers_transmit():
 
 def test_result_topics():
     assert envelope.command_topic("jkg") == "meshcore/JKG/all/cmd"
-    assert envelope.command_topic("JKG", "AB") == "meshcore/JKG/AB/cmd"
-    assert envelope.node_from_result_topic("meshcore/JKG/AB/res") == "AB"
-    assert envelope.node_from_result_topic("meshcore/JKG/AB/cmd") is None
+    assert envelope.command_topic("JKG", "AB12CD34") == "meshcore/JKG/AB12CD34/cmd"
+    assert envelope.command_topic("JKG", "ab12cd34" + "ff" * 28) == "meshcore/JKG/AB12CD34/cmd"
+    assert envelope.node_from_result_topic("meshcore/JKG/AB12CD34/res") == "AB12CD34"
+    assert envelope.node_from_result_topic("meshcore/JKG/AB12CD34/cmd") is None
+    with pytest.raises(envelope.NodeIdError):
+        envelope.command_topic("JKG", "AB")

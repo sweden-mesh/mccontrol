@@ -31,7 +31,7 @@ mccontrol keygen        # once; prints the two serial commands to provision each
 mccontrol config --username <user> --password <pass>     # the control broker's credentials
 mccontrol test          # connect, sign in, subscribe, publish, receive
 mccontrol discover JKG --add    # every node in JKG that accepts your key; or add by hand:
-                                #   mccontrol add LOUTEST <64-hex key> JKG "notes"
+                                #   mccontrol add LOUTEST <first 8 hex of its key> JKG "notes"
 mccontrol               # the screens
 ```
 
@@ -85,7 +85,9 @@ observers use, a broadcast is to one region, and discovery asks which region to 
 
 The envelope is the one the Observer auto-reply firmware verifies (`src/helpers/MqttControlLogic.h`
 there): `v1|counter|expiry|command|signature`, signed over the topic and the body together, so
-a command captured from one node cannot be replayed at another. The node checks the signature,
+a command captured from one node cannot be replayed at another. A node is named on the topics
+by the first eight hex characters of its public key, which is how the firmware builds its own;
+a whole key is accepted anywhere a node is given. The node checks the signature,
 that the counter is higher than the last it accepted, the expiry, its rate limit, and an
 allowlist of commands; everything else is refused before it reaches the command line. What the
 allowlist admits is the firmware's decision, not this tool's.

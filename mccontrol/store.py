@@ -123,8 +123,11 @@ class Store:
         ref = (ref or "").strip()
         if not ref:
             return None
+        # A whole public key names the node by its first eight characters, like the topics.
+        key = ref.upper()[:envelope.NODE_HEX_LEN] if len(ref) >= envelope.NODE_HEX_LEN and all(
+            c in "0123456789abcdefABCDEF" for c in ref) else None
         exact = [d for d in self.devices() if d["name"].lower() == ref.lower()
-                 or d["node"].upper() == ref.upper()]
+                 or d["node"].upper() == ref.upper() or (key and d["node"].upper() == key)]
         if len(exact) == 1:
             return exact[0]
         prefix = [d for d in self.devices() if d["name"].lower().startswith(ref.lower())
@@ -132,9 +135,10 @@ class Store:
         return prefix[0] if len(prefix) == 1 else None
 
     def add_device(self, name, node, region, notes=""):
-        node = node.strip().upper()
-        if not (len(node) == 64 and all(c in "0123456789ABCDEF" for c in node)):
-            raise StoreError("a node is its 64-character public key in hex")
+        try:
+            node = envelope.node_id(node)
+        except envelope.NodeIdError as exc:
+            raise StoreError(str(exc)) from None
         name = name.strip()
         if not name:
             raise StoreError("a device needs a name")

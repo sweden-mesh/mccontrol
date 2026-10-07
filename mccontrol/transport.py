@@ -110,7 +110,7 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
     def on_message(_c, _u, msg):
         node = envelope.node_from_result_topic(msg.topic)
         result = envelope.parse_result(msg.payload, node)
-        if result is None or result.counter != counter or not node or len(node) != 64:
+        if result is None or result.counter != counter or not node or len(node) != envelope.NODE_HEX_LEN:
             return
         with lock:
             found[node.upper()] = {"node": node.upper(), "region": region.upper(),

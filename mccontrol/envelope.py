@@ -2,7 +2,7 @@
 
 Must match `src/helpers/MqttControlLogic.h` in the Observer auto-reply firmware byte for byte:
 
-    topic    meshcore/{IATA}/{NODE}/cmd        one node
+    topic    meshcore/{IATA}/{NODE}/cmd        one node, NODE = first 8 hex of its key
              meshcore/{IATA}/all/cmd           every node in the region
     payload  v1|{counter}|{expiry}|{command}|{128 hex Ed25519 signature}
     signed   "{topic}\\n" + "v1|{counter}|{expiry}|{command}"
@@ -87,13 +87,32 @@ def public_key_hex(seed_hex):
     return key_from_seed(seed_hex).public_key().export_key(format="raw").hex().upper()
 
 
+# A node is named on the control topics by the first four bytes of its public key: eight hex
+# characters, as the repeater firmware builds its own topics (`MyMesh::setupMqttControl`,
+# `toHex(node_hex, self_id.pub_key, 4)`). A full 64-character key is accepted anywhere a node is
+# given and cut to that.
+NODE_HEX_LEN = 8
+
+
+class NodeIdError(ValueError):
+    pass
+
+
+def node_id(value):
+    """Eight upper-case hex characters, from a prefix or a whole public key."""
+    text = (value or "").strip().upper()
+    if len(text) < NODE_HEX_LEN or any(c not in "0123456789ABCDEF" for c in text):
+        raise NodeIdError("a node is named by the first 8 hex characters of its public key")
+    return text[:NODE_HEX_LEN]
+
+
 def command_topic(iata, node=None):
-    leaf = node if node else "all"
+    leaf = node_id(node) if node else "all"
     return f"{TOPIC_PREFIX}{iata.upper()}/{leaf}/cmd"
 
 
 def result_topic(iata, node):
-    return f"{TOPIC_PREFIX}{iata.upper()}/{node}/res"
+    return f"{TOPIC_PREFIX}{iata.upper()}/{node_id(node)}/res"
 
 
 def is_transmit(command):

@@ -5,7 +5,7 @@ import pytest
 
 from mccontrol import actions, envelope, store as _store
 
-NODE = "A" * 64
+NODE = "AAAAAAAA"
 
 
 @pytest.fixture
@@ -32,17 +32,19 @@ def test_a_key_readable_by_others_is_refused(store):
 
 def test_devices_are_found_by_name_node_or_unique_prefix(store):
     store.add_device("LOUTEST", NODE, "JKG", "the bench repeater")
-    store.add_device("Lovsjo", "B" * 64, "JKG")
+    store.add_device("Lovsjo", "BBBBBBBB", "JKG")
     assert store.device("loutest")["node"] == NODE
     assert store.device("AAAA")["name"] == "LOUTEST"
+    assert store.device("A" * 64)["name"] == "LOUTEST"
     assert store.device("lo") is None                      # ambiguous
     assert store.device("lou")["name"] == "LOUTEST"
     with pytest.raises(_store.StoreError):
         store.add_device("again", NODE, "JKG")
     with pytest.raises(_store.StoreError):
         store.add_device("short", "ABC", "JKG")
+    assert store.add_device("whole", "E" * 64, "JKG")["node"] == "EEEEEEEE"
     with pytest.raises(_store.StoreError, match="region"):
-        store.add_device("noregion", "D" * 64, "")
+        store.add_device("noregion", "DDDDDDDD", "")
     assert store.regions() == ["JKG"]
 
 
@@ -85,7 +87,7 @@ def test_a_broadcast_of_a_transmit_command_is_refused_before_signing(store):
 def test_a_broadcast_goes_to_one_region_and_hears_only_that_regions_devices(store, monkeypatch):
     store.create_key()
     store.add_device("LOUTEST", NODE, "JKG")
-    store.add_device("FAR", "B" * 64, "GOT")
+    store.add_device("FAR", "BBBBBBBB", "GOT")
     heard = {}
     monkeypatch.setattr(actions.transport, "send",
                         lambda cfg, seed, topic, cmd, nodes_to_hear=(), **k: heard.update(
@@ -105,13 +107,13 @@ def test_a_device_without_a_region_cannot_be_sent_to(store):
 def test_send_records_every_device_asked_even_the_silent_ones(store, monkeypatch):
     store.create_key()
     store.add_device("LOUTEST", NODE, "JKG")
-    store.add_device("UGO", "B" * 64, "JKG")
+    store.add_device("UGO", "BBBBBBBB", "JKG")
     answer = envelope.parse_result("r1|1|0|region put se-jkp *|OK", NODE)
     monkeypatch.setattr(actions.transport, "send",
                         lambda cfg, seed, topic, cmd, nodes_to_hear=(), **k: ("payload", {NODE: answer}))
     _t, _p, answers, lines = actions.send(store, "region put se-jkp *", region="JKG")
     assert lines == ["LOUTEST            OK", "UGO                no answer"]
-    assert store.history("B" * 64)[0]["code"] is None
+    assert store.history("BBBBBBBB")[0]["code"] is None
     assert store.history(None)[0]["note"] == "1 of 2 answered"
 
 
@@ -158,16 +160,16 @@ def test_discover_finds_the_nodes_that_answer_your_signature_and_marks_the_known
     from mccontrol import transport
     store.create_key()
     store.add_device("LOUTEST", NODE, "JKG")
-    _FakeClient.answers = [(NODE, 0, "> on"), ("B" * 64, 17, ""), ("short", 0, "x")]
+    _FakeClient.answers = [(NODE, 0, "> on"), ("BBBBBBBB", 17, ""), ("short", 0, "x")]
     monkeypatch.setattr(transport, "_client", _FakeClient)
     monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
     found = actions.discover(store, "jkg")
-    assert [(e["node"][:1], e["region"], e["code"]) for e in found] == [("A", "JKG", 0), ("B", "JKG", 17)]
+    assert [(e["node"], e["region"], e["code"]) for e in found] == [("AAAAAAAA", "JKG", 0), ("BBBBBBBB", "JKG", 17)]
     assert found[0]["known_as"] == "LOUTEST" and found[1]["known_as"] is None
     assert found[0]["outcome"] == "> on" and found[1]["outcome"].startswith("refused: rate-limited")
     entry = actions.adopt(store, found[1])
     assert entry["name"] == "BBBBBBBB" and entry["region"] == "JKG"
-    assert actions.adopt(store, dict(found[1], node="C" * 64), name="UGO")["name"] == "UGO"
+    assert actions.adopt(store, dict(found[1], node="CCCCCCCC"), name="UGO")["name"] == "UGO"
 
 
 def test_discovery_broadcasts_one_signed_read_on_the_control_broker(store, monkeypatch):

@@ -1,6 +1,6 @@
 from mccontrol import cli
 
-NODE = "C" * 64
+NODE = "CCCCCCCC"
 
 
 def test_the_command_line_round_trip(tmp_path, monkeypatch, capsys):
