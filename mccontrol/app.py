@@ -42,7 +42,7 @@ class App:
             Menu("Send", [MenuItem("To tagged or cursor", "send", "F2"), MenuItem("To all in a region", "all", "F7"),
                           MenuItem("Read regions", "regions", "F6")]),
             Menu("Keys", [MenuItem("Show public key", "keys")]),
-            Menu("Setup", [MenuItem("Broker and credentials", "setup"), MenuItem("Test the broker", "test")]),
+            Menu("Options", [MenuItem("Control broker", "setup"), MenuItem("Test the broker", "test")]),
             Menu("Help", [MenuItem("Keys on this screen", "help", "F1"), MenuItem("Quit", "quit", "F10")]),
         ])
 
@@ -201,6 +201,12 @@ class App:
                 self.send(initial="region", immediate=True)
         elif action == "forget":
             self.forget()
+        elif action == "keys":
+            self.keys_dialog()
+        elif action == "setup":
+            self.setup_dialog()
+        elif action == "test":
+            self.test_dialog()
         elif action == "all":
             region = self.ask_region("Send to every node in which region?")
             if region:
@@ -225,6 +231,66 @@ class App:
                 f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
             lines.append(f"{line['at'][:16]}  {line['command'][:28]:28} {out[:30]}")
         notice(self.screen, f"History: {d.get('name') or d['node']}", lines or ["Nothing sent yet."], self.draw)
+
+    def keys_dialog(self):
+        """The public key on one line, the provisioning commands, create or import."""
+        if self.store.has_key():
+            try:
+                public = self.store.public_key()
+            except _store.StoreError as exc:
+                notice(self.screen, "Signing key", [str(exc)], self.draw)
+                return
+            body = ["Provision each repeater over its serial console with:", "",
+                    f"  set mqtt.cmd.pubkey {public}", "  set mqtt.cmd on", "",
+                    f"The private seed is in {self.store.key_path}", "and never leaves this machine inside anything but a signature."]
+            d = Dialog("Signing key", body=body, width=min(92, self.screen.size[0] - 4),
+                       buttons=[Button("OK", None, default=True), Button("Replace key", "replace")])
+            if d.run(self.screen, self.draw) == "replace":
+                if confirm(self.screen, "Replace key", ["Every repeater provisioned with the current key will stop accepting commands."],
+                           "silences every node until each is re-provisioned over serial.", yes="Replace", redraw_under=self.draw):
+                    self.store.create_key(overwrite=True)
+                    self.message.say("Key replaced.")
+            return
+        d = Dialog("Signing key", body=["No signing key yet."], width=50,
+                   buttons=[Button("Create", "create", default=True), Button("Import", "import"), Button("Cancel", None)])
+        choice = d.run(self.screen, self.draw)
+        try:
+            if choice == "create":
+                self.store.create_key()
+                self.message.say("Key created; see Keys again for the provisioning command.")
+            elif choice == "import":
+                f = Field("Seed", "", width=64, secret=True)
+                d2 = Dialog("Import a seed", fields=[f], body=["Paste the 64-hex private seed."], width=76)
+                if d2.run(self.screen, self.draw):
+                    self.store.import_key(f.value)
+                    self.message.say("Key imported.")
+        except (_store.StoreError, envelope.EnvelopeError) as exc:
+            self.message.say(str(exc), error=True)
+
+    def setup_dialog(self):
+        cfg = self.store.config()
+        fields = [Field("Broker", cfg.get("broker", ""), width=40), Field("Port", str(cfg.get("port", 1883)), width=6),
+                  Field("Username", cfg.get("username", ""), width=30), Field("Password", cfg.get("password", ""), width=30, secret=True),
+                  Field("Wait seconds", str(cfg.get("wait_secs", 20)), width=4)]
+        d = Dialog("Control broker", fields=fields, body=["The broker a node's mqtt.cmd.slot points at, and its credentials."], width=66)
+        if d.run(self.screen, self.draw) is None:
+            return
+        try:
+            self.store.save_config(broker=fields[0].value.strip(), port=int(fields[1].value), username=fields[2].value.strip(),
+                                   password=fields[3].value, wait_secs=int(fields[4].value))
+            self.message.say("Saved.")
+        except ValueError:
+            self.message.say("Port and wait seconds must be numbers.", error=True)
+
+    def test_dialog(self):
+        cfg = self.store.config()
+        self.message.say(f"Trying {cfg.get('broker')}:{cfg.get('port')} as {cfg.get('username') or '(no username)'}...")
+        self.draw()
+        steps = transport.test_connection(cfg)
+        lines = [f"{'ok  ' if ok else 'FAIL'}  {step:28} {detail}" for step, ok, detail in steps]
+        lines.append(f"{'ok  ' if self.store.has_key() else 'FAIL'}  {'signing key':28} {'present' if self.store.has_key() else 'none: see Keys'}")
+        notice(self.screen, "Broker test", lines, self.draw)
+        self.message.say("Broker test passed." if all(ok for _s, ok, _d in steps) else "Broker test failed.", error=not all(ok for _s, ok, _d in steps))
 
     def edit(self):
         """F4: name, region and notes of the cursor device."""

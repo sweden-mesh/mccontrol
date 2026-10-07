@@ -164,3 +164,19 @@ def test_f8_forgets_after_a_confirm(tmp_path):
     nodes = {d["node"] for d in json.loads((home / "devices.json").read_text())}
     assert "FD700369" not in nodes and len(nodes) == 2
     assert "Forgotten." in text
+
+
+def test_the_keys_dialog_shows_the_provisioning_command_on_one_line(tmp_path):
+    text, _ = walk(tmp_path, [(b"\x1bk", 0.5), (b"\r", 0.8)], cols=100)   # Alt+K opens Keys; Enter runs the item
+    assert "set mqtt.cmd.pubkey" in text
+    from mccontrol import envelope
+    # the terminal stream may carry an attribute change inside the key, which strips to a space
+    assert envelope.public_key_hex("11" * 32) in text.replace(" ", "")
+
+
+def test_setup_saves_the_control_broker(tmp_path):
+    text, home = walk(tmp_path, [(b"\x1bo", 0.5), (b"\r", 0.5), (b"\x08" * 20 + b"mqtt.example", 0.3), (b"\t", 0.2), (b"\t", 0.2),
+                                 (b"mcoar", 0.3), (b"\t", 0.2), (b"pw", 0.3), (b"\r", 0.8)])
+    cfg = json.loads((home / "config.json").read_text())
+    assert cfg["broker"] == "mqtt.example" and cfg["username"] == "mcoar" and cfg["password"] == "pw"
+    assert "Saved." in text
