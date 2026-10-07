@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mccontrol"
+version = "0.1.0"
+description = "Sign and send control commands to MeshCore Observer repeaters over MQTT, from a green screen"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["pycryptodome>=3.19", "paho-mqtt>=2.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+mccontrol = "mccontrol.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["mccontrol*"]
