@@ -169,6 +169,40 @@ def verify(public_hex, topic, payload):
     return True
 
 
+def check(public_hex, topic, payload, last_counter, now):
+    """Judge an envelope in the order a node does -- signature, counter, expiry -- and return
+    the result code the node would publish (0 for accepted). `mqttCtrlVerify` in the firmware
+    is the authority; this is the same order, kept here so the tamper argument in
+    `help/assurance.txt` is pinned by tests rather than asserted."""
+    split = payload.rfind(FIELD_SEP)
+    if split < 0:
+        return 3
+    part = payload[:split]
+    if len(payload) - split - 1 != SIG_HEX_LEN:
+        return 4
+    try:
+        if not verify(public_hex, topic, payload):
+            return 16
+    except ValueError:
+        return 5
+    fields = part.split(FIELD_SEP)
+    if len(fields) != 4 or fields[0] != VERSION_TAG:
+        return 7
+    try:
+        counter, expiry = int(fields[1]), int(fields[2])
+    except ValueError:
+        return 8
+    if counter <= last_counter:
+        return 9
+    if now == 0:
+        return 12
+    if expiry < now:
+        return 10
+    if expiry - now > MAX_FUTURE_SECS:
+        return 11
+    return 0
+
+
 class Result:
     """One line a node published to its /res topic. Silence is its absence, never an instance."""
 

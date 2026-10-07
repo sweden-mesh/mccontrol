@@ -13,4 +13,4 @@ accepted; unix seconds do that without bookkeeping. The expiry bounds a
 delayed replay. A node publishes a result only when the signature
 verified, so an answer of any kind proves the node holds your key.
 
-See [[signing]] and [[broker]].
+See [[signing]], [[assurance]] and [[broker]].

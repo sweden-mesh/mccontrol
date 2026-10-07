@@ -19,6 +19,7 @@ Reference
   [[commands]]    the commands a repeater admits over the control plane
   [[cautions]]    the commands that take something away
   [[signing]]     your key, provisioning a repeater, what the signature covers
+  [[assurance]]   can a command be forged, altered or replayed? what is not covered
   [[broker]]      the control broker, its credentials, the connection test
   [[protocol]]    the envelope on the wire, for the curious
   [[cli]]         the same work from the command line

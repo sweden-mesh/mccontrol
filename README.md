@@ -111,6 +111,13 @@ allowlist of commands; a result is published only when the signature verified. A
 line (`region def a|* b|*`) cannot travel: `|` is the field separator; `region put` one name at
 a time does the same job. `mccontrol help protocol` has the rest.
 
+What that buys, and what it does not: no one on the broker can alter a field, move a command
+to another node or region, turn it into a broadcast, or replay it at a node that has seen it;
+a captured envelope can run once at most, and only within its life. The broker can still
+drop or delay a command, read everything, and publish a forged *result* -- results are not
+signed, so confirm a change with a read rather than with the `ok`. Each property is a test
+in `tests/test_envelope.py`; `mccontrol help assurance` is the argument in full.
+
 ## Tests
 
 `pytest` runs the unit tests and the pseudo-terminal walks: every function key is pressed once
