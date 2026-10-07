@@ -10,7 +10,7 @@
     mccontrol send <region> <command...> --all   every node in that region
     mccontrol regions <device>
     mccontrol history <device>
-    mccontrol discover <region> [--add]   the nodes publishing a status there
+    mccontrol discover <region> [--add]   the nodes there that accept your key
     mccontrol test                 connect, sign in, subscribe and publish on the control broker
 """
 
@@ -48,10 +48,10 @@ def build_parser():
     g = sub.add_parser("regions", help="read a device's region map")
     g.add_argument("device")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
-    d = sub.add_parser("discover", help="list the nodes publishing a status in a region")
+    d = sub.add_parser("discover", help="find the nodes in a region that accept your key")
     d.add_argument("region", help="the IATA code, e.g. JKG")
     d.add_argument("--add", action="store_true", help="remember every node not yet in your list")
-    d.add_argument("--seconds", type=float, default=5.0)
+    d.add_argument("--wait-secs", type=float, default=None, help="how long to listen for answers")
     h = sub.add_parser("history", help="what was sent to a device and what came back")
     h.add_argument("device")
     h.add_argument("--limit", type=int, default=30)
@@ -160,16 +160,15 @@ def _test(store, _args):
 
 
 def _discover(store, args):
-    found = actions.discover(store, args.region, seconds=args.seconds)
+    found = actions.discover(store, args.region, wait_secs=args.wait_secs)
     if not found:
-        print(f"no node published a status in {args.region.upper()}")
+        print(f"no node in {args.region.upper()} answered a command signed with your key")
         return 0
     for e in found:
         mark = f"known as {e['known_as']}" if e["known_as"] else ("added" if args.add else "")
         if args.add and not e["known_as"]:
             actions.adopt(store, e)
-        print(f"{e['name'][:24]:24} {e['node'][:8]}  {e['model'][:18]:18} repeat={e['repeat'] or '?':4} "
-              f"{e['at']:16} {mark}")
+        print(f"{e['node'][:8]}  {e['region']:4}  {e['outcome'][:40]:40} {mark}")
     return 0
 
 

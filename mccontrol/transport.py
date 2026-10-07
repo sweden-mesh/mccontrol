@@ -86,58 +86,48 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
     return payload, dict(answers)
 
 
-# Where nodes announce themselves: the public Observer feed. Its credentials are published by
-# the project that runs it and are not the control broker's, so they are not configuration.
-DISCOVERY_FEED = {"broker": "mqtt.meshat.se", "port": 1883, "username": "msh", "password": "msh"}
+# The read that discovery broadcasts. Harmless, on every node's allowlist, and answered by
+# exactly the nodes that verified the signature: the firmware publishes no result for a
+# command whose signature failed, so an answer of any kind is proof the node holds your key.
+DISCOVERY_COMMAND = "get autoreply"
 
 
-def discover(region, seconds=5.0, client_factory=None, feed=None):
-    """The nodes publishing a status in the region: `[{node, name, model, firmware, repeat, at}]`.
+def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, counter=None):
+    """The nodes in `region` that accept your signing key: `[{node, region, code, reply}]`.
 
-    Observer nodes publish `meshcore/{IATA}/{NODE}/status` on the public feed, retained, so it hands over
-    the last one from every node the moment we subscribe: a few seconds is enough. A retained
-    status may be old -- the node may be long gone -- so `at` is shown and nothing here claims
-    the node is up. Whether it accepts *your* key is learnt by sending it something.
+    One signed broadcast of a read to `meshcore/{IATA}/all/cmd` on the control broker, then
+    every `meshcore/{IATA}/+/res` that answers it. A node that answers -- even with a refusal
+    such as rate-limited -- verified the signature and is yours. A node with another key, or
+    none, says nothing, and nothing here claims anything about it.
     """
-    import json
-
+    counter = int(time.time()) if counter is None else counter
+    topic = envelope.command_topic(region)
+    payload = envelope.build(seed_hex, topic, counter, DISCOVERY_COMMAND,
+                             ttl_secs=config.get("ttl_secs", envelope.DEFAULT_TTL_SECS))
     found = {}
     lock = threading.Lock()
 
     def on_message(_c, _u, msg):
-        parts = msg.topic.split("/")
-        if len(parts) < 4 or parts[-1] != "status":
-            return
-        node = parts[-2].upper()
-        if len(node) != 64:
-            return
-        try:
-            data = json.loads(msg.payload.decode("utf-8", "replace"))
-        except ValueError:
+        node = envelope.node_from_result_topic(msg.topic)
+        result = envelope.parse_result(msg.payload, node)
+        if result is None or result.counter != counter or not node or len(node) != 64:
             return
         with lock:
-            found[node] = {
-                "node": node,
-                "region": region.upper(),
-                "name": str(data.get("origin") or "")[:40],
-                "model": str(data.get("model") or ""),
-                "firmware": str(data.get("firmware_version") or ""),
-                "repeat": str(data.get("repeat") or ""),
-                "at": str(data.get("timestamp") or "")[:16].replace("T", " "),
-                "retained": bool(getattr(msg, "retain", False)),
-            }
+            found[node.upper()] = {"node": node.upper(), "region": region.upper(),
+                                   "code": result.code, "reply": result.reply}
 
-    feed = feed or DISCOVERY_FEED
-    client = (client_factory or _client)(feed)
+    client = (client_factory or _client)(config)
     client.on_message = on_message
-    _connect(client, feed)
+    _connect(client, config)
     try:
-        client.subscribe(f"{envelope.TOPIC_PREFIX}{region.upper()}/+/status", qos=0)
-        time.sleep(seconds)
+        client.subscribe(f"{envelope.TOPIC_PREFIX}{region.upper()}/+/res", qos=1)
+        info = client.publish(topic, payload, qos=1)
+        info.wait_for_publish(timeout=10)
+        time.sleep(wait_secs)
     finally:
         client.loop_stop()
         client.disconnect()
-    return sorted(found.values(), key=lambda d: (d["name"].lower(), d["node"]))
+    return sorted(found.values(), key=lambda d: d["node"])
 
 
 def test_connection(config, client_factory=None, timeout=10.0):

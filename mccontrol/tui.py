@@ -196,7 +196,7 @@ class App:
             s.frame()
             s.put(2, 1, "Type options, press Enter.")
             s.put(3, 3, "1=Add   2=Change   4=Remove   5=Display   7=History   8=Regions   9=Send")
-            s.put(4, 3, "F6=Discover nodes in a region")
+            s.put(4, 3, "F6=Discover the nodes in a region that accept your key")
             s.put(5, 1, "Opt  Name                Node      Reg   Last sent            Result")
             if not devices:
                 s.put(7, 6, "(no devices yet -- type 1 on the first line to add one)")
@@ -269,14 +269,14 @@ class App:
 
     def discover_screen(self):
         s = Screen(self.win, "Discover Devices")
-        region = self.ask_region(s, "Discover the nodes publishing a status in which region?")
+        region = self.ask_region(s, "Find the nodes that accept your key in which region?")
         if not region:
             return
         s.frame()
-        s.put(2, 1, f"Listening for the status every node in {region} publishes...")
+        s.put(2, 1, f"Asking every node in {region} with one signed read, and listening for answers...")
         self.win.refresh()
         try:
-            found = actions.discover(self.store, region, seconds=5.0)
+            found = actions.discover(self.store, region)
         except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
             s.message = str(exc)[:76]
             s.frame()
@@ -285,19 +285,18 @@ class App:
         cursor_row, opts, top = 0, {}, 0
         while True:
             s.frame()
-            s.put(2, 1, f"{len(found)} node(s) publish a status in {region}. "
+            s.put(2, 1, f"{len(found)} node(s) in {region} answered a command signed with your key. "
                         f"Type 1 on a row to remember it, Enter.")
-            s.put(3, 3, "The date is from the node's own clock on its last retained status; not proof it is up.")
-            s.put(5, 1, "Opt  Name                      Node      Model              Repeat  Last status")
+            s.put(3, 3, "Only a node that verified your signature answers; silence says nothing.")
+            s.put(5, 1, "Opt  Node      Region  Answer")
             page = found[top:top + 14]
             for i, e in enumerate(page):
                 attr = curses.A_REVERSE if top + i == cursor_row else 0
                 opt = opts.get(top + i, " ")
                 known = f"= {e['known_as']}" if e["known_as"] else ""
-                s.put(6 + i, 1, f" {opt}   {e['name'][:25]:25} {e['node'][:8]}  {e['model'][:18]:18} "
-                                f"{(e['repeat'] or '?')[:5]:5}  {e['at'][:16]} {known}", attr)
+                s.put(6 + i, 1, f" {opt}   {e['node'][:8]}  {e['region']:6}  {e['outcome'][:44]:44} {known}", attr)
             if not found:
-                s.put(7, 6, "(nothing heard)")
+                s.put(7, 6, "(no answer: no node there holds your key, or its control plane is off)")
             s.put(21, 70, "More..." if top + 14 < len(found) else "Bottom")
             s.keys("F3=Exit   F12=Cancel   PageUp/PageDown=Scroll")
             self.win.refresh()

@@ -116,9 +116,9 @@ def test_send_records_every_device_asked_even_the_silent_ones(store, monkeypatch
 
 
 class _FakeClient:
-    """Enough of paho for discover(): connect fires on_connect, subscribe delivers retained statuses."""
+    """Enough of paho: connect fires on_connect; a publish to all/cmd draws the scripted answers."""
 
-    retained = []
+    answers = []          # (node, code, reply) published on .../{node}/res with the request's counter
 
     def __init__(self, _config):
         self.on_connect = self.on_message = None
@@ -135,10 +135,17 @@ class _FakeClient:
         self.on_connect(self, None, None, _RC())
 
     def subscribe(self, topic, qos=0):
+        pass
+
+    def publish(self, topic, payload, qos=0):
         import types
-        for node, payload in self.retained:
+        counter = payload.split("|")[1]
+        region = topic.split("/")[1]
+        for node, code, reply in self.answers:
             self.on_message(self, None, types.SimpleNamespace(
-                topic=f"meshcore/JKG/{node}/status", payload=payload, retain=True))
+                topic=f"meshcore/{region}/{node}/res",
+                payload=f"r1|{counter}|{code}|get autoreply|{reply}".encode()))
+        return types.SimpleNamespace(wait_for_publish=lambda timeout=0: None)
 
     def loop_stop(self):
         pass
@@ -147,26 +154,39 @@ class _FakeClient:
         pass
 
 
-def test_discover_lists_status_publishers_and_marks_the_ones_you_have(store, monkeypatch):
+def test_discover_finds_the_nodes_that_answer_your_signature_and_marks_the_known_ones(store, monkeypatch):
     from mccontrol import transport
-    import json
+    store.create_key()
     store.add_device("LOUTEST", NODE, "JKG")
-    _FakeClient.retained = [
-        (NODE, json.dumps({"origin": "SE-JKG-LOUTEST", "model": "Heltec V3", "firmware_version": "v1",
-                           "repeat": "on", "timestamp": "2026-10-07T18:00:00+00:00"}).encode()),
-        ("B" * 64, json.dumps({"origin": "SE-JKG-UGORptr", "timestamp": "2026-09-01T00:00:00"}).encode()),
-        ("short", b"{}"), (NODE[:63] + "Z", b"not json"),
-    ]
+    _FakeClient.answers = [(NODE, 0, "> on"), ("B" * 64, 17, ""), ("short", 0, "x")]
     monkeypatch.setattr(transport, "_client", _FakeClient)
     monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
     found = actions.discover(store, "jkg")
-    assert [e["region"] for e in found] == ["JKG", "JKG"]
-    assert [e["name"] for e in found] == ["SE-JKG-LOUTEST", "SE-JKG-UGORptr"]
+    assert [(e["node"][:1], e["region"], e["code"]) for e in found] == [("A", "JKG", 0), ("B", "JKG", 17)]
     assert found[0]["known_as"] == "LOUTEST" and found[1]["known_as"] is None
-    assert found[0]["at"] == "2026-10-07 18:00" and found[0]["retained"]
+    assert found[0]["outcome"] == "> on" and found[1]["outcome"].startswith("refused: rate-limited")
     entry = actions.adopt(store, found[1])
-    assert entry["name"] == "SE-JKG-UGORptr" and entry["node"] == "B" * 64 and entry["region"] == "JKG"
-    assert actions.adopt(store, dict(found[1], node="C" * 64))["name"] == "SE-JKG-UGORptr-2"
+    assert entry["name"] == "BBBBBBBB" and entry["region"] == "JKG"
+    assert actions.adopt(store, dict(found[1], node="C" * 64), name="UGO")["name"] == "UGO"
+
+
+def test_discovery_broadcasts_one_signed_read_on_the_control_broker(store, monkeypatch):
+    from mccontrol import transport, envelope
+    store.create_key()
+    published = {}
+
+    class _Spy(_FakeClient):
+        def publish(self, topic, payload, qos=0):
+            published["topic"], published["payload"] = topic, payload
+            return super().publish(topic, payload, qos)
+
+    _FakeClient.answers = []
+    monkeypatch.setattr(transport, "_client", _Spy)
+    monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
+    assert actions.discover(store, "JKG") == []
+    assert published["topic"] == "meshcore/JKG/all/cmd"
+    assert envelope.verify(store.public_key(), published["topic"], published["payload"])
+    assert "|get autoreply|" in published["payload"]
 
 
 def test_the_connection_test_reports_each_step_and_stops_at_the_first_failure(monkeypatch):
@@ -199,24 +219,6 @@ def test_the_connection_test_reports_each_step_and_stops_at_the_first_failure(mo
     steps = transport.test_connection({"broker": "b", "port": 1, "username": "u", "password": "p"},
                                       client_factory=_Refuse, timeout=0.2)
     assert steps == [("connect and sign in", False, "b refused the connection: Not authorized")]
-
-
-def test_discovery_uses_the_public_feed_not_the_control_broker(store, monkeypatch):
-    from mccontrol import transport
-    seen = {}
-
-    class _Spy(_FakeClient):
-        def __init__(self, config):
-            seen.update(config)
-            super().__init__(config)
-
-    _FakeClient.retained = []
-    monkeypatch.setattr(transport, "_client", _Spy)
-    monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
-    store.save_config(broker="mqtt.louie.se", username="mcoar", password="secret")
-    actions.discover(store, "JKG")
-    assert seen["broker"] == "mqtt.meshat.se" and seen["username"] == "msh"
-    assert "secret" not in seen.values()
 
 
 def test_the_configuration_holds_only_the_control_broker(store):

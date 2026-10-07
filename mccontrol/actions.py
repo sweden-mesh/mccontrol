@@ -71,23 +71,26 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     return topic, payload, answers, lines
 
 
-def discover(store, region, seconds=5.0):
-    """Nodes publishing a status in `region`, marked with whether you have them."""
+def discover(store, region, wait_secs=None):
+    """The nodes in `region` that answer a command signed with your key, marked if known."""
     if not region:
         raise envelope.EnvelopeError("discovery needs a region: the IATA code, e.g. JKG")
+    config = store.config()
     known = {d["node"]: d["name"] for d in store.devices()}
-    found = transport.discover(region, seconds=seconds)
+    found = transport.discover(config, store.seed(), region,
+                               wait_secs=wait_secs or config.get("wait_secs", 20))
     for entry in found:
         entry["known_as"] = known.get(entry["node"])
+        entry["outcome"] = outcome_line(envelope.Result(entry["node"], 0, entry["code"],
+                                                        transport.DISCOVERY_COMMAND, entry["reply"]))
     return found
 
 
-def adopt(store, entry):
-    """Remember a discovered node under its own name, or its name plus a suffix if taken."""
-    name = entry["name"] or entry["node"][:8]
+def adopt(store, entry, name=None):
+    """Remember a discovered node, by the first eight characters of its key unless named."""
+    name = (name or "").strip() or entry["node"][:8]
     base, n = name, 2
     while any(d["name"].lower() == name.lower() for d in store.devices()):
         name = f"{base}-{n}"
         n += 1
-    notes = " ".join(x for x in (entry.get("model"), entry.get("firmware")) if x)
-    return store.add_device(name, entry["node"], entry["region"], notes)
+    return store.add_device(name, entry["node"], entry["region"], "found by discovery")
