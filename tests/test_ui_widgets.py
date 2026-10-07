@@ -190,3 +190,53 @@ curses.wrapper(main)
     import json
     assert json.loads(m.group(1)) == ["send", "region", "hi", False, True]
     assert "Send a Command" in text and "stops forwarding" in text
+
+
+# ---- menu bar --------------------------------------------------------------------
+
+def test_the_menu_bar_opens_on_f10_or_alt_letter_and_runs_an_item():
+    script = """
+import os, sys; sys.path.insert(0, %r); os.environ["ESCDELAY"] = "150"
+import curses, json
+from mccontrol.ui import Screen, MenuBar, Menu, MenuItem
+def main(win):
+    s = Screen(win)
+    bar = MenuBar([Menu("Devices", [MenuItem("Discover", "disco", "F5"), MenuItem("Forget", "forget", "F8")]),
+                   Menu("Send", [MenuItem("To device", "send", "F2"), MenuItem("To all in region", "all", "F7")])])
+    got = []
+    while len(got) < 3:
+        s.erase(); bar.draw(s); s.refresh()
+        k = s.key()
+        if bar.wants(k):
+            got.append(bar.run(s, k, lambda: s.erase()))
+    print("RESULT", json.dumps(got), flush=True)
+curses.wrapper(main)
+""" % os.getcwd()
+    import fcntl, struct, termios, signal
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.environ["TERM"] = "xterm"
+        os.execvp(sys.executable, [sys.executable, "-c", script])
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    def send(keys, wait=0.4):
+        time.sleep(wait); os.write(fd, keys)
+    send(b"\x1b[21~")         # F10: Devices open
+    send(b"\x1bOB")           # Down -> Forget
+    send(b"\r")               # run it
+    send(b"\x1bs")            # Alt+s: Send open
+    send(b"\x1bOC")           # Right -> wraps to Devices
+    send(b"\r")               # Discover
+    send(b"\x1bs"); send(b"t")   # Alt+s then the letter t -> "To device"
+    out = b""; end = time.time() + 4
+    while time.time() < end:
+        r, _, _ = select.select([fd], [], [], 0.1)
+        if r:
+            try: out += os.read(fd, 65536)
+            except OSError: break
+    os.waitpid(pid, 0)
+    text = re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b" ", out).decode("utf-8", "replace")
+    m = re.search(r"RESULT (\[.*?\])", text)
+    assert m, text[-300:]
+    import json
+    assert json.loads(m.group(1)) == ["forget", "disco", "send"]
+    assert "Discover" in text and "F5" in text
