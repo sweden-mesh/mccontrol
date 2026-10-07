@@ -18,8 +18,12 @@ import stat
 
 from . import envelope
 
+# The control plane rides a broker of its own, not the one the Observer stats go to:
+# mqtt.louie.se takes the signed commands and carries the results back. The Observer feed
+# (mqtt.meshat.se) refuses subscriptions and is not used here for anything but discovery.
 DEFAULT_CONFIG = {
-    "broker": "mqtt.meshat.se",
+    "broker": "mqtt.louie.se",
+    "discovery_broker": "mqtt.meshat.se",
     "port": 1883,
     "username": "msh",
     "password": "msh",

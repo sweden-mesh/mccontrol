@@ -145,7 +145,7 @@ class App:
                 s.put(4 + i, 6, f"{n:>2}. {label}")
             cfg = self.store.config()
             s.put(13, 6, f"Region . . . . . :  {cfg.get('region') or '(not set)'}")
-            s.put(14, 6, f"Broker . . . . . :  {cfg.get('broker')}:{cfg.get('port')}")
+            s.put(14, 6, f"Control broker . :  {cfg.get('broker')}:{cfg.get('port')}")
             s.put(15, 6, f"Signing key  . . :  {'present' if self.store.has_key() else 'NONE - select 4'}")
             s.put(16, 6, f"Devices  . . . . :  {len(self.store.devices())}")
             s.put(19, 1, "Selection or command")
@@ -513,7 +513,8 @@ class App:
         cfg = self.store.config()
         s.frame()
         s.put(2, 1, "Type changes, press Enter on each. Leave a field as it is to keep it.")
-        fields = [("Region (IATA) . . . :", "region", 8), ("Broker  . . . . . . :", "broker", 40),
+        fields = [("Region (IATA) . . . :", "region", 8), ("Control broker  . . :", "broker", 40),
+                  ("Discovery broker  . :", "discovery_broker", 40),
                   ("Port  . . . . . . . :", "port", 6), ("Username  . . . . . :", "username", 20),
                   ("Password  . . . . . :", "password", 20), ("Wait for answer, s  :", "wait_secs", 4)]
         values = {}
@@ -527,6 +528,7 @@ class App:
             values[key] = value.strip()
         try:
             self.store.save_config(region=values["region"].upper(), broker=values["broker"],
+                                   discovery_broker=values["discovery_broker"],
                                    port=int(values["port"]), username=values["username"],
                                    password=values["password"], wait_secs=int(values["wait_secs"]))
         except ValueError:

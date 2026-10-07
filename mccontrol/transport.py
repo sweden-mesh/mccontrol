@@ -121,9 +121,11 @@ def discover(config, seconds=5.0, client_factory=None):
                 "retained": bool(getattr(msg, "retain", False)),
             }
 
-    client = (client_factory or _client)(config)
+    # Statuses are on the Observer feed, which is a different broker from the control one.
+    feed = dict(config, broker=config.get("discovery_broker") or config["broker"])
+    client = (client_factory or _client)(feed)
     client.on_message = on_message
-    _connect(client, config)
+    _connect(client, feed)
     try:
         client.subscribe(f"{envelope.TOPIC_PREFIX}{config['region'].upper()}/+/status", qos=0)
         time.sleep(seconds)

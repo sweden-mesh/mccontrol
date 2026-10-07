@@ -59,6 +59,14 @@ The command line does the same without the screens: `mccontrol send loutest regi
 `mccontrol send all region allowf se-jkp --all`, `mccontrol regions loutest`,
 `mccontrol history loutest`, `--dry-run` to sign and print without sending.
 
+## Two brokers
+
+The control plane does not ride the Observer feed. Commands and results go through
+**`mqtt.louie.se`**, the control broker, which is the one a node's `mqtt.cmd.slot` points at;
+this is mccontrol's default. The Observer stats and packets go to `mqtt.meshat.se`, which
+refuses subscriptions and is used here only to discover nodes from their retained status.
+Both are set under *Change configuration* or `mccontrol config --broker … --discovery-broker …`.
+
 ## The protocol
 
 The envelope is the one the Observer auto-reply firmware verifies (`src/helpers/MqttControlLogic.h`
