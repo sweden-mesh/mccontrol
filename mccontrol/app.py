@@ -154,7 +154,7 @@ class App:
                 self.do("regions")
             elif key == curses.KEY_F7:
                 if self.right_mode == "found":
-                    self.adopt_found(range(len(self.found)))
+                    self.adopt_found(range(len(self.found)), ask=False)
                 else:
                     self.do("all")
             elif key == curses.KEY_F8:
@@ -303,16 +303,19 @@ class App:
         """node  name-or-reply  = known: fits the right panel at 80 columns."""
         middle = e["name"] or e["outcome"]
         tail = f" = {e['known_as']}" if e["known_as"] else ""
-        return f"{e['node']} {middle[:36 - len(tail)]:{36 - len(tail)}}{tail}"
+        room = max(4, 27 - len(tail))
+        return f"{e['node']} {middle[:room]:{room}}{tail}"
 
-    def adopt_found(self, rows):
+    def adopt_found(self, rows, ask=True):
+        """Remember found rows. With `ask`, a node the fleet did not name gets a name dialog;
+        F7 (add all) skips the dialogs and leaves those unnamed for later."""
         added = 0
         for i in rows:
             if i >= len(self.found) or self.found[i]["known_as"]:
                 continue
             e = self.found[i]
             name = e["name"]
-            if not name:
+            if not name and ask:
                 f = Field("Name", "", width=30)
                 d = Dialog("Name the device", fields=[f], body=[f"{e['node']} in {e['region']} ({e['outcome'][:30]})",
                                                                 "Leave empty to name it later."], width=56)
