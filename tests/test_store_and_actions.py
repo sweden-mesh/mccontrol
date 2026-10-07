@@ -318,3 +318,11 @@ def test_refresh_names_names_the_unnamed_and_stores_every_version(store, monkeyp
     assert store.device("ugo")["name"] == "UGO"                        # a name you gave is kept
     assert store.device("ugo")["ver"].endswith("42f48ce9")
     assert any("get name: refused: not-allowed" in l for l in lines)
+
+
+def test_a_result_of_any_kind_counts_as_heard_and_silence_does_not(store):
+    store.add_device("LOUTEST", NODE, "JKG")
+    store.record(NODE, "region", "t", None)
+    assert store.device("loutest").get("last_heard") is None
+    store.record(NODE, "region", "t", envelope.parse_result("r1|1|17||", NODE))      # a refusal
+    assert store.device("loutest")["last_heard"] == store.device("loutest")["last_sent"]

@@ -236,8 +236,10 @@ class Store:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(line) + "\n")
         if node:
-            self.update_device(node, last_sent=line["at"],
-                               last_result=(None if result is None else result.code_name))
+            changes = {"last_sent": line["at"], "last_result": (None if result is None else result.code_name)}
+            if result is not None:
+                changes["last_heard"] = line["at"]      # any answer, a refusal too, proves it is there
+            self.update_device(node, **changes)
         return line
 
     def history(self, node, limit=200):

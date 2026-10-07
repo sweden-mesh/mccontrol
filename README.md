@@ -20,6 +20,10 @@ The colours are Turbo Pascal's: a black menu bar and key bar with the hot letter
 numbers in red, a blue work area, grey dialogs, green for the open menu. A terminal without
 colour gets bold and reverse video instead.
 
+A name ending in ` ?` is a device nothing has been heard from for seven days after a send — over
+the control plane or by Beacon — and is a device to look at, not a verdict. Nothing refreshes by
+itself.
+
 The left panel is your device directory; the right panel follows the cursor (history), or
 shows a send's results, or what a discovery found. Ins tags rows, `*` inverts, `+`/`-` tag a
 region. Dialogs take the one or two values a verb needs; Esc always cancels.

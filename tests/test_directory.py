@@ -64,3 +64,18 @@ def test_the_version_column_is_short_and_sorts():
     devs = [dict(_devs()[0], ver="v1.17.1-ar-10"), dict(_devs()[1], ver="v1.16.0"), _devs()[2]]
     assert [d.get("ver") for d in directory.sorted_devices(devs, "version")] == ["v1.16.0", "v1.17.1-ar-10", None]
     assert "1.17.1-ar-10" in directory.row(devs[0], 100, NOW)
+
+
+def test_a_device_not_heard_from_in_seven_days_is_marked_and_one_never_asked_is_not():
+    fresh = dict(_devs()[0], last_sent=(NOW - datetime.timedelta(days=10)).isoformat(),
+                 last_heard=(NOW - datetime.timedelta(days=2)).isoformat())
+    old = dict(_devs()[0], last_sent=(NOW - datetime.timedelta(days=10)).isoformat(),
+               last_heard=(NOW - datetime.timedelta(days=8)).isoformat())
+    never_heard = dict(_devs()[0], last_sent=(NOW - datetime.timedelta(hours=1)).isoformat(), last_heard=None)
+    never_asked = dict(_devs()[0], last_sent=None, last_heard=None)
+    beacon_saw = dict(old, fleet={"battery_mv": 4000, "seen": (NOW - datetime.timedelta(days=1)).isoformat()})
+    assert not directory.stale(fresh, NOW) and directory.stale(old, NOW)
+    assert directory.stale(never_heard, NOW) and not directory.stale(never_asked, NOW)
+    assert not directory.stale(beacon_saw, NOW)
+    assert directory.row(old, 60, NOW).startswith(old["name"][:16] + " ?")
+    assert " ?" not in directory.row(fresh, 60, NOW)[:18]

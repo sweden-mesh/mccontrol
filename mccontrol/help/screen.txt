@@ -19,3 +19,10 @@ See [[keys]] for the keys, [[send]] for sending, [[discover]] for finding
 repeaters.
 
 Batt and Seen come from Beacon when you ask (r); see [[stats]].
+
+A name ending in " ?" marks a device something was sent to and nothing
+heard from for seven days -- no result over the control plane and no
+status seen by Beacon. It is a device to look at, not a verdict: the
+control plane may be off, or the node may answer another key now. A
+device never sent to carries no mark, since nothing is known. Nothing
+refreshes by itself; s, r and n ask when you do.

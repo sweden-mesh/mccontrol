@@ -34,15 +34,43 @@ def sorted_devices(devices, by="name"):
     return sorted(devices, key=lambda d: (d.get("name") or "~" + d["node"]).lower())
 
 
+STALE_DAYS = 7
+
+
+def last_heard(device):
+    """The latest proof the node is there: a result over the control plane, or the status
+    Beacon last saw. ISO text or None."""
+    seen = (device.get("fleet") or {}).get("seen")
+    heard = device.get("last_heard")
+    return max(x for x in (seen, heard) if x) if (seen or heard) else None
+
+
+def stale(device, now=None, days=STALE_DAYS):
+    """True when something was sent and nothing has been heard for `days`: a device to look
+    at, not a verdict. A device never asked is not stale, it is unknown."""
+    heard = last_heard(device)
+    if not heard:
+        return bool(device.get("last_sent"))
+    try:
+        then = datetime.datetime.fromisoformat(heard)
+    except ValueError:
+        return False
+    now = now or datetime.datetime.now()
+    return (now - then).total_seconds() > days * 86400
+
+
 def row(device, width, now=None):
     """One list row for a device, laid out to `width` columns.
 
     name (18)  node (8)  reg (4)  last sent (7)  batt (5)  seen (5)  ver (12)  result (rest)
 
+    A name ending in ` ?` is a device something was sent to and nothing heard from for
+    seven days, over the control plane or by Beacon: one to look at, not a verdict.
     `batt` and `seen` are what Beacon last said (`device["fleet"]`, filled by a refresh):
     battery in volts and the age of the node's last status. Blank until asked for.
     """
-    name = (device.get("name") or "(unnamed)")[:18].ljust(18)
+    name = (device.get("name") or "(unnamed)")
+    name = (f"{name[:16]} ?" if stale(device, now) else name[:18]).ljust(18)
     node = device["node"][:8].ljust(8)
     region = (device.get("region") or "?")[:4].ljust(4)
     sent = relative(device.get("last_sent"), now)[:7].ljust(7)
