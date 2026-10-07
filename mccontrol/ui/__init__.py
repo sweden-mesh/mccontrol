@@ -6,3 +6,4 @@ themselves onto it from state the caller passes in and hand keys back as decisio
 
 from .screen import Screen, Colors, KEY_ENTER, is_enter, is_exit            # noqa: F401
 from .widgets import Panel, ListView, KeyBar, Message                       # noqa: F401
+from .dialogs import Dialog, Field, Button, confirm, notice                 # noqa: F401

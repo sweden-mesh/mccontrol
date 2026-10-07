@@ -165,22 +165,27 @@ class Screen:
         """One key. An Esc that a terminal sends as the start of a function-key sequence the
         library did not recognise is drained, so its tail never lands in a field."""
         key = self.win.getch()
-        if key == 27:
-            self.win.nodelay(True)
-            try:
-                tail = []
-                while True:
-                    nxt = self.win.getch()
-                    if nxt == -1:
-                        break
-                    tail.append(nxt)
-            finally:
-                self.win.nodelay(False)
-            # Alt+letter arrives as Esc then the letter: hand it back as a negative code.
-            if len(tail) == 1 and 32 <= tail[0] < 127:
-                return -tail[0]
-            return 27
-        return key
+        if key != 27:
+            return key
+        self.win.nodelay(True)
+        try:
+            nxt = self.win.getch()
+            if nxt == -1:                                   # a plain Esc
+                return 27
+            if nxt >= 256:                                  # a key of its own pressed right after Esc
+                curses.ungetch(nxt)
+                return 27
+            tail = [nxt]
+            if nxt not in (ord("["), ord("O")):             # Alt+letter: Esc then the letter
+                return -nxt if 32 <= nxt < 127 else 27
+            while True:                                     # an unrecognised sequence: drain it
+                nxt = self.win.getch()
+                if nxt == -1:
+                    break
+                tail.append(nxt)
+        finally:
+            self.win.nodelay(False)
+        return 27
 
     def cursor(self, visible):
         try:

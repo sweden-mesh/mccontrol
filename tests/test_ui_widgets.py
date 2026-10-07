@@ -123,3 +123,70 @@ curses.wrapper(main)
     # attribute changes become spaces once the escape codes are stripped, so the number and
     # its label are matched with room between them
     assert re.search(r"1\s*Help", text) and re.search(r"10\s*Quit", text)
+
+
+# ---- dialogs ---------------------------------------------------------------------
+
+from mccontrol.ui import dialogs
+
+
+def test_a_field_edits_and_recalls_history():
+    f = dialogs.Field("Command", history=["region", "get autoreply"], width=10)
+    for ch in "ver":
+        assert f.handle(ord(ch))
+    assert f.value == "ver"
+    assert f.handle(curses.KEY_BACKSPACE) and f.value == "ve"
+    assert f.handle(curses.KEY_UP) and f.value == "get autoreply"
+    assert f.handle(curses.KEY_UP) and f.value == "region"
+    assert f.handle(curses.KEY_UP) and f.value == "region"              # at the oldest
+    assert f.handle(curses.KEY_DOWN) and f.value == "get autoreply"
+    assert f.handle(curses.KEY_DOWN) and f.value == ""                  # past the newest: blank
+    assert not f.handle(curses.KEY_F1)
+    secret = dialogs.Field("Password", "abc", secret=True)
+    assert secret.shown() == "***"
+    assert dialogs.Field("Command", width=2).handle(ord("x")) and not dialogs.Field("Command", "xx", width=2).handle(ord("y"))
+
+
+def test_a_dialog_runs_on_a_terminal_enter_takes_the_default_and_esc_cancels():
+    script = """
+import sys; sys.path.insert(0, %r)
+import curses, json
+from mccontrol.ui import Screen, Dialog, Field, Button, confirm
+def main(win):
+    s = Screen(win)
+    d = Dialog("Send a Command", fields=[Field("Command", width=30), Field("Note", width=20)],
+               buttons=[Button("Send", "send", default=True), Button("Cancel", None)])
+    r1 = d.run(s)
+    r2 = confirm(s, "Confirm", ["Command: region denyf *"], "stops forwarding every unscoped message")
+    r3 = confirm(s, "Confirm", ["again"], "x")
+    print("RESULT", json.dumps([r1, d.fields[0].value, d.fields[1].value, r2, r3]), flush=True)
+curses.wrapper(main)
+""" % os.getcwd()
+    import fcntl, signal, struct, termios
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.environ["TERM"] = "xterm"
+        os.execvp(sys.executable, [sys.executable, "-c", script])
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    def send(keys, wait=0.4):
+        time.sleep(wait); os.write(fd, keys)
+    send(b"region")           # typed into the focused Command field
+    send(b"\t")               # Tab to Note
+    send(b"hi")
+    send(b"\r")               # Enter on a field: the default button, Send
+    send(b"\x1b")             # confirm 1: Esc -> False
+    send(b"\x1bOD")           # confirm 2: Left (xterm keypad mode) moves focus from Cancel to Send anyway
+    send(b"\r")               #            Enter -> True
+    out = b""; end = time.time() + 4
+    while time.time() < end:
+        r, _, _ = select.select([fd], [], [], 0.1)
+        if r:
+            try: out += os.read(fd, 65536)
+            except OSError: break
+    os.waitpid(pid, 0)
+    text = re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b" ", out).decode("utf-8", "replace")
+    m = re.search(r"RESULT (\[.*?\])", text)
+    assert m, text[-400:]
+    import json
+    assert json.loads(m.group(1)) == ["send", "region", "hi", False, True]
+    assert "Send a Command" in text and "stops forwarding" in text
