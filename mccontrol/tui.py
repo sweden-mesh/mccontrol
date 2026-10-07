@@ -387,9 +387,14 @@ class App:
                 except _store.StoreError as exc:
                     public = f"unreadable: {exc}"
                 s.put(2, 1, "Your key is present. Provision each repeater over its serial console with:")
-                s.put(4, 3, "set mqtt.cmd.pubkey " + public[:40])
-                s.put(5, 3, "                    " + public[40:])
-                s.put(6, 3, "set mqtt.cmd on")
+                _h, w = self.win.getmaxyx()
+                if w >= 86:                              # the whole command fits: one line, copyable
+                    s.put(4, 1, "set mqtt.cmd.pubkey " + public)
+                else:                                    # 80 columns: the key alone, unbroken
+                    s.put(4, 1, "set mqtt.cmd.pubkey   (followed by the key on the next line)")
+                    s.put(5, 1, public)
+                s.put(6, 1, "set mqtt.cmd on")
+                s.put(7, 1, "'mccontrol key' prints the public key alone for copying.")
                 s.put(8, 3, f"The private seed is in {self.store.key_path}")
                 s.put(9, 3, "It is never shown here and never leaves this machine inside anything but a signature.")
                 s.put(11, 3, "1. Replace the key (every repeater provisioned with the old one stops listening)")
