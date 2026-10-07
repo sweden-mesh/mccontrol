@@ -1,0 +1,21 @@
+The command line
+
+The same work without the screens:
+
+  mccontrol keygen                      create the signing key
+  mccontrol key                         print the public key
+  mccontrol config --username u --password p [--broker h --port n]
+  mccontrol test                        test the control broker
+  mccontrol discover JKG [--add]        find the nodes there that accept your key
+  mccontrol add <name> <8-hex node> <region> [notes]
+  mccontrol devices                     list your devices
+  mccontrol send loutest region put se-jkp '*'
+  mccontrol send JKG region allowf se-jkp --all
+  mccontrol send loutest region --dry-run     sign and print, send nothing
+  mccontrol regions loutest             read the map
+  mccontrol history loutest
+  mccontrol help [topic]                this help as text
+
+A device is named by its name or by any unique prefix of its name or id.
+Commands that take something away ask on the command line too; --yes
+skips the question. Back to [[index]].

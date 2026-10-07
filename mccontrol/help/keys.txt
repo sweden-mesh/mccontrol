@@ -1,0 +1,19 @@
+Keys on the main screen
+
+  F1        this help, about the screen or dialog you are on
+  Shift+F1  the help contents;  Alt+F1  the previous help topic
+  F2        send a command to the tagged devices, or the cursor device
+  F3        the cursor device's history as a window (Enter does the same)
+  F4        edit the cursor device: name, region, notes
+  F5        discover: find the repeaters in a region that accept your key
+  F6        read the cursor device's region map (sends "region")
+  F7        send a command to every node in a region
+  F8        forget the cursor device
+  F9 / F10  the menu / quit
+  Ins Space tag the row and move down;  * invert;  + - tag or untag a region
+  Tab       switch panels;  Enter  open;  Esc  close a dialog or menu
+  Ctrl+L    redraw the screen
+
+In a dialog: Tab and Shift+Tab move between fields and buttons, Enter
+presses the highlighted default button from anywhere, Esc cancels. See
+[[dialogs]].

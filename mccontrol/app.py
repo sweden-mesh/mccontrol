@@ -7,9 +7,9 @@ matters is in the store; the screen is redrawn from it after every key.
 
 import curses
 
-from . import actions, directory, envelope, store as _store, transport
-from .ui import (Button, Dialog, Field, KeyBar, ListView, Menu, MenuBar, MenuItem, Message,
-                 Panel, confirm, notice)
+from . import actions, directory, envelope, helptext, store as _store, transport
+from .ui import (Button, Dialog, Field, HelpWindow, KeyBar, ListView, Menu, MenuBar, MenuItem,
+                 Message, Panel, confirm, notice)
 from .ui.screen import KEY_ENTER, run as _run
 
 KEYS = ["Help", "Send", "Hist", "Edit", "Disco", "Regns", "All", "Del", "Menu", "Quit"]
@@ -34,6 +34,8 @@ class App:
         self.right_rows = []                 # (line, full_text) pairs behind the right panel
         self.right_mode = "history"          # "history" | "results" | "found" | "regions"
         self.right_node = None               # whose history the panel shows
+        self.helpwin = HelpWindow(helptext.load)
+        self.context = "main"                # which help topic F1 opens
         self.menu = MenuBar([
             Menu("Devices", [MenuItem("Discover", "discover", "F5"), MenuItem("Edit", "edit", "F4"),
                              MenuItem("Forget", "forget", "F8"), MenuItem("Sort by name", "sort:name"),
@@ -43,7 +45,9 @@ class App:
                           MenuItem("Read regions", "regions", "F6")]),
             Menu("Keys", [MenuItem("Show public key", "keys")]),
             Menu("Options", [MenuItem("Control broker", "setup"), MenuItem("Test the broker", "test")]),
-            Menu("Help", [MenuItem("Keys on this screen", "help", "F1"), MenuItem("Quit", "quit", "F10")]),
+            Menu("Help", [MenuItem("Contents", "help:index", "Shift+F1"), MenuItem("This screen", "help", "F1"),
+                          MenuItem("Keys", "help:keys"), MenuItem("Commands", "help:commands"),
+                          MenuItem("Quit", "quit", "F10")]),
         ])
 
     # -- state -------------------------------------------------------------------------
@@ -140,6 +144,8 @@ class App:
                 continue
             if key == curses.KEY_F1:
                 self.do("help")
+            elif key == curses.KEY_F0 + 13:                     # Shift+F1: the contents
+                self.do("help:index")
             elif key == curses.KEY_F2:
                 self.do("send")
             elif key == curses.KEY_F3 or (key in KEY_ENTER and self.left.active):
@@ -186,6 +192,8 @@ class App:
             self.tag_region(action[4:] == "+")
         elif action == "help":
             self.help()
+        elif action.startswith("help:"):
+            self.helpwin.run(self.screen, action[5:], self.draw)
         elif action == "history":
             self.history_window()
         elif action == "send":
@@ -460,13 +468,9 @@ class App:
         return f.value.strip().upper() or None
 
     def help(self):
-        lines = ["F1  this help           F6  read the cursor device's regions",
-                 "F2  send to tagged/cursor F7  send to all in a region",
-                 "F3  history (Enter too)  F8  forget the cursor device",
-                 "F4  edit the device      F9/F10  menu / quit",
-                 "F5  discover a region    Ins/Space tag, * invert, +/- by region",
-                 "Tab switches panels; Esc closes a dialog or menu."]
-        notice(self.screen, "Keys", lines, self.draw)
+        """F1: the topic for where the cursor is -- the found list, a dialog's subject, or the screen."""
+        context = "found" if self.right_mode == "found" else self.context
+        self.helpwin.run(self.screen, helptext.CONTEXT.get(context, "screen"), self.draw)
 
 
 def run(store):

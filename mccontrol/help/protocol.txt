@@ -1,0 +1,16 @@
+The envelope
+
+  topic    meshcore/<IATA>/<node>/cmd      one node (first 8 hex of its key)
+           meshcore/<IATA>/all/cmd         every node in the region
+  payload  v1|<counter>|<expiry>|<command>|<128-hex Ed25519 signature>
+  signed   "<topic>" newline "v1|<counter>|<expiry>|<command>"
+  result   r1|<counter>|<code>|<command>|<reply>  on meshcore/<IATA>/<node>/res
+
+The topic is inside the signature, so a command captured from one node
+cannot be replayed at another, nor a per-node command replayed as a
+broadcast. The counter must be greater than the last one the node
+accepted; unix seconds do that without bookkeeping. The expiry bounds a
+delayed replay. A node publishes a result only when the signature
+verified, so an answer of any kind proves the node holds your key.
+
+See [[signing]] and [[broker]].

@@ -53,6 +53,8 @@ def build_parser():
     d.add_argument("region", help="the IATA code, e.g. JKG")
     d.add_argument("--add", action="store_true", help="remember every node not yet in your list")
     d.add_argument("--wait-secs", type=float, default=None, help="how long to listen for answers")
+    hp = sub.add_parser("help", help="the help topics as text")
+    hp.add_argument("topic", nargs="?", default="index")
     h = sub.add_parser("history", help="what was sent to a device and what came back")
     h.add_argument("device")
     h.add_argument("--limit", type=int, default=30)
@@ -176,6 +178,16 @@ def _discover(store, args):
     return 0
 
 
+def _help(_store, args):
+    from . import helptext
+    text = helptext.as_text(args.topic)
+    if text is None:
+        print(f"no help topic {args.topic!r}; topics: {', '.join(helptext.topics())}", file=sys.stderr)
+        return 1
+    print(text)
+    return 0
+
+
 def _history(store, args):
     device = _device(store, args.device)
     for line in store.history(device["node"], limit=args.limit):
@@ -186,7 +198,7 @@ def _history(store, args):
 
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
             "remove": _remove, "send": _send, "regions": _regions, "history": _history,
-            "discover": _discover, "test": _test}
+            "discover": _discover, "test": _test, "help": _help}
 
 if __name__ == "__main__":
     sys.exit(main())

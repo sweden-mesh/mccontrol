@@ -19,3 +19,6 @@ mccontrol = "mccontrol.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["mccontrol*"]
+
+[tool.setuptools.package-data]
+mccontrol = ["help/*.txt"]

@@ -77,9 +77,9 @@ def test_the_directory_shows_every_device_with_its_columns_and_tags(tmp_path):
     assert re.search(r"1\s*Help", text) and re.search(r"10\s*Quit", text)
 
 
-def test_f1_shows_the_keys_and_f10_quits(tmp_path):
-    text, _ = walk(tmp_path, [(F[1], 0.5), (b"\r", 0.3), (F[10], 0.3)])
-    assert "F5  discover a region" in text
+def test_f10_quits(tmp_path):
+    text, _ = walk(tmp_path, [(F[10], 0.3)], seconds=1.5)
+    assert "Devices" in text
 
 
 def test_the_right_panel_follows_the_cursor_and_opens_a_reply(tmp_path):
@@ -186,3 +186,19 @@ def test_setup_saves_the_control_broker(tmp_path):
     assert "Saved." in text
 
 
+
+
+def test_f1_opens_help_for_the_screen_and_enter_follows_a_link(tmp_path):
+    text, _ = walk(tmp_path, [(F[1], 0.6), (b"\r", 0.6)])
+    assert "Help: The screen" in text
+    assert "Help: Keys on the main screen" in text         # the first link on the screen topic
+
+
+def test_the_command_line_prints_a_topic(tmp_path, capsys):
+    from mccontrol import cli
+    import os
+    os.environ["MCCONTROL_HOME"] = str(tmp_path)
+    assert cli.main(["help", "commands"]) == 0
+    out = capsys.readouterr().out
+    assert "region put" in out and "[cautions]" in out
+    assert cli.main(["help", "nothing"]) == 1

@@ -8,3 +8,4 @@ from .screen import Screen, Colors, KEY_ENTER, is_enter, is_exit            # no
 from .widgets import Panel, ListView, KeyBar, Message                       # noqa: F401
 from .dialogs import Dialog, Field, Button, confirm, notice                 # noqa: F401
 from .menu import MenuBar, Menu, MenuItem                                 # noqa: F401
+from .help import HelpWindow                                              # noqa: F401

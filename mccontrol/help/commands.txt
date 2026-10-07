@@ -1,0 +1,31 @@
+Commands a repeater admits over the control plane
+
+Only what the firmware's allowlist admits travels this way; everything
+else is refused before it reaches the node's command line, with
+"not-allowed". The list, as of the firmware this tool was written against:
+
+  region                   read the region map (the tree with F flags)
+  region put <name> [*]    add a region as a child of * (or of a parent)
+  region allowf <name>     forward floods carrying that scope
+  region denyf <name>      stop forwarding that scope   (see [[cautions]])
+  region remove <name>     delete a region             (see [[cautions]])
+  region default <name>    the scope on the repeater's own adverts
+  region home <name>       the repeater's home region (not acted upon)
+  region save              keep the map after a reboot
+
+  set autoreply on|off     answer test requests, or not
+  set autoreply.<x> <v>    hops, direct.flood, slot, window, slots,
+                           region, mode, private: the auto-reply settings
+  get autoreply[.<x>]      read them back
+  trigger test [<id>] [F|P|D|S]      originate a test probe
+  trigger private <64hex> [<id>]     a test request to one repeater
+
+  get txdelay  get direct.txdelay  get rxdelay  get af  get cad
+  get int.thresh  get radio  get repeat  get flood.max  get flood.max.unscoped
+  ver                      which firmware the node runs
+  get name                 the node's name
+
+A region tree line with "|" (region def a|* b|*) cannot travel: "|" is the
+envelope's field separator. Add names one at a time with region put.
+
+"trigger" commands transmit on the air and are refused as a broadcast.

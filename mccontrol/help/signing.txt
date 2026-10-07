@@ -1,0 +1,19 @@
+Your signing key
+
+Every command is signed with an Ed25519 key kept on this machine
+(key.seed in the configuration directory, readable only by you). A
+repeater accepts commands signed by exactly one public key, the one
+given to it over its serial console:
+
+  set mqtt.cmd.pubkey <your 64-hex public key>
+  set mqtt.cmd on
+
+The Keys menu shows that command on one line, creates a key when there is
+none, imports an existing seed, and replaces the key -- which silences
+every repeater provisioned with the old one until each is re-provisioned.
+
+The seed is never shown and never leaves the machine inside anything but
+a signature. "refused: sig-invalid" from a node means it holds a
+different public key than this one.
+
+See [[protocol]] for what the signature covers.

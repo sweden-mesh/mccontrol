@@ -1,0 +1,14 @@
+The control broker
+
+Commands and results travel through one MQTT broker, the one each
+repeater's mqtt.cmd.slot points at. Options > Control broker sets its
+host, port, username, password and how long to wait for answers. Options
+> Test the broker connects with those, subscribes to a test topic,
+publishes to it and checks the broker delivers it back; each step is
+reported and the first failure named ("Not authorized" is the broker
+rejecting the username or password).
+
+This is not the broker the repeaters' statistics go to; those credentials
+are not used here.
+
+Back to [[index]].

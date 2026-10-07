@@ -1,0 +1,24 @@
+Help: contents
+
+mccontrol signs commands with your key and sends them to the repeaters you
+run, over the control broker. Move the cursor onto a link and press Enter
+to follow it; Alt+F1 goes back; Esc closes help.
+
+Getting around
+  [[screen]]      the device directory and the quick view
+  [[keys]]        every key on the main screen
+  [[dialogs]]     how dialogs work: fields, Tab, Enter, Esc
+
+Doing things
+  [[send]]        send a command to one device, the tagged ones, or a region
+  [[discover]]    find the repeaters that accept your key
+  [[devices]]     add, edit, forget; names and regions
+  [[history]]     what was sent and what came back
+
+Reference
+  [[commands]]    the commands a repeater admits over the control plane
+  [[cautions]]    the commands that take something away
+  [[signing]]     your key, provisioning a repeater, what the signature covers
+  [[broker]]      the control broker, its credentials, the connection test
+  [[protocol]]    the envelope on the wire, for the curious
+  [[cli]]         the same work from the command line

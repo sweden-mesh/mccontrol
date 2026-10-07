@@ -1,0 +1,19 @@
+The screen
+
+The left panel is the device directory: one row per repeater you manage,
+with its name, node id, region, when you last sent to it and what it
+answered. The row under the cursor bar is the current device; Ins or Space
+tags a row, * inverts the tags, + and - tag or untag a whole region. The
+panel's bottom edge counts the tags.
+
+The right panel shows what the cursor is on: the device's history, newest
+first. After a send it shows that send's results per device until the
+cursor moves; after a discovery it shows what answered. Tab moves between
+the panels; Enter on a history line opens the whole reply.
+
+The top line is the menu bar (F10 or Alt+letter). The bottom line is the
+key bar: the ten function keys and what each does here. The line above it
+is the message line: the outcome of the last thing you did.
+
+See [[keys]] for the keys, [[send]] for sending, [[discover]] for finding
+repeaters.
