@@ -19,6 +19,12 @@ Beacon, and so does
   mccontrol config --beacon-url https://beacon.example/api/v1
   mccontrol stats loutest [--range 24h|48h|168h] [--interval 1h|6h|24h]
 
+"r" (View > Refresh Batt/Seen) fills the directory's Batt and Seen
+columns -- battery in volts and the age of the node's last status --
+for the tagged devices, or all of them when none is tagged, from the
+same source; they stay blank until asked for and never refresh by
+themselves. On the command line, "mccontrol fleet" prints the table.
+
 The first line is always the sample's age. A sample Beacon holds is as
 old as the node's last status publish (every mqtt.interval minutes),
 and when Beacon cannot be reached the panel says so and shows no

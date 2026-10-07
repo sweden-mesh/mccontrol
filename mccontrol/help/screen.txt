@@ -1,8 +1,8 @@
 The screen
 
 The left panel is the device directory: one row per repeater you manage,
-with its name, node id, region, when you last sent to it and what it
-answered. The row under the cursor bar is the current device; Ins or Space
+with its name, node id, region, when you last sent to it, its battery and
+last-seen age once asked for, and what it answered. The row under the cursor bar is the current device; Ins or Space
 tags a row, * inverts the tags, + and - tag or untag a whole region. The
 panel's bottom edge counts the tags.
 
@@ -17,3 +17,5 @@ is the message line: the outcome of the last thing you did.
 
 See [[keys]] for the keys, [[send]] for sending, [[discover]] for finding
 repeaters.
+
+Batt and Seen come from Beacon when you ask (r); see [[stats]].

@@ -43,7 +43,7 @@ class App:
                              MenuItem("Tag all in region", "tag:+", "+"), MenuItem("Untag region", "tag:-", "-")]),
             self.send_menu(),
             Menu("View", [MenuItem("Statistics", "stats:24h:6h", "s"), MenuItem("Last 48 hours", "stats:48h:6h"),
-                          MenuItem("Last 7 days", "stats:168h:24h")]),
+                          MenuItem("Last 7 days", "stats:168h:24h"), MenuItem("Refresh Batt/Seen", "fleet", "r")]),
             Menu("Keys", [MenuItem("Show public key", "keys")]),
             Menu("Options", [MenuItem("Broker", "setup"), MenuItem("Test the broker", "test"),
                              MenuItem("Shortcuts", "shortcuts"), MenuItem("Command sets", "sets")]),
@@ -207,6 +207,8 @@ class App:
                 self.click()
             elif key == ord("s") and self.left.active:
                 self.do("stats:24h:6h")
+            elif key == ord("r") and self.left.active:
+                self.do("fleet")
             elif key == ord("+") or key == ord("-"):
                 self.do("tag:" + chr(key))
             elif key < 0 and chr(-key) in "123456789":          # Alt+digit
@@ -281,6 +283,8 @@ class App:
             self.shortcuts_dialog()
         elif action == "sets":
             self.sets_dialog()
+        elif action == "fleet":
+            self.refresh_fleet()
         elif action.startswith("stats:"):
             _s, range_, interval = action.split(":")
             self.statistics(range_, interval)
@@ -498,6 +502,20 @@ class App:
             return
         self.show_results(f"Stats: {name[:28]}", lines)
         self.message.say(lines[0] + ". Enter opens a line; the cursor returns to history.")
+
+    def refresh_fleet(self):
+        """r, or View > Refresh: Batt and Seen from Beacon for the tagged devices, or all of
+        them when none is tagged. Only when asked; nothing refreshes by itself."""
+        devices = self.targets if self.list.tags else list(self.devices)
+        if not devices:
+            self.message.say("No devices to refresh.", error=True)
+            return
+        self.message.say(f"Asking Beacon about {len(devices)} device(s)...")
+        self.draw()
+        updated, failed = actions.refresh_fleet(self.store, devices)
+        self.reload()
+        self.message.say(f"Refreshed {updated} of {len(devices)} from Beacon"
+                         + (f"; {failed} without statistics." if failed else "."), error=bool(failed))
 
     def sets_dialog(self):
         """Options > Command sets: one set at a time, by name; empty steps are dropped."""

@@ -35,19 +35,25 @@ def sorted_devices(devices, by="name"):
 def row(device, width, now=None):
     """One list row for a device, laid out to `width` columns.
 
-    name (18)  node (8)  reg (4)  last sent (7)  result (rest)
+    name (18)  node (8)  reg (4)  last sent (7)  batt (5)  seen (5)  result (rest)
+
+    `batt` and `seen` are what Beacon last said (`device["fleet"]`, filled by a refresh):
+    battery in volts and the age of the node's last status. Blank until asked for.
     """
     name = (device.get("name") or "(unnamed)")[:18].ljust(18)
     node = device["node"][:8].ljust(8)
     region = (device.get("region") or "?")[:4].ljust(4)
     sent = relative(device.get("last_sent"), now)[:7].ljust(7)
+    fleet = device.get("fleet") or {}
+    batt = (f"{fleet['battery_mv'] / 1000:.2f}" if fleet.get("battery_mv") else "")[:5].ljust(5)
+    seen = (relative(fleet.get("seen"), now) if fleet else "")[:5].ljust(5)
     result = (device.get("last_result") or "")
-    line = f"{name} {node} {region} {sent} {result}"
+    line = f"{name} {node} {region} {sent} {batt} {seen} {result}"
     return line[: width - 1].ljust(width - 1)
 
 
 def header(width):
-    return f"{'Name':18} {'Node':8} {'Reg':4} {'Sent':7} Result"[: width - 1]
+    return f"{'Name':18} {'Node':8} {'Reg':4} {'Sent':7} {'Batt':5} {'Seen':5} Result"[: width - 1]
 
 
 def tag_footer(tagged, total):

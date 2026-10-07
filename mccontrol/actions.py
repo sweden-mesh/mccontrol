@@ -1,6 +1,9 @@
 """What the screens and the command line both do, so they cannot disagree."""
 
+import datetime
+
 from . import beacon, envelope, transport
+from .store import _now as _store_now
 
 # Commands that take something away from a repeater. Each is sent only after the person has
 # been told what it does; the node itself does not second-guess a signed command.
@@ -112,6 +115,26 @@ def statistics(store, device, range_="24h", interval="6h"):
     except beacon.BeaconError as exc:
         return lines + ["", f"no telemetry: {exc}"]
     return lines + ["", f"last {range_} at {interval}:"] + beacon.telemetry_lines(points)
+
+
+def refresh_fleet(store, devices, now=None):
+    """Battery and last-seen from Beacon for each device, stored as `fleet` on the device.
+    Returns `(updated, failed)` counts; a device Beacon does not know keeps nothing stale:
+    its `fleet` is cleared."""
+    updated = failed = 0
+    for d in devices:
+        try:
+            sample = beacon.stats(store, d, now=now)
+        except beacon.BeaconError:
+            store.update_device(d["node"], fleet=None)
+            failed += 1
+            continue
+        seen = datetime.datetime.fromtimestamp(sample["sampled_at"]).isoformat(timespec="seconds")
+        store.update_device(d["node"], fleet={"battery_mv": sample["stats"].get("battery_mv"),
+                                               "seen": seen, "firmware": sample["firmware"],
+                                               "fetched": _store_now()})
+        updated += 1
+    return updated, failed
 
 
 def regions_asked(text, store):

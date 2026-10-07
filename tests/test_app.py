@@ -271,3 +271,12 @@ def test_s_shows_the_cursor_devices_statistics_from_beacon_and_says_when_there_a
     text, _ = walk(tmp_path, [(DOWN, 0.3), (b"s", 1.0), (b"\x1bOA", 0.3), (b"s", 1.0)], env={"MCCONTROL_FAKE_BEACON": fake})
     assert "Stats: Gisebo" in text and "sampled" in text and "4261 mV" in text and "dd hh:mm" in text
     assert "Stats: Far" in text and "no statistics" in text
+
+
+def test_r_refreshes_batt_and_seen_from_beacon_for_the_tagged_devices(tmp_path):
+    fake = str(pathlib.Path(__file__).parent / "data" / "beacon-fake.json")
+    text, home = walk(tmp_path, [(DOWN, 0.3), (INS, 0.3), (b"r", 1.0)], env={"MCCONTROL_FAKE_BEACON": fake}, cols=100)
+    assert "Refreshed 1 of 1 from Beacon." in text
+    assert "4.26" in text
+    devs = {d["node"]: d for d in json.loads((home / "devices.json").read_text())}
+    assert devs["4AC61A7F"]["fleet"]["battery_mv"] == 4261 and "fleet" not in devs["FD700369"]

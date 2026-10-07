@@ -30,8 +30,8 @@ def test_a_row_lays_out_the_columns_and_fits_the_width():
     r = directory.row(_devs()[1], 38, NOW)
     assert r.startswith("(unnamed)          4AC61A7F JKG  -")
     assert len(r) == 37
-    r = directory.row(_devs()[2], 70, NOW)
-    assert "FD700369 GOT  1 d     refused: not-allowed" in r
+    r = directory.row(_devs()[2], 90, NOW)
+    assert "FD700369 GOT  1 d                 refused: not-allowed" in r     # blank Batt and Seen
     assert directory.header(38).startswith("Name")
 
 
@@ -46,3 +46,11 @@ def test_tagging_a_region():
     assert directory.by_region(_devs(), "jkg") == [0, 1]
     assert directory.by_region(_devs(), "GOT") == [2]
     assert directory.by_region(_devs(), "") == []
+
+
+def test_the_fleet_columns_show_battery_in_volts_and_the_age_of_the_last_status():
+    d = dict(_devs()[1], fleet={"battery_mv": 4261, "seen": (NOW - datetime.timedelta(minutes=12)).isoformat(), "firmware": "x"})
+    r = directory.row(d, 100, NOW)
+    assert "4AC61A7F JKG  -       4.26  12 m" in r
+    assert directory.header(100).split()[4:6] == ["Batt", "Seen"]
+    assert "   " in directory.row(_devs()[1], 100, NOW)         # no fleet data: blank, never a guess
