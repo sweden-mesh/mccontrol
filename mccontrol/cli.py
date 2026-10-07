@@ -9,6 +9,7 @@
     mccontrol send <device> <command...>      (--all for every node, --dry-run to only sign)
     mccontrol regions <device>
     mccontrol history <device>
+    mccontrol discover [--add]     the nodes publishing a status in your region
 """
 
 import argparse
@@ -43,6 +44,9 @@ def build_parser():
     s.add_argument("--yes", action="store_true", help="do not ask about a command that takes something away")
     g = sub.add_parser("regions", help="read a device's region map")
     g.add_argument("device")
+    d = sub.add_parser("discover", help="list the nodes publishing a status in your region")
+    d.add_argument("--add", action="store_true", help="remember every node not yet in your list")
+    d.add_argument("--seconds", type=float, default=5.0)
     h = sub.add_parser("history", help="what was sent to a device and what came back")
     h.add_argument("device")
     h.add_argument("--limit", type=int, default=30)
@@ -138,6 +142,20 @@ def _regions(store, args):
     return _send(store, args, command="region")
 
 
+def _discover(store, args):
+    found = actions.discover(store, seconds=args.seconds)
+    if not found:
+        print("no node published a status in this region")
+        return 0
+    for e in found:
+        mark = f"known as {e['known_as']}" if e["known_as"] else ("added" if args.add else "")
+        if args.add and not e["known_as"]:
+            actions.adopt(store, e)
+        print(f"{e['name'][:24]:24} {e['node'][:8]}  {e['model'][:18]:18} repeat={e['repeat'] or '?':4} "
+              f"{e['at']:16} {mark}")
+    return 0
+
+
 def _history(store, args):
     device = _device(store, args.device)
     for line in store.history(device["node"], limit=args.limit):
@@ -147,7 +165,8 @@ def _history(store, args):
 
 
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
-            "remove": _remove, "send": _send, "regions": _regions, "history": _history}
+            "remove": _remove, "send": _send, "regions": _regions, "history": _history,
+            "discover": _discover}
 
 if __name__ == "__main__":
     sys.exit(main())

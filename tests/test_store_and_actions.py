@@ -100,3 +100,57 @@ def test_send_records_every_device_asked_even_the_silent_ones(store, monkeypatch
     assert lines == ["LOUTEST            OK", "UGO                no answer"]
     assert store.history("B" * 64)[0]["code"] is None
     assert store.history(None)[0]["note"] == "1 of 2 answered"
+
+
+class _FakeClient:
+    """Enough of paho for discover(): connect fires on_connect, subscribe delivers retained statuses."""
+
+    retained = []
+
+    def __init__(self, _config):
+        self.on_connect = self.on_message = None
+
+    def username_pw_set(self, *_a):
+        pass
+
+    def connect(self, *_a, **_k):
+        pass
+
+    def loop_start(self):
+        class _RC:
+            is_failure = False
+        self.on_connect(self, None, None, _RC())
+
+    def subscribe(self, topic, qos=0):
+        import types
+        for node, payload in self.retained:
+            self.on_message(self, None, types.SimpleNamespace(
+                topic=f"meshcore/JKG/{node}/status", payload=payload, retain=True))
+
+    def loop_stop(self):
+        pass
+
+    def disconnect(self):
+        pass
+
+
+def test_discover_lists_status_publishers_and_marks_the_ones_you_have(store, monkeypatch):
+    from mccontrol import transport
+    import json
+    store.save_config(region="JKG")
+    store.add_device("LOUTEST", NODE)
+    _FakeClient.retained = [
+        (NODE, json.dumps({"origin": "SE-JKG-LOUTEST", "model": "Heltec V3", "firmware_version": "v1",
+                           "repeat": "on", "timestamp": "2026-10-07T18:00:00+00:00"}).encode()),
+        ("B" * 64, json.dumps({"origin": "SE-JKG-UGORptr", "timestamp": "2026-09-01T00:00:00"}).encode()),
+        ("short", b"{}"), (NODE[:63] + "Z", b"not json"),
+    ]
+    monkeypatch.setattr(transport, "_client", _FakeClient)
+    monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
+    found = actions.discover(store)
+    assert [e["name"] for e in found] == ["SE-JKG-LOUTEST", "SE-JKG-UGORptr"]
+    assert found[0]["known_as"] == "LOUTEST" and found[1]["known_as"] is None
+    assert found[0]["at"] == "2026-10-07 18:00" and found[0]["retained"]
+    entry = actions.adopt(store, found[1])
+    assert entry["name"] == "SE-JKG-UGORptr" and entry["node"] == "B" * 64
+    assert actions.adopt(store, dict(found[1], node="C" * 64))["name"] == "SE-JKG-UGORptr-2"

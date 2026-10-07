@@ -192,6 +192,7 @@ class App:
             s.frame()
             s.put(2, 1, "Type options, press Enter.")
             s.put(3, 3, "1=Add   2=Change   4=Remove   5=Display   7=History   8=Regions   9=Send")
+            s.put(4, 3, "F6=Discover nodes in the region")
             s.put(5, 1, "Opt  Name                Node      Last sent            Result")
             if not devices:
                 s.put(7, 6, "(no devices yet -- type 1 on the first line to add one)")
@@ -205,13 +206,16 @@ class App:
                 s.put(6 + i, 1, f" {opt}   {d['name'][:19]:19} {d['node'][:8]}  "
                                 f"{(d['last_sent'] or '-')[:19]:19}  {(d['last_result'] or '')[:14]}", attr)
             s.put(21, 1, "Use arrows to move, type an option on a row, Enter to run.")
-            s.keys("F3=Exit   F5=Refresh   F12=Cancel")
+            s.keys("F3=Exit   F5=Refresh   F6=Discover   F12=Cancel")
             self.win.refresh()
             key = self.win.getch()
             if exit_key(self.win, key):
                 return
             if key == curses.KEY_F5:
                 opts = {}
+                continue
+            if key == curses.KEY_F6:
+                self.discover_screen()
                 continue
             if key == curses.KEY_DOWN and cursor < len(rows) - 1:
                 cursor += 1
@@ -246,6 +250,68 @@ class App:
             self.send_screen(device, initial="region", immediate=True)
         elif opt == "9":
             self.send_screen(device)
+
+    def discover_screen(self):
+        s = Screen(self.win, "Discover Devices")
+        s.frame()
+        s.put(2, 1, "Listening for the status every node in the region publishes...")
+        self.win.refresh()
+        try:
+            found = actions.discover(self.store, seconds=5.0)
+        except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
+            s.message = str(exc)[:76]
+            s.frame()
+            s.wait()
+            return
+        cursor_row, opts, top = 0, {}, 0
+        while True:
+            s.frame()
+            s.put(2, 1, f"{len(found)} node(s) publish a status in {self.store.config().get('region')}. "
+                        f"Type 1 on a row to remember it, Enter.")
+            s.put(3, 3, "The date is from the node's own clock on its last retained status; not proof it is up.")
+            s.put(5, 1, "Opt  Name                      Node      Model              Repeat  Last status")
+            page = found[top:top + 14]
+            for i, e in enumerate(page):
+                attr = curses.A_REVERSE if top + i == cursor_row else 0
+                opt = opts.get(top + i, " ")
+                known = f"= {e['known_as']}" if e["known_as"] else ""
+                s.put(6 + i, 1, f" {opt}   {e['name'][:25]:25} {e['node'][:8]}  {e['model'][:18]:18} "
+                                f"{(e['repeat'] or '?')[:5]:5}  {e['at'][:16]} {known}", attr)
+            if not found:
+                s.put(7, 6, "(nothing heard)")
+            s.put(21, 70, "More..." if top + 14 < len(found) else "Bottom")
+            s.keys("F3=Exit   F12=Cancel   PageUp/PageDown=Scroll")
+            self.win.refresh()
+            key = self.win.getch()
+            if exit_key(self.win, key):
+                return
+            if key == curses.KEY_DOWN and cursor_row < len(found) - 1:
+                cursor_row += 1
+                if cursor_row >= top + 14:
+                    top += 14
+            elif key == curses.KEY_UP and cursor_row > 0:
+                cursor_row -= 1
+                if cursor_row < top:
+                    top = max(0, top - 14)
+            elif key == curses.KEY_NPAGE and top + 14 < len(found):
+                top += 14
+                cursor_row = top
+            elif key == curses.KEY_PPAGE and top > 0:
+                top = max(0, top - 14)
+                cursor_row = top
+            elif 0 <= key < 256 and chr(key) == "1" and found:
+                opts[cursor_row] = "1"
+            elif key in (curses.KEY_BACKSPACE, 127, 8, 32):
+                opts.pop(cursor_row, None)
+            elif key in (curses.KEY_ENTER, 10, 13):
+                added = 0
+                for i in sorted(opts):
+                    if not found[i]["known_as"]:
+                        entry = actions.adopt(self.store, found[i])
+                        found[i]["known_as"] = entry["name"]
+                        added += 1
+                opts = {}
+                s.message = f"{added} device(s) remembered." if added else ""
 
     def add_device_screen(self):
         s = Screen(self.win, "Add Device")

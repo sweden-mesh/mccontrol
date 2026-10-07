@@ -84,3 +84,50 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
         client.loop_stop()
         client.disconnect()
     return payload, dict(answers)
+
+
+def discover(config, seconds=5.0, client_factory=None):
+    """The nodes publishing a status in the region: `[{node, name, model, firmware, repeat, at}]`.
+
+    Observer nodes publish `meshcore/{IATA}/{NODE}/status`, retained, so the broker hands over
+    the last one from every node the moment we subscribe: a few seconds is enough. A retained
+    status may be old -- the node may be long gone -- so `at` is shown and nothing here claims
+    the node is up. Whether it accepts *your* key is learnt by sending it something.
+    """
+    import json
+
+    found = {}
+    lock = threading.Lock()
+
+    def on_message(_c, _u, msg):
+        parts = msg.topic.split("/")
+        if len(parts) < 4 or parts[-1] != "status":
+            return
+        node = parts[-2].upper()
+        if len(node) != 64:
+            return
+        try:
+            data = json.loads(msg.payload.decode("utf-8", "replace"))
+        except ValueError:
+            return
+        with lock:
+            found[node] = {
+                "node": node,
+                "name": str(data.get("origin") or "")[:40],
+                "model": str(data.get("model") or ""),
+                "firmware": str(data.get("firmware_version") or ""),
+                "repeat": str(data.get("repeat") or ""),
+                "at": str(data.get("timestamp") or "")[:16].replace("T", " "),
+                "retained": bool(getattr(msg, "retain", False)),
+            }
+
+    client = (client_factory or _client)(config)
+    client.on_message = on_message
+    _connect(client, config)
+    try:
+        client.subscribe(f"{envelope.TOPIC_PREFIX}{config['region'].upper()}/+/status", qos=0)
+        time.sleep(seconds)
+    finally:
+        client.loop_stop()
+        client.disconnect()
+    return sorted(found.values(), key=lambda d: (d["name"].lower(), d["node"]))

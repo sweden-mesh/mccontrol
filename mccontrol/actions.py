@@ -64,3 +64,26 @@ def send(store, command, device=None, broadcast=False, dry_run=False, wait_secs=
         store.record(None, command, topic, None,
                      note=f"{len(answers)} of {len(hear)} answered")
     return topic, payload, answers, lines
+
+
+def discover(store, seconds=5.0):
+    """Nodes publishing a status in the configured region, marked with whether you have them."""
+    config = store.config()
+    if not config.get("region"):
+        raise envelope.EnvelopeError("no region set: the IATA code your observers use, e.g. JKG")
+    known = {d["node"]: d["name"] for d in store.devices()}
+    found = transport.discover(config, seconds=seconds)
+    for entry in found:
+        entry["known_as"] = known.get(entry["node"])
+    return found
+
+
+def adopt(store, entry):
+    """Remember a discovered node under its own name, or its name plus a suffix if taken."""
+    name = entry["name"] or entry["node"][:8]
+    base, n = name, 2
+    while any(d["name"].lower() == name.lower() for d in store.devices()):
+        name = f"{base}-{n}"
+        n += 1
+    notes = " ".join(x for x in (entry.get("model"), entry.get("firmware")) if x)
+    return store.add_device(name, entry["node"], notes)

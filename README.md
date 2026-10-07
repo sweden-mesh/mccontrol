@@ -44,7 +44,9 @@ Python 3.10 or newer; depends on `pycryptodome` (Ed25519) and `paho-mqtt`. The i
   because every repeater provisioned with the old one would stop listening. The seed is never
   shown and never leaves the machine inside anything but a signature.
 - **Devices.** The repeaters you manage, by name, with notes, when you last sent to each and
-  what it answered. Tens of them fit on one screen.
+  what it answered. Tens of them fit on one screen. **F6 discovers them**: every node publishing
+  a status in your region is listed with its name, model and firmware, and `1` on a row
+  remembers it. The command line does the same with `mccontrol discover` and `--add`.
 - **Sending.** A command is signed for exactly one topic -- one node, or `all` for every node
   in the region -- and published; the tool waits for the node's reply on its result topic and
   shows it in words (`refused: not-allowed -- The command is not on the node's allowlist`).
