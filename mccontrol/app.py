@@ -180,6 +180,8 @@ class App:
             self.help()
         elif action == "history":
             self.history_window()
+        elif action == "send":
+            self.send()
         else:
             self.message.say(f"{action}: not built yet.", error=True)
 
@@ -200,6 +202,62 @@ class App:
                 f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
             lines.append(f"{line['at'][:16]}  {line['command'][:28]:28} {out[:30]}")
         notice(self.screen, f"History: {d.get('name') or d['node']}", lines or ["Nothing sent yet."], self.draw)
+
+    def send(self, region=None, initial=""):
+        """F2: one dialog, then the signed publish, then the results in the right panel."""
+        targets = [] if region else self.targets
+        if not region and not targets:
+            self.message.say("No device under the cursor; add or discover one first.", error=True)
+            return
+        if not region and len({(d.get("region") or "").upper() for d in targets}) > 1:
+            self.message.say("The tagged devices span more than one region; a send is to one region.", error=True)
+            return
+        if region:
+            target_line = f"EVERY node in {region}"
+        elif len(targets) == 1:
+            target_line = f"{targets[0].get('name') or targets[0]['node']}  ({targets[0]['node']}, {targets[0].get('region') or '?'})"
+        else:
+            target_line = f"{len(targets)} tagged devices in {targets[0].get('region') or '?'}"
+        history = list(dict.fromkeys(l["command"] for l in reversed(self.store.history(None, 50))))
+        for d in targets[:1]:
+            history = list(dict.fromkeys(history + [l["command"] for l in reversed(self.store.history(d["node"], 50))]))
+        field = Field("Command", initial, width=48, history=list(reversed(history)))
+        dialog = Dialog("Send a Command", fields=[field], width=66,
+                        body=[f"To: {target_line}", "",
+                              "Examples: region   region put se-jkp *   region allowf se-jkp   get autoreply",
+                              "Up/Down recall earlier commands. A tree line with '|' cannot travel."],
+                        buttons=[Button("Send", True, default=True), Button("Cancel", None)])
+        while True:
+            if not dialog.run(self.screen, self.draw):
+                return
+            command = field.value.strip()
+            if not command:
+                dialog.message = "Type a command."
+                continue
+            break
+        why = actions.caution(command)
+        if why and not confirm(self.screen, "Confirm", [f"Command: {command}", f"To: {target_line}"],
+                               f"It {why}", redraw_under=self.draw):
+            return
+        self.message.say("Sending...")
+        self.draw()
+        try:
+            if region:
+                _t, _p, answers, lines = actions.send(self.store, command, region=region)
+                asked = len([d for d in self.store.devices() if (d.get("region") or "").upper() == region])
+            else:
+                answers, lines, asked = {}, [], 0
+                for d in targets:                      # one signed publish per device, each to its own topic
+                    _t, _p, a, l = actions.send(self.store, command, device=d)
+                    answers.update(a)
+                    lines += l
+                    asked += 1
+        except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
+            self.message.say(str(exc), error=True)
+            return
+        self.reload()
+        self.show_results(f"Results: {command[:30]}", lines)
+        self.message.say(f"{len(answers)} of {asked} answered.", error=(len(answers) < asked))
 
     def tag_region(self, on):
         region = self.ask_region("Tag every device in which region?" if on else "Untag which region?")

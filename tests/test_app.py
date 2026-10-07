@@ -84,3 +84,29 @@ def test_the_right_panel_follows_the_cursor_and_opens_a_reply(tmp_path):
     assert "History: Gisebo" in text
     assert "region" in text and "> * F" in text
     assert "topic t" in text                      # the reply dialog shows the topic line
+
+
+def test_f2_sends_to_the_tagged_devices_and_shows_the_results(tmp_path):
+    fake = json.dumps({"4AC61A7F": [0, "> * F"], "65C1D12C": [14, ""]})
+    text, home = walk(tmp_path, [(DOWN, 0.3), (INS, 0.3), (INS, 0.3), (F[2], 0.5),
+                                 (b"region", 0.3), (b"\r", 1.5)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "2 tagged devices in JKG" in text
+    assert "2 of 2 answered" in text
+    assert "Results: region" in text
+    assert "refused: not-allow" in text          # the 80-column panel cuts the rest
+    hist = (home / "history" / "65C1D12C.jsonl").read_text()
+    assert '"command": "region"' in hist
+
+
+def test_a_command_that_takes_something_away_asks_first_and_esc_sends_nothing(tmp_path):
+    fake = json.dumps({"4AC61A7F": [0, "OK"]})
+    text, home = walk(tmp_path, [(DOWN, 0.3), (F[2], 0.5), (b"region denyf *", 0.3), (b"\r", 0.6), (b"\x1b", 0.6)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "stops this repeater forwarding every message" in text
+    assert not (home / "history" / "4AC61A7F.jsonl").read_text().count("denyf")
+
+
+def test_tags_across_two_regions_are_refused(tmp_path):
+    text, _ = walk(tmp_path, [(INS, 0.3), (DOWN, 0.3), (INS, 0.3), (b"*", 0.3), (b"*", 0.3), (F[2], 0.6)])
+    # rows: Far(GOT), Gisebo(JKG), (unnamed)(JKG); Ins on row 0 and 2 -> GOT and JKG tagged
+    assert "span more than one region" in text

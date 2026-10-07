@@ -64,7 +64,7 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     for node in hear:
         result = answers.get(node)
         store.record(node, command, topic, result, note="broadcast" if broadcast else "")
-        lines.append(f"{names.get(node, node[:8]):18} {outcome_line(result)}")
+        lines.append(f"{names.get(node, node[:8])[:12]:12} {outcome_line(result)}")
     if broadcast:
         store.record(None, command, topic, None,
                      note=f"{len(answers)} of {len(hear)} answered")

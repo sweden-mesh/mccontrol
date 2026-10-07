@@ -112,7 +112,7 @@ def test_send_records_every_device_asked_even_the_silent_ones(store, monkeypatch
     monkeypatch.setattr(actions.transport, "send",
                         lambda cfg, seed, topic, cmd, nodes_to_hear=(), **k: ("payload", {NODE: answer}))
     _t, _p, answers, lines = actions.send(store, "region put se-jkp *", region="JKG")
-    assert lines == ["LOUTEST            OK", "UGO                no answer"]
+    assert lines == ["LOUTEST      OK", "UGO          no answer"]
     assert store.history("BBBBBBBB")[0]["code"] is None
     assert store.history(None)[0]["note"] == "1 of 2 answered"
 

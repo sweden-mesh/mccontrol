@@ -45,6 +45,23 @@ def _connect(client, config, timeout=10.0):
         raise BrokerError(f"{config['broker']} refused the connection: {verdict.get('why')}")
 
 
+def _fake(topic, command, counter, nodes):
+    """For the interface's pseudo-terminal tests only: MCCONTROL_FAKE_RESULTS holds a JSON
+    object `{node: [code, reply]}` and no broker is touched. Unset in normal use."""
+    import json
+    import os
+    spec = os.environ.get("MCCONTROL_FAKE_RESULTS")
+    if spec is None:
+        return None
+    scripted = json.loads(spec)
+    answers = {}
+    for node in nodes:
+        if node in scripted:
+            code, reply = scripted[node]
+            answers[node] = envelope.Result(node, counter, code, command, reply)
+    return answers
+
+
 def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl_secs=None,
          counter=None):
     """Sign `command` for `topic`, publish it, and collect results from `nodes_to_hear`.
@@ -55,6 +72,9 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
     counter = int(time.time()) if counter is None else counter
     payload = envelope.build(seed_hex, topic, counter, command,
                              ttl_secs=ttl_secs or config.get("ttl_secs", envelope.DEFAULT_TTL_SECS))
+    faked = _fake(topic, command, counter, nodes_to_hear)
+    if faked is not None:
+        return payload, faked
     answers = {}
     lock = threading.Lock()
     all_in = threading.Event()
