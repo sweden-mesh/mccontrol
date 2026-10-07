@@ -31,20 +31,23 @@ def test_a_key_readable_by_others_is_refused(store):
 
 
 def test_devices_are_found_by_name_node_or_unique_prefix(store):
-    store.add_device("LOUTEST", NODE, "the bench repeater")
-    store.add_device("Lovsjo", "B" * 64)
+    store.add_device("LOUTEST", NODE, "JKG", "the bench repeater")
+    store.add_device("Lovsjo", "B" * 64, "JKG")
     assert store.device("loutest")["node"] == NODE
     assert store.device("AAAA")["name"] == "LOUTEST"
     assert store.device("lo") is None                      # ambiguous
     assert store.device("lou")["name"] == "LOUTEST"
     with pytest.raises(_store.StoreError):
-        store.add_device("again", NODE)
+        store.add_device("again", NODE, "JKG")
     with pytest.raises(_store.StoreError):
-        store.add_device("short", "ABC")
+        store.add_device("short", "ABC", "JKG")
+    with pytest.raises(_store.StoreError, match="region"):
+        store.add_device("noregion", "D" * 64, "")
+    assert store.regions() == ["JKG"]
 
 
 def test_history_records_what_was_sent_and_what_came_back(store):
-    store.add_device("LOUTEST", NODE)
+    store.add_device("LOUTEST", NODE, "JKG")
     ok = envelope.parse_result("r1|1|0|region|> * F", NODE)
     store.record(NODE, "region", "meshcore/JKG/" + NODE + "/cmd", ok)
     store.record(NODE, "region save", "meshcore/JKG/" + NODE + "/cmd", None)
@@ -64,8 +67,7 @@ def test_cautions_name_what_a_command_takes_away():
 
 def test_a_dry_run_signs_and_sends_nothing(store, monkeypatch):
     store.create_key()
-    store.save_config(region="JKG")
-    store.add_device("LOUTEST", NODE)
+    store.add_device("LOUTEST", NODE, "JKG")
     monkeypatch.setattr(actions.transport, "send", lambda *a, **k: pytest.fail("sent"))
     topic, payload, answers, lines = actions.send(store, "region", device=store.device("LOUTEST"),
                                                   dry_run=True)
@@ -76,27 +78,38 @@ def test_a_dry_run_signs_and_sends_nothing(store, monkeypatch):
 
 def test_a_broadcast_of_a_transmit_command_is_refused_before_signing(store):
     store.create_key()
-    store.save_config(region="JKG")
     with pytest.raises(envelope.EnvelopeError, match="every node"):
-        actions.send(store, "trigger test", broadcast=True, dry_run=True)
+        actions.send(store, "trigger test", region="JKG", dry_run=True)
 
 
-def test_sending_needs_a_region(store):
+def test_a_broadcast_goes_to_one_region_and_hears_only_that_regions_devices(store, monkeypatch):
     store.create_key()
-    store.add_device("LOUTEST", NODE)
+    store.add_device("LOUTEST", NODE, "JKG")
+    store.add_device("FAR", "B" * 64, "GOT")
+    heard = {}
+    monkeypatch.setattr(actions.transport, "send",
+                        lambda cfg, seed, topic, cmd, nodes_to_hear=(), **k: heard.update(
+                            {"topic": topic, "nodes": list(nodes_to_hear), "region": cfg["region"]}) or ("p", {}))
+    actions.send(store, "region put se-jkp *", region="jkg")
+    assert heard == {"topic": "meshcore/JKG/all/cmd", "nodes": [NODE], "region": "JKG"}
+
+
+def test_a_device_without_a_region_cannot_be_sent_to(store):
+    store.create_key()
+    store.add_device("LOUTEST", NODE, "JKG")
+    store.update_device(NODE, region="")
     with pytest.raises(envelope.EnvelopeError, match="no region"):
         actions.send(store, "region", device=store.device("LOUTEST"), dry_run=True)
 
 
 def test_send_records_every_device_asked_even_the_silent_ones(store, monkeypatch):
     store.create_key()
-    store.save_config(region="JKG")
-    store.add_device("LOUTEST", NODE)
-    store.add_device("UGO", "B" * 64)
+    store.add_device("LOUTEST", NODE, "JKG")
+    store.add_device("UGO", "B" * 64, "JKG")
     answer = envelope.parse_result("r1|1|0|region put se-jkp *|OK", NODE)
     monkeypatch.setattr(actions.transport, "send",
                         lambda cfg, seed, topic, cmd, nodes_to_hear=(), **k: ("payload", {NODE: answer}))
-    _t, _p, answers, lines = actions.send(store, "region put se-jkp *", broadcast=True)
+    _t, _p, answers, lines = actions.send(store, "region put se-jkp *", region="JKG")
     assert lines == ["LOUTEST            OK", "UGO                no answer"]
     assert store.history("B" * 64)[0]["code"] is None
     assert store.history(None)[0]["note"] == "1 of 2 answered"
@@ -137,8 +150,7 @@ class _FakeClient:
 def test_discover_lists_status_publishers_and_marks_the_ones_you_have(store, monkeypatch):
     from mccontrol import transport
     import json
-    store.save_config(region="JKG")
-    store.add_device("LOUTEST", NODE)
+    store.add_device("LOUTEST", NODE, "JKG")
     _FakeClient.retained = [
         (NODE, json.dumps({"origin": "SE-JKG-LOUTEST", "model": "Heltec V3", "firmware_version": "v1",
                            "repeat": "on", "timestamp": "2026-10-07T18:00:00+00:00"}).encode()),
@@ -147,12 +159,13 @@ def test_discover_lists_status_publishers_and_marks_the_ones_you_have(store, mon
     ]
     monkeypatch.setattr(transport, "_client", _FakeClient)
     monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
-    found = actions.discover(store)
+    found = actions.discover(store, "jkg")
+    assert [e["region"] for e in found] == ["JKG", "JKG"]
     assert [e["name"] for e in found] == ["SE-JKG-LOUTEST", "SE-JKG-UGORptr"]
     assert found[0]["known_as"] == "LOUTEST" and found[1]["known_as"] is None
     assert found[0]["at"] == "2026-10-07 18:00" and found[0]["retained"]
     entry = actions.adopt(store, found[1])
-    assert entry["name"] == "SE-JKG-UGORptr" and entry["node"] == "B" * 64
+    assert entry["name"] == "SE-JKG-UGORptr" and entry["node"] == "B" * 64 and entry["region"] == "JKG"
     assert actions.adopt(store, dict(found[1], node="C" * 64))["name"] == "SE-JKG-UGORptr-2"
 
 
@@ -167,13 +180,13 @@ def test_the_connection_test_reports_each_step_and_stops_at_the_first_failure(mo
             self.on_message(self, None, types.SimpleNamespace(topic=topic, payload=payload.encode()))
             return types.SimpleNamespace(wait_for_publish=lambda timeout=0: None)
 
-    steps = transport.test_connection({"broker": "b", "port": 1, "username": "u", "password": "p",
-                                       "region": "JKG"}, client_factory=_Echo, timeout=0.2)
+    steps = transport.test_connection({"broker": "b", "port": 1, "username": "u", "password": "p"},
+                                      client_factory=_Echo, timeout=0.2)
     assert [(s, ok) for s, ok, _d in steps] == [("connect and sign in", True),
                                                 ("subscribe to a result topic", True),
                                                 ("publish", True),
                                                 ("receive what we published", True)]
-    assert "JKG/mccontrol-test/res" in steps[1][2]
+    assert "TEST/mccontrol-test/res" in steps[1][2]
 
     class _Refuse(_FakeClient):
         def loop_start(self):
@@ -186,3 +199,25 @@ def test_the_connection_test_reports_each_step_and_stops_at_the_first_failure(mo
     steps = transport.test_connection({"broker": "b", "port": 1, "username": "u", "password": "p"},
                                       client_factory=_Refuse, timeout=0.2)
     assert steps == [("connect and sign in", False, "b refused the connection: Not authorized")]
+
+
+def test_discovery_uses_the_public_feed_not_the_control_broker(store, monkeypatch):
+    from mccontrol import transport
+    seen = {}
+
+    class _Spy(_FakeClient):
+        def __init__(self, config):
+            seen.update(config)
+            super().__init__(config)
+
+    _FakeClient.retained = []
+    monkeypatch.setattr(transport, "_client", _Spy)
+    monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
+    store.save_config(broker="mqtt.louie.se", username="mcoar", password="secret")
+    actions.discover(store, "JKG")
+    assert seen["broker"] == "mqtt.meshat.se" and seen["username"] == "msh"
+    assert "secret" not in seen.values()
+
+
+def test_the_configuration_holds_only_the_control_broker(store):
+    assert set(store.config()) == {"broker", "port", "username", "password", "ttl_secs", "wait_secs"}

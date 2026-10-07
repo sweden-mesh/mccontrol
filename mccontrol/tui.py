@@ -144,8 +144,8 @@ class App:
             for i, (n, label) in enumerate(items):
                 s.put(4 + i, 6, f"{n:>2}. {label}")
             cfg = self.store.config()
-            s.put(13, 6, f"Region . . . . . :  {cfg.get('region') or '(not set)'}")
-            s.put(14, 6, f"Control broker . :  {cfg.get('broker')}:{cfg.get('port')}")
+            s.put(13, 6, f"Regions  . . . . :  {', '.join(self.store.regions()) or '(no devices yet)'}")
+            s.put(14, 6, f"Control broker . :  {cfg.get('broker')}:{cfg.get('port')} as {cfg.get('username') or '(no username)'}")
             s.put(15, 6, f"Signing key  . . :  {'present' if self.store.has_key() else 'NONE - select 4'}")
             s.put(16, 6, f"Devices  . . . . :  {len(self.store.devices())}")
             s.put(19, 1, "Selection or command")
@@ -161,7 +161,9 @@ class App:
             elif choice == "2":
                 self.pick_and_send()
             elif choice == "3":
-                self.send_screen(None, broadcast=True)
+                region = self.ask_region(s, "Send to every node in which region?")
+                if region:
+                    self.send_screen(None, region=region)
             elif choice == "4":
                 self.keys_screen()
             elif choice == "5":
@@ -194,8 +196,8 @@ class App:
             s.frame()
             s.put(2, 1, "Type options, press Enter.")
             s.put(3, 3, "1=Add   2=Change   4=Remove   5=Display   7=History   8=Regions   9=Send")
-            s.put(4, 3, "F6=Discover nodes in the region")
-            s.put(5, 1, "Opt  Name                Node      Last sent            Result")
+            s.put(4, 3, "F6=Discover nodes in a region")
+            s.put(5, 1, "Opt  Name                Node      Reg   Last sent            Result")
             if not devices:
                 s.put(7, 6, "(no devices yet -- type 1 on the first line to add one)")
             rows = devices or [None]
@@ -205,7 +207,7 @@ class App:
                 if d is None:
                     s.put(6 + i, 1, f" {opt}   ", attr)
                     continue
-                s.put(6 + i, 1, f" {opt}   {d['name'][:19]:19} {d['node'][:8]}  "
+                s.put(6 + i, 1, f" {opt}   {d['name'][:19]:19} {d['node'][:8]}  {(d.get('region') or '?')[:4]:4}  "
                                 f"{(d['last_sent'] or '-')[:19]:19}  {(d['last_result'] or '')[:14]}", attr)
             s.put(21, 1, "Use arrows to move, type an option on a row, Enter to run.")
             s.keys("F3=Exit   F5=Refresh   F6=Discover   F12=Cancel")
@@ -253,13 +255,28 @@ class App:
         elif opt == "9":
             self.send_screen(device)
 
+    def ask_region(self, s, question):
+        """One field for an IATA code, offering the regions your devices already span."""
+        s.frame()
+        s.put(2, 1, question)
+        s.put(4, 3, "Region (IATA)  :")
+        known = ", ".join(self.store.regions())
+        if known:
+            s.put(6, 3, f"Your devices are in: {known}")
+        s.keys("F3=Exit   F12=Cancel")
+        region = s.read_line(4, 20, 8, initial=(self.store.regions() or [""])[0])
+        return (region or "").strip().upper() or None
+
     def discover_screen(self):
         s = Screen(self.win, "Discover Devices")
+        region = self.ask_region(s, "Discover the nodes publishing a status in which region?")
+        if not region:
+            return
         s.frame()
-        s.put(2, 1, "Listening for the status every node in the region publishes...")
+        s.put(2, 1, f"Listening for the status every node in {region} publishes...")
         self.win.refresh()
         try:
-            found = actions.discover(self.store, seconds=5.0)
+            found = actions.discover(self.store, region, seconds=5.0)
         except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
             s.message = str(exc)[:76]
             s.frame()
@@ -268,7 +285,7 @@ class App:
         cursor_row, opts, top = 0, {}, 0
         while True:
             s.frame()
-            s.put(2, 1, f"{len(found)} node(s) publish a status in {self.store.config().get('region')}. "
+            s.put(2, 1, f"{len(found)} node(s) publish a status in {region}. "
                         f"Type 1 on a row to remember it, Enter.")
             s.put(3, 3, "The date is from the node's own clock on its last retained status; not proof it is up.")
             s.put(5, 1, "Opt  Name                      Node      Model              Repeat  Last status")
@@ -322,7 +339,8 @@ class App:
             s.put(2, 1, "Type choices, press Enter.")
             s.put(4, 3, "Name . . . . . . . . . :")
             s.put(5, 3, "Node public key, 64 hex:")
-            s.put(7, 3, "Notes  . . . . . . . . :")
+            s.put(7, 3, "Region (IATA)  . . . . :")
+            s.put(8, 3, "Notes  . . . . . . . . :")
             s.keys("F3=Exit   F12=Cancel")
             name = s.read_line(4, 30, 30)
             if name is None:
@@ -330,11 +348,14 @@ class App:
             node = s.read_line(6, 5, 70)
             if node is None:
                 return
-            notes = s.read_line(7, 30, 46)
+            region = s.read_line(7, 30, 8, initial=(self.store.regions() or [""])[0])
+            if region is None:
+                return
+            notes = s.read_line(8, 30, 46)
             if notes is None:
                 return
             try:
-                self.store.add_device(name, node, notes)
+                self.store.add_device(name, node, region, notes)
                 return
             except _store.StoreError as exc:
                 s.message = str(exc)
@@ -345,15 +366,21 @@ class App:
         s.put(2, 1, "Type changes, press Enter.")
         s.put(4, 3, f"Node . . . . . . . . . :  {device['node']}")
         s.put(5, 3, "Name . . . . . . . . . :")
-        s.put(6, 3, "Notes  . . . . . . . . :")
+        s.put(6, 3, "Region (IATA)  . . . . :")
+        s.put(7, 3, "Notes  . . . . . . . . :")
         s.keys("F3=Exit   F12=Cancel")
         name = s.read_line(5, 30, 30, initial=device["name"])
         if name is None:
             return
-        notes = s.read_line(6, 30, 48, initial=device["notes"])
+        region = s.read_line(6, 30, 8, initial=device.get("region", ""))
+        if region is None:
+            return
+        notes = s.read_line(7, 30, 46, initial=device["notes"])
         if notes is None:
             return
-        self.store.update_device(device["node"], name=name.strip() or device["name"], notes=notes.strip())
+        self.store.update_device(device["node"], name=name.strip() or device["name"],
+                                 region=region.strip().upper() or device.get("region", ""),
+                                 notes=notes.strip())
 
     def remove_device_screen(self, device):
         s = Screen(self.win, "Confirm Remove of Device")
@@ -372,11 +399,11 @@ class App:
         s.put(3, 3, f"Name . . . . . :  {device['name']}")
         s.put(4, 3, f"Node . . . . . :  {device['node']}")
         s.put(5, 3, f"Notes  . . . . :  {device['notes']}")
-        s.put(6, 3, f"Added  . . . . :  {device['added']}")
+        s.put(6, 3, f"Added  . . . . :  {device['added']}   Region: {device.get('region') or '?'}")
         s.put(7, 3, f"Last sent  . . :  {device['last_sent'] or '-'}")
         s.put(8, 3, f"Last result  . :  {device['last_result'] or '-'}")
-        s.put(10, 3, f"Command topic  :  {envelope.command_topic(self.store.config().get('region') or '????', device['node'])}")
-        s.put(11, 3, f"Result topic . :  {envelope.result_topic(self.store.config().get('region') or '????', device['node'])}")
+        s.put(10, 3, f"Command topic  :  {envelope.command_topic(device.get('region') or '????', device['node'])}")
+        s.put(11, 3, f"Result topic . :  {envelope.result_topic(device.get('region') or '????', device['node'])}")
         s.wait()
 
     # -- sending -----------------------------------------------------------------------
@@ -399,13 +426,14 @@ class App:
             return
         self.send_screen(device)
 
-    def send_screen(self, device, broadcast=False, initial="", immediate=False):
-        s = Screen(self.win, "Send a Command to All Devices" if broadcast else "Send a Command")
+    def send_screen(self, device, region=None, initial="", immediate=False):
+        broadcast = device is None
+        s = Screen(self.win, f"Send a Command to All Devices in {region}" if broadcast else "Send a Command")
         command = initial
         while True:
             if not immediate:
                 s.frame()
-                target = "EVERY node in the region" if broadcast else f"{device['name']}  ({device['node'][:8]})"
+                target = f"EVERY node in {region}" if broadcast else f"{device['name']}  ({device['node'][:8]}, {device.get('region') or '?'})"
                 s.put(2, 1, "Type the command, press Enter. Nothing is sent until you confirm.")
                 s.put(4, 3, f"To . . . . . . :  {target}")
                 s.put(5, 3, "Command  . . . :")
@@ -421,7 +449,7 @@ class App:
                     continue
             immediate = False
             why = actions.caution(command)
-            if why and not self.confirm(command, why, broadcast, device):
+            if why and not self.confirm(command, why, region if broadcast else None, device):
                 continue
             try:
                 s.message = "Sending..."
@@ -430,18 +458,19 @@ class App:
                 s.put(6, 3, "Waiting for the node to answer...")
                 self.win.refresh()
                 _topic, _payload, _answers, lines = actions.send(self.store, command, device=device,
-                                                                 broadcast=broadcast)
+                                                                 region=region)
                 self.show_lines("Command Result", [f"Command:  {command}", ""] + lines)
                 return
             except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
                 s.message = str(exc)[:76]
 
-    def confirm(self, command, why, broadcast, device):
+    def confirm(self, command, why, region, device):
+        broadcast = region is not None
         s = Screen(self.win, "Confirm Command")
         s.frame()
         s.put(2, 1, "This command takes something away. Press Enter to send it, F12 to cancel.")
         s.put(4, 3, f"Command  . . . :  {command}")
-        s.put(5, 3, f"To . . . . . . :  {'EVERY node in the region' if broadcast else device['name']}")
+        s.put(5, 3, f"To . . . . . . :  {f'EVERY node in {region}' if broadcast else device['name']}")
         for i, line in enumerate(textwrap.wrap(f"It {why}", 72)):
             s.put(7 + i, 3, line)
         if broadcast:
@@ -470,8 +499,6 @@ class App:
         lines = [f"{'ok  ' if ok else 'FAIL'}  {step:30} {detail}" for step, ok, detail in steps]
         lines.append(f"{'ok  ' if self.store.has_key() else 'FAIL'}  {'signing key':30} "
                      f"{'present' if self.store.has_key() else 'none: select 4 on the main menu'}")
-        lines.append(f"{'ok  ' if cfg.get('region') else 'FAIL'}  {'region':30} "
-                     f"{cfg.get('region') or 'not set: select 5 on the main menu'}")
         lines.append("")
         lines.append("A node that stays silent after this passes has a different key, or a different")
         lines.append("broker on its command slot, or the control plane switched off.")
@@ -532,8 +559,7 @@ class App:
         cfg = self.store.config()
         s.frame()
         s.put(2, 1, "Type changes, press Enter on each. Leave a field as it is to keep it.")
-        fields = [("Region (IATA) . . . :", "region", 8), ("Control broker  . . :", "broker", 40),
-                  ("Discovery broker  . :", "discovery_broker", 40),
+        fields = [("Control broker  . . :", "broker", 40),
                   ("Port  . . . . . . . :", "port", 6), ("Username  . . . . . :", "username", 20),
                   ("Password  . . . . . :", "password", 20), ("Wait for answer, s  :", "wait_secs", 4)]
         values = {}
@@ -546,8 +572,7 @@ class App:
                 return
             values[key] = value.strip()
         try:
-            self.store.save_config(region=values["region"].upper(), broker=values["broker"],
-                                   discovery_broker=values["discovery_broker"],
+            self.store.save_config(broker=values["broker"],
                                    port=int(values["port"]), username=values["username"],
                                    password=values["password"], wait_secs=int(values["wait_secs"]))
         except ValueError:

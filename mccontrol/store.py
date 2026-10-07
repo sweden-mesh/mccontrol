@@ -18,16 +18,14 @@ import stat
 
 from . import envelope
 
-# The control plane rides a broker of its own, not the one the Observer stats go to:
-# mqtt.louie.se takes the signed commands and carries the results back. The Observer feed
-# (mqtt.meshat.se) refuses subscriptions and is not used here for anything but discovery.
+# The configuration is the control broker and nothing else: the one that takes the signed
+# commands and carries the results back, with its own username and password. A region is a
+# property of each device, since one person may run repeaters in several.
 DEFAULT_CONFIG = {
     "broker": "mqtt.louie.se",
-    "discovery_broker": "mqtt.meshat.se",
     "port": 1883,
-    "username": "msh",
-    "password": "msh",
-    "region": "",
+    "username": "",
+    "password": "",
     "ttl_secs": envelope.DEFAULT_TTL_SECS,
     "wait_secs": 20,
 }
@@ -116,6 +114,10 @@ class Store:
         """Your devices, in the order you added them."""
         return self._read_json(self.root / "devices.json", [])
 
+    def regions(self):
+        """The regions your devices are in, each once, in first-seen order."""
+        return list(dict.fromkeys(d.get("region", "") for d in self.devices() if d.get("region")))
+
     def device(self, ref):
         """By name, by node hex, or by a unique prefix of either; None if nothing matches."""
         ref = (ref or "").strip()
@@ -129,19 +131,22 @@ class Store:
                   or d["node"].upper().startswith(ref.upper())]
         return prefix[0] if len(prefix) == 1 else None
 
-    def add_device(self, name, node, notes=""):
+    def add_device(self, name, node, region, notes=""):
         node = node.strip().upper()
         if not (len(node) == 64 and all(c in "0123456789ABCDEF" for c in node)):
             raise StoreError("a node is its 64-character public key in hex")
         name = name.strip()
         if not name:
             raise StoreError("a device needs a name")
+        region = (region or "").strip().upper()
+        if not (2 <= len(region) <= 8 and region.isalnum()):
+            raise StoreError("a device needs its region: the IATA code its observers use, e.g. JKG")
         devices = self.devices()
         if any(d["name"].lower() == name.lower() for d in devices):
             raise StoreError(f"a device named {name!r} already exists")
         if any(d["node"] == node for d in devices):
             raise StoreError("that node is already in the list")
-        entry = {"name": name, "node": node, "notes": notes.strip(), "added": _now(),
+        entry = {"name": name, "node": node, "region": region, "notes": notes.strip(), "added": _now(),
                  "last_sent": None, "last_result": None}
         devices.append(entry)
         self._write_json(self.root / "devices.json", devices)

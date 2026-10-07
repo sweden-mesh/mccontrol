@@ -8,11 +8,12 @@ def test_the_command_line_round_trip(tmp_path, monkeypatch, capsys):
     assert cli.main(["keygen"]) == 0
     assert "set mqtt.cmd.pubkey" in capsys.readouterr().out
     assert cli.main(["keygen"]) == 1                        # refuses to overwrite
-    assert cli.main(["config", "--region", "jkg"]) == 0
-    assert "JKG" in capsys.readouterr().out
-    assert cli.main(["add", "LOUTEST", NODE, "bench"]) == 0
+    assert cli.main(["config", "--username", "mcoar"]) == 0
+    assert "mcoar" in capsys.readouterr().out
+    assert cli.main(["add", "LOUTEST", NODE, "jkg", "bench"]) == 0
     assert cli.main(["devices"]) == 0
-    assert "LOUTEST" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "LOUTEST" in out and "JKG" in out
     assert cli.main(["send", "loutest", "region", "put", "se-jkp", "*", "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "would publish to meshcore/JKG/" + NODE + "/cmd" in out and "not sent" in out

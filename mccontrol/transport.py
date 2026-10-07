@@ -86,10 +86,15 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
     return payload, dict(answers)
 
 
-def discover(config, seconds=5.0, client_factory=None):
+# Where nodes announce themselves: the public Observer feed. Its credentials are published by
+# the project that runs it and are not the control broker's, so they are not configuration.
+DISCOVERY_FEED = {"broker": "mqtt.meshat.se", "port": 1883, "username": "msh", "password": "msh"}
+
+
+def discover(region, seconds=5.0, client_factory=None, feed=None):
     """The nodes publishing a status in the region: `[{node, name, model, firmware, repeat, at}]`.
 
-    Observer nodes publish `meshcore/{IATA}/{NODE}/status`, retained, so the broker hands over
+    Observer nodes publish `meshcore/{IATA}/{NODE}/status` on the public feed, retained, so it hands over
     the last one from every node the moment we subscribe: a few seconds is enough. A retained
     status may be old -- the node may be long gone -- so `at` is shown and nothing here claims
     the node is up. Whether it accepts *your* key is learnt by sending it something.
@@ -113,6 +118,7 @@ def discover(config, seconds=5.0, client_factory=None):
         with lock:
             found[node] = {
                 "node": node,
+                "region": region.upper(),
                 "name": str(data.get("origin") or "")[:40],
                 "model": str(data.get("model") or ""),
                 "firmware": str(data.get("firmware_version") or ""),
@@ -121,13 +127,12 @@ def discover(config, seconds=5.0, client_factory=None):
                 "retained": bool(getattr(msg, "retain", False)),
             }
 
-    # Statuses are on the Observer feed, which is a different broker from the control one.
-    feed = dict(config, broker=config.get("discovery_broker") or config["broker"])
+    feed = feed or DISCOVERY_FEED
     client = (client_factory or _client)(feed)
     client.on_message = on_message
     _connect(client, feed)
     try:
-        client.subscribe(f"{envelope.TOPIC_PREFIX}{config['region'].upper()}/+/status", qos=0)
+        client.subscribe(f"{envelope.TOPIC_PREFIX}{region.upper()}/+/status", qos=0)
         time.sleep(seconds)
     finally:
         client.loop_stop()
@@ -151,9 +156,8 @@ def test_connection(config, client_factory=None, timeout=10.0):
         return steps
     steps.append(("connect and sign in", True,
                   f"{config['broker']}:{config['port']} as {config.get('username') or '(no username)'}"))
-    region = (config.get("region") or "TEST").upper()
     try:
-        topic = f"{envelope.TOPIC_PREFIX}{region}/mccontrol-test/res"
+        topic = f"{envelope.TOPIC_PREFIX}TEST/mccontrol-test/res"
         got = threading.Event()
         client.on_message = lambda _c, _u, msg: got.set() if msg.topic == topic else None
         info = client.subscribe(topic, qos=1)

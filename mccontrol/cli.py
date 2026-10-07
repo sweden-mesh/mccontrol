@@ -3,13 +3,14 @@
     mccontrol                      the green screen
     mccontrol keygen               make a signing key and print what to provision
     mccontrol key                  print the public key
-    mccontrol config [--region JKG] [--broker host] ...
-    mccontrol add <name> <node-hex> [notes...]
+    mccontrol config [--broker host] [--username u] [--password p]
+    mccontrol add <name> <node-hex> <region> [notes...]
     mccontrol devices
-    mccontrol send <device> <command...>      (--all for every node, --dry-run to only sign)
+    mccontrol send <device> <command...>      (--dry-run to only sign)
+    mccontrol send <region> <command...> --all   every node in that region
     mccontrol regions <device>
     mccontrol history <device>
-    mccontrol discover [--add]     the nodes publishing a status in your region
+    mccontrol discover <region> [--add]   the nodes publishing a status there
     mccontrol test                 connect, sign in, subscribe and publish on the control broker
 """
 
@@ -25,28 +26,30 @@ def build_parser():
     sub.add_parser("keygen", help="create the signing key").add_argument(
         "--force", action="store_true", help="replace an existing key (silences provisioned nodes)")
     sub.add_parser("key", help="print the public key to provision with 'set mqtt.cmd.pubkey'")
-    c = sub.add_parser("config", help="show or change the broker and region")
-    for name in ("region", "broker", "discovery-broker", "username", "password"):
-        c.add_argument(f"--{name}", dest=name.replace("-", "_"))
+    c = sub.add_parser("config", help="show or change the control broker")
+    for name in ("broker", "username", "password"):
+        c.add_argument(f"--{name}")
     c.add_argument("--port", type=int)
     c.add_argument("--wait-secs", type=int)
     a = sub.add_parser("add", help="remember a device")
     a.add_argument("name")
     a.add_argument("node", help="its 64-character public key")
+    a.add_argument("region", help="the IATA code its observers use, e.g. JKG")
     a.add_argument("notes", nargs="*")
     sub.add_parser("devices", help="list your devices")
     r = sub.add_parser("remove", help="forget a device")
     r.add_argument("device")
     s = sub.add_parser("send", help="sign and send a command")
-    s.add_argument("device", help="a device name, or 'all' with --all")
+    s.add_argument("device", help="a device name, or a region code with --all")
     s.add_argument("words", nargs="+", help="the command, e.g. region put se-jkp '*'")
-    s.add_argument("--all", action="store_true", help="every node in the region at once")
+    s.add_argument("--all", action="store_true", help="every node in that region at once")
     s.add_argument("--dry-run", action="store_true", help="sign and print, send nothing")
     s.add_argument("--yes", action="store_true", help="do not ask about a command that takes something away")
     g = sub.add_parser("regions", help="read a device's region map")
     g.add_argument("device")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
-    d = sub.add_parser("discover", help="list the nodes publishing a status in your region")
+    d = sub.add_parser("discover", help="list the nodes publishing a status in a region")
+    d.add_argument("region", help="the IATA code, e.g. JKG")
     d.add_argument("--add", action="store_true", help="remember every node not yet in your list")
     d.add_argument("--seconds", type=float, default=5.0)
     h = sub.add_parser("history", help="what was sent to a device and what came back")
@@ -83,19 +86,18 @@ def _key(store, _args):
 
 
 def _config(store, args):
-    changes = {k: getattr(args, k) for k in ("region", "broker", "discovery_broker", "username",
-                                             "password", "port")}
+    changes = {k: getattr(args, k) for k in ("broker", "username", "password", "port")}
     changes["wait_secs"] = args.wait_secs
     if any(v is not None for v in changes.values()):
-        store.save_config(**{k: (v.upper() if k == "region" and v else v) for k, v in changes.items()})
+        store.save_config(**changes)
     for key, value in store.config().items():
         print(f"{key:12} {'(set)' if key == 'password' else value}")
     return 0
 
 
 def _add(store, args):
-    entry = store.add_device(args.name, args.node, " ".join(args.notes))
-    print(f"added {entry['name']} ({entry['node'][:8]})")
+    entry = store.add_device(args.name, args.node, args.region, " ".join(args.notes))
+    print(f"added {entry['name']} ({entry['node'][:8]}) in {entry['region']}")
     return 0
 
 
@@ -105,7 +107,7 @@ def _devices(store, _args):
         print("no devices yet: mccontrol add <name> <node-hex>")
         return 0
     for d in rows:
-        print(f"{d['name']:18} {d['node'][:8]}  last sent {d['last_sent'] or '-':20} "
+        print(f"{d['name']:18} {d['node'][:8]}  {d.get('region', '?'):4}  last sent {d['last_sent'] or '-':20} "
               f"{d['last_result'] or '':12} {d['notes']}")
     return 0
 
@@ -127,15 +129,16 @@ def _device(store, ref):
 def _send(store, args, command=None):
     command = command or " ".join(args.words)
     device = None if args.all else _device(store, args.device)
+    region = args.device.upper() if args.all else None
     why = actions.caution(command)
     if why and not args.dry_run and not args.yes:
-        where = "EVERY node in the region" if args.all else device["name"]
+        where = f"EVERY node in {region}" if args.all else device["name"]
         print(f"'{command}' {why}\nSend it to {where}? [y/N] ", end="", flush=True)
         if input().strip().lower() != "y":
             print("not sent")
             return 2
-    _topic, _payload, _answers, lines = actions.send(store, command, device=device,
-                                                     broadcast=args.all, dry_run=args.dry_run)
+    _topic, _payload, _answers, lines = actions.send(store, command, device=device, region=region,
+                                                     dry_run=args.dry_run)
     print("\n".join(lines))
     return 0
 
@@ -153,15 +156,13 @@ def _test(store, _args):
         print(f"ok   signing key                  public {store.public_key()[:16]}...")
     else:
         print("FAIL signing key                  none: run 'mccontrol keygen'")
-    if not store.config().get("region"):
-        print("FAIL region                       not set: 'mccontrol config --region <IATA>'")
     return 0 if all(ok for _s, ok, _d in steps) else 1
 
 
 def _discover(store, args):
-    found = actions.discover(store, seconds=args.seconds)
+    found = actions.discover(store, args.region, seconds=args.seconds)
     if not found:
-        print("no node published a status in this region")
+        print(f"no node published a status in {args.region.upper()}")
         return 0
     for e in found:
         mark = f"known as {e['known_as']}" if e["known_as"] else ("added" if args.add else "")

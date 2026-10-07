@@ -34,25 +34,30 @@ def outcome_line(result):
     return f"refused: {result.code_name}" + (f" -- {result.help}" if result.help else "")
 
 
-def send(store, command, device=None, broadcast=False, dry_run=False, wait_secs=None):
-    """Sign and send `command` to one device or to every node in the region.
+def send(store, command, device=None, region=None, dry_run=False, wait_secs=None):
+    """Sign and send `command` to one device, or with `region` to every node in that region.
 
     Returns `(topic, payload, {node: Result}, lines)`, where `lines` is what to show.
     Raises `envelope.EnvelopeError`, `transport.BrokerError` or `store.StoreError`.
     """
     config = store.config()
-    region = config.get("region")
-    if not region:
-        raise envelope.EnvelopeError("no region set: the IATA code your observers use, e.g. JKG")
+    broadcast = device is None
+    if broadcast and not region:
+        raise envelope.EnvelopeError("a broadcast needs a region")
     if broadcast and envelope.is_transmit(command):
         raise envelope.EnvelopeError("a command that transmits may not be sent to every node; "
                                      "the firmware refuses it, and so does this")
+    region = (region or device.get("region") or "").upper()
+    if not region:
+        raise envelope.EnvelopeError(f"{device['name']} has no region; change the device and set it")
     topic = envelope.command_topic(region, None if broadcast else device["node"])
-    hear = [d["node"] for d in store.devices()] if broadcast else [device["node"]]
+    hear = ([d["node"] for d in store.devices() if (d.get("region") or "").upper() == region]
+            if broadcast else [device["node"]])
     if dry_run:
         payload = envelope.build(store.seed(), topic, 0, command)
         return topic, payload, {}, [f"would publish to {topic}", payload, "not sent (dry run)"]
-    payload, answers = transport.send(config, store.seed(), topic, command, nodes_to_hear=hear,
+    payload, answers = transport.send(dict(config, region=region), store.seed(), topic, command,
+                                      nodes_to_hear=hear,
                                       wait_secs=wait_secs or config.get("wait_secs", 20))
     lines = []
     names = {d["node"]: d["name"] for d in store.devices()}
@@ -66,13 +71,12 @@ def send(store, command, device=None, broadcast=False, dry_run=False, wait_secs=
     return topic, payload, answers, lines
 
 
-def discover(store, seconds=5.0):
-    """Nodes publishing a status in the configured region, marked with whether you have them."""
-    config = store.config()
-    if not config.get("region"):
-        raise envelope.EnvelopeError("no region set: the IATA code your observers use, e.g. JKG")
+def discover(store, region, seconds=5.0):
+    """Nodes publishing a status in `region`, marked with whether you have them."""
+    if not region:
+        raise envelope.EnvelopeError("discovery needs a region: the IATA code, e.g. JKG")
     known = {d["node"]: d["name"] for d in store.devices()}
-    found = transport.discover(config, seconds=seconds)
+    found = transport.discover(region, seconds=seconds)
     for entry in found:
         entry["known_as"] = known.get(entry["node"])
     return found
@@ -86,4 +90,4 @@ def adopt(store, entry):
         name = f"{base}-{n}"
         n += 1
     notes = " ".join(x for x in (entry.get("model"), entry.get("firmware")) if x)
-    return store.add_device(name, entry["node"], notes)
+    return store.add_device(name, entry["node"], entry["region"], notes)

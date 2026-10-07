@@ -28,8 +28,9 @@ device. Keys stay on your machine.
 ```
 pip install .
 mccontrol keygen        # once; prints the two serial commands to provision each repeater
-mccontrol config --region JKG
-mccontrol add LOUTEST <64-hex public key> "the bench repeater"
+mccontrol config --username <user> --password <pass>     # the control broker's credentials
+mccontrol test          # connect, sign in, subscribe, publish, receive
+mccontrol discover JKG --add    # or add by hand: mccontrol add LOUTEST <64-hex key> JKG "notes"
 mccontrol               # the screens
 ```
 
@@ -43,12 +44,13 @@ Python 3.10 or newer; depends on `pycryptodome` (Ed25519) and `paho-mqtt`. The i
   to type into each repeater's serial console once. It refuses to replace a key by accident,
   because every repeater provisioned with the old one would stop listening. The seed is never
   shown and never leaves the machine inside anything but a signature.
-- **Devices.** The repeaters you manage, by name, with notes, when you last sent to each and
-  what it answered. Tens of them fit on one screen. **F6 discovers them**: every node publishing
-  a status in your region is listed with its name, model and firmware, and `1` on a row
-  remembers it. The command line does the same with `mccontrol discover` and `--add`.
+- **Devices.** The repeaters you manage, by name and region, with notes, when you last sent to
+  each and what it answered. Tens of them fit on one screen, across as many regions as you run
+  repeaters in. **F6 discovers them**: every node publishing a status in a region is listed with
+  its name, model and firmware, and `1` on a row remembers it. The command line does the same
+  with `mccontrol discover <region>` and `--add`.
 - **Sending.** A command is signed for exactly one topic -- one node, or `all` for every node
-  in the region -- and published; the tool waits for the node's reply on its result topic and
+  in one region -- and published; the tool waits for the node's reply on its result topic and
   shows it in words (`refused: not-allowed -- The command is not on the node's allowlist`).
   Commands that take something away (`region denyf *`, `region remove`, `set repeat off`) say
   what they do and ask first; a command that transmits is refused as a broadcast, as the
@@ -56,22 +58,25 @@ Python 3.10 or newer; depends on `pycryptodome` (Ed25519) and `paho-mqtt`. The i
 - **History.** Every command sent to a device and what came back, kept per device.
 
 **Test the connection first.** Menu 7, or `mccontrol test`, connects to the control broker with
-the configured username and password, subscribes to a test result topic under your region,
+the configured username and password, subscribes to a test result topic,
 publishes to it and checks the broker delivers it back -- each step reported, the first failure
 named (`Not authorized` is the broker rejecting the username or password). Nothing a repeater
 listens on is touched.
 
 The command line does the same without the screens: `mccontrol send loutest region put se-jkp '*'`,
-`mccontrol send all region allowf se-jkp --all`, `mccontrol regions loutest`,
+`mccontrol send JKG region allowf se-jkp --all`, `mccontrol regions loutest`,
 `mccontrol history loutest`, `--dry-run` to sign and print without sending.
 
-## Two brokers
+## The configuration is the control broker
 
-The control plane does not ride the Observer feed. Commands and results go through
-**`mqtt.louie.se`**, the control broker, which is the one a node's `mqtt.cmd.slot` points at;
-this is mccontrol's default. The Observer stats and packets go to `mqtt.meshat.se`, which
-refuses subscriptions and is used here only to discover nodes from their retained status.
-Both are set under *Change configuration* or `mccontrol config --broker … --discovery-broker …`.
+The only thing configured is the control broker: host, port, username, password and how long
+to wait for an answer. The default host is **`mqtt.louie.se`**, the broker a node's
+`mqtt.cmd.slot` points at; its credentials are yours to set (`mccontrol config`, or menu 5).
+Discovery reads the public Observer feed, whose published credentials are built in; nothing
+you configure is sent there.
+
+A region belongs to a device, not to the configuration: each device carries the IATA code its
+observers use, a broadcast is to one region, and discovery asks which region to listen to.
 
 ## The protocol
 
@@ -90,8 +95,8 @@ A region tree line (`region def a|* b|*`) cannot travel: `|` is the envelope's f
 ```
 ~/.config/mccontrol/
     key.seed            your private seed, mode 600
-    config.json         broker, region, how long to wait for an answer
-    devices.json        your devices
+    config.json         the control broker and how long to wait for an answer
+    devices.json        your devices, each with its region
     history/<node>.jsonl
 ```
 
