@@ -71,10 +71,32 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     return topic, payload, answers, lines
 
 
+def regions_asked(text, store):
+    """`JKG`, `JKG, GOT` or `*` (every region the directory spans) as a list of IATA codes."""
+    text = (text or "").strip()
+    if text == "*":
+        return store.regions()
+    seen = []
+    for part in text.replace(";", ",").replace(" ", ",").split(","):
+        code = part.strip().upper()
+        if code and code not in seen:
+            seen.append(code)
+    return seen
+
+
 def discover(store, region, wait_secs=None):
-    """The nodes in `region` that answer a command signed with your key, marked if known."""
-    if not region:
-        raise envelope.EnvelopeError("discovery needs a region: the IATA code, e.g. JKG")
+    """The nodes in `region` that answer a command signed with your key, marked if known.
+    `region` may name several (`JKG, GOT`) or `*`; one signed read per region, one list."""
+    regions = regions_asked(region, store)
+    if not regions:
+        raise envelope.EnvelopeError("discovery needs a region: the IATA code, e.g. JKG; "
+                                     "several with commas, or * for every region you have")
+    if len(regions) > 1:
+        found = []
+        for one in regions:
+            found += discover(store, one, wait_secs)
+        return found
+    region = regions[0]
     config = store.config()
     known = {d["node"]: d["name"] for d in store.devices()}
     found = transport.discover(config, store.seed(), region,

@@ -227,3 +227,30 @@ def test_the_connection_test_reports_each_step_and_stops_at_the_first_failure(mo
 
 def test_the_configuration_holds_only_the_control_broker(store):
     assert set(store.config()) == {"broker", "port", "username", "password", "ttl_secs", "wait_secs"}
+
+
+def test_discovery_asks_several_regions_in_one_run_and_star_means_every_region_you_have(store, monkeypatch):
+    from mccontrol import transport
+    store.create_key()
+    store.add_device("LOUTEST", NODE, "JKG")
+    store.add_device("FAR", "FD700369", "GOT")
+    asked = []
+
+    class _Spy(_FakeClient):
+        def publish(self, topic, payload, qos=0):
+            asked.append(topic)
+            _FakeClient.answers = [(NODE, 0, "> on")] if "/JKG/" in topic else [("FD700369", 0, "> off")]
+            return super().publish(topic, payload, qos)
+
+    monkeypatch.setattr(transport, "_client", _Spy)
+    monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
+    assert actions.regions_asked("jkg, got", store) == ["JKG", "GOT"]
+    assert actions.regions_asked("*", store) == store.regions()
+    assert actions.regions_asked("JKG JKG;got", store) == ["JKG", "GOT"]
+    found = actions.discover(store, "JKG, GOT")
+    assert [(e["node"], e["region"]) for e in found] == [(NODE, "JKG"), ("FD700369", "GOT")]
+    # two broadcasts per region: the discovery read, then the names read
+    assert asked == ["meshcore/JKG/all/cmd"] * 2 + ["meshcore/GOT/all/cmd"] * 2
+    assert found[0]["known_as"] == "LOUTEST" and found[1]["known_as"] == "FAR"
+    found = actions.discover(store, "*")
+    assert {e["region"] for e in found} == set(store.regions())

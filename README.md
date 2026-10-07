@@ -46,7 +46,7 @@ library. 80x24 is the minimum; wider terminals get wider panels.
 | F2 | send a command to the tagged devices, or the cursor device; Up recalls earlier commands |
 | F3 / Enter | the cursor device's history as a window; on the right panel, Enter opens a reply |
 | F4 | edit the device: name, region, notes |
-| F5 | discover: the repeaters in a region that accept your key; on the found list, F5 adds the tagged and F7 adds all |
+| F5 | discover: the repeaters in a region that accept your key (`JKG, GOT` for several, `*` for every region you have); on the found list, F5 adds the tagged and F7 adds all |
 | F6 | read the cursor device's region map |
 | F7 | send a command to every node in a region |
 | F8 | forget the cursor device |

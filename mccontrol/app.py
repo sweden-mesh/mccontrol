@@ -435,10 +435,12 @@ class App:
         if self.right_mode == "found":
             self.adopt_found(self.view.selected)
             return
-        region = self.ask_region("Find the nodes that accept your key in which region?")
+        region = self.ask_region("Find the nodes that accept your key in which region?",
+                                 hint="One IATA code, several with commas, or * for every region you have.")
         if not region:
             return
-        self.message.say(f"Asking every node in {region} with one signed read...")
+        asked = ", ".join(actions.regions_asked(region, self.store)) or region
+        self.message.say(f"Asking every node in {asked} with one signed read per region...")
         self.draw()
         try:
             found = actions.discover(self.store, region)
@@ -447,7 +449,7 @@ class App:
             return
         self.found = found
         lines = [self.found_line(e) for e in found]
-        self.show_results(f"Found in {region}: {len(found)}", lines or ["(no node answered)"])
+        self.show_results(f"Found in {asked}: {len(found)}", lines or ["(no node answered)"])
         self.right_mode = "found" if found else "results"
         self.right.active, self.left.active = True, False
         self.message.say(f"{len(found)} answered. Ins tags, F5 adds the tagged, F7 adds all, Esc returns."
@@ -495,10 +497,10 @@ class App:
         self.list.tags = (self.list.tags | rows) if on else (self.list.tags - rows)
         self.left.footer = directory.tag_footer(len(self.list.tags), len(self.devices))
 
-    def ask_region(self, question):
+    def ask_region(self, question, hint=None):
         first = (self.cursor_device or {}).get("region") or (self.store.regions() or [""])[0]
-        f = Field("Region", first, width=8)
-        d = Dialog("Region", fields=[f], body=[question], width=50)
+        f = Field("Region", first, width=20 if hint else 8)
+        d = Dialog("Region", fields=[f], body=[question] + ([hint] if hint else []), width=70 if hint else 50)
         if d.run(self.screen, self.draw) is None:
             return None
         return f.value.strip().upper() or None

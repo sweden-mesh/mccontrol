@@ -57,7 +57,7 @@ def build_parser():
     sc.add_argument("--set", nargs=2, metavar=("N", "COMMAND"), help="put COMMAND on Alt+N ('' frees it)")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
     d = sub.add_parser("discover", help="find the nodes in a region that accept your key")
-    d.add_argument("region", help="the IATA code, e.g. JKG")
+    d.add_argument("region", help="the IATA code, e.g. JKG; several with commas, or '*' for every region you have")
     d.add_argument("--add", action="store_true", help="remember every node not yet in your list")
     d.add_argument("--wait-secs", type=float, default=None, help="how long to listen for answers")
     hp = sub.add_parser("help", help="the help topics as text")
