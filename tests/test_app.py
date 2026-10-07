@@ -110,3 +110,13 @@ def test_tags_across_two_regions_are_refused(tmp_path):
     text, _ = walk(tmp_path, [(INS, 0.3), (DOWN, 0.3), (INS, 0.3), (b"*", 0.3), (b"*", 0.3), (F[2], 0.6)])
     # rows: Far(GOT), Gisebo(JKG), (unnamed)(JKG); Ins on row 0 and 2 -> GOT and JKG tagged
     assert "span more than one region" in text
+
+
+def test_f7_sends_to_every_node_in_a_region_and_hears_that_regions_devices(tmp_path):
+    fake = json.dumps({"4AC61A7F": [0, "OK"], "65C1D12C": [0, "OK"], "FD700369": [0, "OK"]})
+    text, home = walk(tmp_path, [(DOWN, 0.3), (F[7], 0.5), (b"\r", 0.5), (b"region put se-jkp *", 0.3), (b"\r", 1.5)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "EVERY node in JKG" in text
+    assert "2 of 2 answered" in text                 # Far is in GOT and is not asked
+    assert '"note": "broadcast"' in (home / "history" / "4AC61A7F.jsonl").read_text()
+    assert not (home / "history" / "FD700369.jsonl").exists()

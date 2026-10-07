@@ -182,6 +182,10 @@ class App:
             self.history_window()
         elif action == "send":
             self.send()
+        elif action == "all":
+            region = self.ask_region("Send to every node in which region?")
+            if region:
+                self.send(region=region)
         else:
             self.message.say(f"{action}: not built yet.", error=True)
 
