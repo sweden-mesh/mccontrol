@@ -156,6 +156,13 @@ class Screen:
     def refresh(self):
         self.win.refresh()
 
+    def repaint(self):
+        """Redraw every cell on the next refresh, not only what changed."""
+        try:
+            self.win.clearok(True)
+        except curses.error:
+            pass
+
     def erase(self):
         self.win.erase()
 

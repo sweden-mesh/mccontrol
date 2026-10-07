@@ -15,6 +15,7 @@
 """
 
 import argparse
+import os
 import sys
 
 from . import actions, envelope, store as _store, transport
@@ -63,8 +64,11 @@ def main(argv=None):
     store = _store.Store()
     try:
         if args.command is None:
-            from . import tui
-            return tui.run(store)
+            if os.environ.get("MCCONTROL_OLD_UI"):
+                from . import tui
+                return tui.run(store)
+            from . import app
+            return app.run(store)
         return COMMANDS[args.command](store, args)
     except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
         print(f"mccontrol: {exc}", file=sys.stderr)

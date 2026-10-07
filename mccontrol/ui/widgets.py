@@ -35,16 +35,22 @@ class ListView:
     and survive a redraw; the caller resets them when the rows change meaning.
     """
 
-    def __init__(self, panel):
+    def __init__(self, panel, header=0):
         self.panel = panel
+        self.header = header            # rows at the top of the panel the list leaves alone
         self.rows = []
         self.cursor = 0
         self.top = 0
         self.tags = set()
 
     @property
+    def area(self):
+        y, x, w, h = self.panel.inner
+        return y + self.header, x, w, h - self.header
+
+    @property
     def page(self):
-        return self.panel.inner[3]
+        return max(1, self.area[3])
 
     def set_rows(self, rows, keep=True):
         self.rows = list(rows)
@@ -60,7 +66,7 @@ class ListView:
             self.top = self.cursor - self.page + 1
 
     def draw(self, screen):
-        y, x, w, h = self.panel.inner
+        y, x, w, h = self.area
         c = screen.colors
         for i in range(h):
             idx = self.top + i
