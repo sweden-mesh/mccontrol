@@ -71,6 +71,37 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     return topic, payload, answers, lines
 
 
+def fill(steps, arg):
+    """The set's commands with `{arg}` filled in; refuses a set that needs one and has none."""
+    if any("{arg}" in s for s in steps) and not (arg or "").strip():
+        raise envelope.EnvelopeError("this set needs a value for {arg}")
+    return [s.replace("{arg}", (arg or "").strip()) for s in steps]
+
+
+def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=None, on_step=None):
+    """Send `steps` in order to one device (or every node in `region`), stopping at the first
+    refusal or silence. Returns `(lines, stopped_at)`: what to show, and the index of the
+    step that stopped it, or None when every step was answered ok."""
+    lines, stopped = [], None
+    for i, command in enumerate(steps):
+        if on_step:
+            on_step(i, command)
+        _t, _p, answers, step_lines = send(store, command, device=device, region=region,
+                                           dry_run=dry_run, wait_secs=wait_secs)
+        lines.append(f"-- {i + 1}/{len(steps)}: {command}")
+        lines += step_lines
+        if dry_run:
+            continue
+        expected = 1 if device else len([d for d in store.devices()
+                                         if (d.get("region") or "").upper() == region.upper()])
+        if len(answers) < expected or any(not r.ok for r in answers.values()):
+            stopped = i
+            lines.append(f"stopped at step {i + 1}: not every node answered ok; "
+                         f"{len(steps) - i - 1} step(s) not sent")
+            break
+    return lines, stopped
+
+
 def regions_asked(text, store):
     """`JKG`, `JKG, GOT` or `*` (every region the directory spans) as a list of IATA codes."""
     text = (text or "").strip()

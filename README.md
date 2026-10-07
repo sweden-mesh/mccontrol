@@ -73,6 +73,9 @@ firmware refuses it.
   of yours; a second read fills in names on firmware that admits `get name`.
 - **Sending.** One signed publish per tagged device to its own topic, or one broadcast to a
   region; results per device in the right panel, counted on the message line, kept in history.
+- **Command sets.** A named list of steps (`region put`, `region allowf`, `region save`, `region`
+  is the shipped example) sent in order to the targets, stopping at the first refusal or silence;
+  Send > Command set runs one, Options > Command sets defines one.
 - **Help.** Topics with cross-links, a command reference, and the same text on the command line:
   `mccontrol help commands`.
 
@@ -84,6 +87,7 @@ mccontrol send JKG region allowf se-jkp --all
 mccontrol send loutest region --dry-run
 mccontrol regions loutest
 mccontrol alt 2 loutest                  # shortcut 2 (ver); mccontrol shortcuts lists and --set changes them
+mccontrol run add-scope loutest se-jkp   # a command set, step by step, stopping at the first refusal; mccontrol sets lists them
 mccontrol history loutest
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```

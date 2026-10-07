@@ -33,6 +33,13 @@ DEFAULT_CONFIG = {
 # Alt+1..9 on the main screen and `mccontrol alt <n>` on the command line: a command each,
 # sent without a dialog. Reads by default; a user may put anything there, and a caution
 # still asks.
+# A command set: a named list sent in order to a device, stopping at the first refusal or
+# silence. `{arg}` in a step is filled in when the set is run. One shipped as the example.
+DEFAULT_SETS = {
+    "add-scope": ["region put {arg} *", "region allowf {arg}", "region save", "region"],
+}
+SET_STEPS = 6
+
 SHORTCUT_SLOTS = 9
 DEFAULT_SHORTCUTS = ["region", "ver", "get name", "get autoreply", "get radio", "get repeat"]
 
@@ -113,6 +120,33 @@ class Store:
         data.update({k: v for k, v in changes.items() if v is not None})
         self._write_json(self.root / "config.json", data)
         return data
+
+    def sets(self):
+        """Named command sets, the shipped example included until it is removed or renamed."""
+        sets = dict(DEFAULT_SETS)
+        sets.update(self.config().get("sets", {}))
+        return {n: [str(s).strip() for s in steps if str(s).strip()] for n, steps in sets.items() if steps}
+
+    def save_set(self, name, steps):
+        name = (name or "").strip().lower()
+        if not name or " " in name:
+            raise StoreError("a set's name is one word")
+        sets = dict(self.config().get("sets", {}))
+        sets.setdefault(name, [])
+        sets.update({n: s for n, s in DEFAULT_SETS.items() if n not in sets})
+        sets[name] = [s.strip() for s in steps if s and s.strip()]
+        if not sets[name]:
+            raise StoreError("a set needs at least one command")
+        self.save_config(sets=sets)
+        return sets[name]
+
+    def remove_set(self, name):
+        sets = dict(self.config().get("sets", {}))
+        sets.update({n: s for n, s in DEFAULT_SETS.items() if n not in sets})
+        if name not in sets:
+            raise StoreError(f"no set named {name}")
+        sets[name] = []                   # an empty list is a removed set, the shipped one included
+        self.save_config(sets=sets)
 
     def shortcuts(self):
         """Nine slots, Alt+1 first; an empty string is an unused slot."""

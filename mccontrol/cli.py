@@ -53,6 +53,16 @@ def build_parser():
     al.add_argument("--all", action="store_true", help="every node in that region at once")
     al.add_argument("--dry-run", action="store_true", help="sign and print, send nothing")
     al.add_argument("--yes", action="store_true", help="do not ask about a command that takes something away")
+    rn = sub.add_parser("run", help="send a command set, step by step, stopping at the first refusal")
+    rn.add_argument("set", help="the set's name; 'mccontrol sets' lists them")
+    rn.add_argument("device", help="a device name, or a region code with --all")
+    rn.add_argument("arg", nargs="?", default="", help="the value for {arg} in the set's steps")
+    rn.add_argument("--all", action="store_true", help="every node in that region at once")
+    rn.add_argument("--dry-run", action="store_true", help="sign and print, send nothing")
+    rn.add_argument("--yes", action="store_true", help="do not ask about a step that takes something away")
+    st = sub.add_parser("sets", help="list the command sets, define one, or remove one")
+    st.add_argument("--set", nargs="+", metavar="X", help="NAME then the steps in order: --set add-scope 'region put {arg} *' ...")
+    st.add_argument("--remove", metavar="NAME")
     sc = sub.add_parser("shortcuts", help="list the Alt+1..9 shortcuts, or set one")
     sc.add_argument("--set", nargs=2, metavar=("N", "COMMAND"), help="put COMMAND on Alt+N ('' frees it)")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
@@ -160,6 +170,39 @@ def _alt(store, args):
     return _send(store, args, command=slots[args.n - 1])
 
 
+def _run(store, args):
+    steps = store.sets().get(args.set.lower())
+    if not steps:
+        raise _store.StoreError(f"no set named {args.set}; 'mccontrol sets' lists them")
+    steps = actions.fill(steps, args.arg)
+    device = None if args.all else _device(store, args.device)
+    region = args.device.upper() if args.all else None
+    cautions = [f"'{s}' {actions.caution(s)}" for s in steps if actions.caution(s)]
+    if cautions and not args.dry_run and not args.yes:
+        where = f"EVERY node in {region}" if args.all else (device["name"] or device["node"])
+        print("\n".join(cautions) + f"\nRun the set on {where}? [y/N] ", end="", flush=True)
+        if input().strip().lower() != "y":
+            print("not sent")
+            return 2
+    lines, stopped = actions.run_set(store, steps, device=device, region=region, dry_run=args.dry_run)
+    print("\n".join(lines))
+    return 0 if stopped is None else 3
+
+
+def _sets(store, args):
+    if args.set:
+        if len(args.set) < 2:
+            raise _store.StoreError("--set takes the name and then at least one step")
+        store.save_set(args.set[0], args.set[1:])
+    if args.remove:
+        store.remove_set(args.remove.lower())
+    for name, steps in sorted(store.sets().items()):
+        print(name)
+        for i, s in enumerate(steps, 1):
+            print(f"  {i}. {s}")
+    return 0
+
+
 def _shortcuts(store, args):
     if args.set:
         n, command = args.set
@@ -221,7 +264,8 @@ def _history(store, args):
 
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
             "remove": _remove, "send": _send, "regions": _regions, "history": _history,
-            "discover": _discover, "test": _test, "help": _help, "alt": _alt, "shortcuts": _shortcuts}
+            "discover": _discover, "test": _test, "help": _help, "alt": _alt, "shortcuts": _shortcuts,
+            "run": _run, "sets": _sets}
 
 if __name__ == "__main__":
     sys.exit(main())

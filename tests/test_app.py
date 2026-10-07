@@ -242,3 +242,24 @@ def test_a_click_moves_the_cursor_presses_a_key_bar_label_and_opens_a_menu(tmp_p
     assert "History: Gisebo" in text                  # the right panel followed the click
     assert "Forget device" in text                    # key 8 (Del) at column 58 asked
     assert "Sort by name" in text                     # the Devices menu opened by a click on its title
+
+
+def test_a_set_runs_from_the_send_menu_and_stops_where_a_node_refuses(tmp_path):
+    fake = json.dumps({"FD700369|region put se-jkp *": [0, "OK"], "FD700369|region allowf se-jkp": [14, ""],
+                       "FD700369": [0, "OK"]})
+    # Alt+S opens Send; "c" picks "Command set"; the set field holds add-scope; Tab to the value; Enter runs
+    text, home = walk(tmp_path, [(b"\x1bs", 0.5), (b"c", 0.5), (b"\t", 0.2), (b"se-jkp", 0.3), (b"\r", 2.5)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=6.0)
+    assert "Set: add-scope" in text
+    assert "Stopped at step 2" in text
+    hist = (home / "history" / "FD700369.jsonl").read_text()
+    assert "region put se-jkp *" in hist and "region allowf se-jkp" in hist and "region save" not in hist
+
+
+def test_options_defines_a_set(tmp_path):
+    # Alt+O opens Options; "c" picks "Command sets"; the name field holds add-scope: rename it and change step 1
+    text, home = walk(tmp_path, [(b"\x1bo", 0.5), (b"c", 0.6), (b"\x08" * 12 + b"reads", 0.3), (b"\t", 0.2),
+                                 (b"\x08" * 20 + b"ver", 0.3), (b"\r", 0.8)])
+    assert "Saved reads." in text
+    cfg = json.loads((home / "config.json").read_text())
+    assert cfg["sets"]["reads"][0] == "ver"

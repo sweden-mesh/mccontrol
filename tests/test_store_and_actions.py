@@ -254,3 +254,44 @@ def test_discovery_asks_several_regions_in_one_run_and_star_means_every_region_y
     assert found[0]["known_as"] == "LOUTEST" and found[1]["known_as"] == "FAR"
     found = actions.discover(store, "*")
     assert {e["region"] for e in found} == set(store.regions())
+
+
+def test_a_command_set_runs_in_order_and_stops_at_the_first_refusal(store, monkeypatch):
+    store.create_key()
+    store.add_device("LOUTEST", NODE, "JKG")
+    sent = []
+
+    def fake_send(cfg, seed, topic, cmd, nodes_to_hear=(), **k):
+        sent.append(cmd)
+        code = 14 if cmd.startswith("region allowf") else 0
+        return "payload", {NODE: envelope.parse_result(f"r1|1|{code}|{cmd}|> ok", NODE)}
+
+    monkeypatch.setattr(actions.transport, "send", fake_send)
+    assert store.sets()["add-scope"][0] == "region put {arg} *"
+    with pytest.raises(envelope.EnvelopeError, match="arg"):
+        actions.fill(store.sets()["add-scope"], "")
+    steps = actions.fill(store.sets()["add-scope"], "se-jkp")
+    lines, stopped = actions.run_set(store, steps, device=store.device("loutest"))
+    assert sent == ["region put se-jkp *", "region allowf se-jkp"]       # save and read never sent
+    assert stopped == 1 and "stopped at step 2" in lines[-1] and "2 step(s) not sent" in lines[-1]
+    assert lines[0] == "-- 1/4: region put se-jkp *"
+    sent.clear()
+    lines, stopped = actions.run_set(store, ["region", "ver"], device=store.device("loutest"))
+    assert stopped is None and sent == ["region", "ver"]
+    # silence stops it too
+    monkeypatch.setattr(actions.transport, "send", lambda *a, **k: ("payload", {}))
+    _l, stopped = actions.run_set(store, ["region", "ver"], device=store.device("loutest"))
+    assert stopped == 0
+
+
+def test_sets_are_saved_removed_and_the_shipped_one_can_go(store):
+    assert store.save_set("Rollout", ["region put {arg} *", "", "region save"]) == ["region put {arg} *", "region save"]
+    assert store.sets()["rollout"] == ["region put {arg} *", "region save"]
+    with pytest.raises(_store.StoreError):
+        store.save_set("two words", ["x"])
+    with pytest.raises(_store.StoreError):
+        store.save_set("empty", ["", " "])
+    store.remove_set("add-scope")
+    assert "add-scope" not in store.sets() and "rollout" in store.sets()
+    with pytest.raises(_store.StoreError):
+        store.remove_set("nothing")

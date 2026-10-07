@@ -43,8 +43,8 @@ class App:
                              MenuItem("Tag all in region", "tag:+", "+"), MenuItem("Untag region", "tag:-", "-")]),
             self.send_menu(),
             Menu("Keys", [MenuItem("Show public key", "keys")]),
-            Menu("Options", [MenuItem("Control broker", "setup"), MenuItem("Test the broker", "test"),
-                             MenuItem("Shortcuts", "shortcuts")]),
+            Menu("Options", [MenuItem("Broker", "setup"), MenuItem("Test the broker", "test"),
+                             MenuItem("Shortcuts", "shortcuts"), MenuItem("Command sets", "sets")]),
             Menu("Help", [MenuItem("Contents", "help:index", "Shift+F1"), MenuItem("This screen", "help", "F1"),
                           MenuItem("Keys", "help:keys"), MenuItem("Commands", "help:commands"),
                           MenuItem("Quit", "quit", "F10")]),
@@ -55,7 +55,7 @@ class App:
     def send_menu(self):
         """The Send menu lists the shortcuts with their keys, as Turbo Vision showed them."""
         items = [MenuItem("To tagged or cursor", "send", "F2"), MenuItem("To all in a region", "all", "F7"),
-                 MenuItem("Read regions", "regions", "F6")]
+                 MenuItem("Read regions", "regions", "F6"), MenuItem("Command set", "runset")]
         items += [MenuItem(cmd[:28], f"alt:{n}", f"Alt+{n}")
                   for n, cmd in enumerate(self.store.shortcuts(), 1) if cmd]
         return Menu("Send", items)
@@ -275,6 +275,10 @@ class App:
             self.test_dialog()
         elif action == "shortcuts":
             self.shortcuts_dialog()
+        elif action == "sets":
+            self.sets_dialog()
+        elif action == "runset":
+            self.run_set()
         elif action.startswith("alt:"):
             self.shortcut(int(action[4:]))
         elif action == "all":
@@ -396,21 +400,106 @@ class App:
         self.show_history(self.cursor_device)
         self.message.say("Forgotten.")
 
-    def send(self, region=None, initial="", immediate=False):
-        """F2: one dialog, then the signed publish, then the results in the right panel."""
+    def aim(self, region=None):
+        """Where a send goes: `(targets, target_line)`, or None with the reason said."""
         targets = [] if region else self.targets
         if not region and not targets:
             self.message.say("No device under the cursor; add or discover one first.", error=True)
-            return
+            return None
         if not region and len({(d.get("region") or "").upper() for d in targets}) > 1:
             self.message.say("The tagged devices span more than one region; a send is to one region.", error=True)
-            return
+            return None
         if region:
             target_line = f"EVERY node in {region}"
         elif len(targets) == 1:
             target_line = f"{targets[0].get('name') or targets[0]['node']}  ({targets[0]['node']}, {targets[0].get('region') or '?'})"
         else:
             target_line = f"{len(targets)} tagged devices in {targets[0].get('region') or '?'}"
+        return targets, target_line
+
+    def run_set(self, region=None):
+        """Send > Run a set: a named list of commands in order, stopping at the first refusal."""
+        aimed = self.aim(region)
+        if not aimed:
+            return
+        targets, target_line = aimed
+        sets = self.store.sets()
+        if not sets:
+            self.message.say("No command sets; Options > Command sets.", error=True)
+            return
+        names = sorted(sets)
+        name = Field("Set", names[0], width=20)
+        arg = Field("Value for {arg}", "", width=30, hotkey="v")
+        d = Dialog("Run a Command Set", fields=[name, arg], width=66,
+                   body=[f"To: {target_line}", "", "Sets: " + ", ".join(names)[:56],
+                         "Each step is sent in turn; a refusal or silence stops the rest."],
+                   buttons=[Button("Run", True, default=True), Button("Cancel", None)])
+        while True:
+            if not d.run(self.screen, self.draw):
+                return
+            steps = sets.get(name.value.strip().lower())
+            if not steps:
+                d.message = "No set of that name."
+                continue
+            try:
+                steps = actions.fill(steps, arg.value)
+            except envelope.EnvelopeError as exc:
+                d.message = str(exc)
+                continue
+            break
+        cautions = [f"{s}: {actions.caution(s)}" for s in steps if actions.caution(s)]
+        if cautions and not confirm(self.screen, "Confirm", [f"Set: {name.value.strip()}", f"To: {target_line}"] + cautions[:3],
+                                    "One or more steps take something away.", redraw_under=self.draw):
+            return
+        lines, stopped = [], None
+        try:
+            if region:
+                lines, stopped = actions.run_set(self.store, steps, region=region)
+            else:
+                for dev in targets:
+                    self.message.say(f"Running {name.value.strip()} on {dev.get('name') or dev['node']}...")
+                    self.draw()
+                    l, s = actions.run_set(self.store, steps, device=dev)
+                    lines += l
+                    stopped = s if stopped is None else stopped
+        except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
+            self.message.say(str(exc), error=True)
+            return
+        self.reload()
+        self.show_results(f"Set: {name.value.strip()[:28]}", lines)
+        self.message.say("Every step answered ok." if stopped is None else f"Stopped at step {stopped + 1}; see the right panel.",
+                         error=stopped is not None)
+
+    def sets_dialog(self):
+        """Options > Command sets: one set at a time, by name; empty steps are dropped."""
+        sets = self.store.sets()
+        first = sorted(sets)[0] if sets else ""
+        current = sets.get(first, [])
+        name = Field("Name", first, width=20)
+        steps = [Field(f"Step {i + 1}", current[i] if i < len(current) else "", width=44, hotkey=str(i + 1))
+                 for i in range(_store.SET_STEPS)]
+        d = Dialog("Command Sets", fields=[name] + steps, width=66,
+                   body=["Sets: " + (", ".join(sorted(sets)) or "none"), "{arg} in a step is asked for when the set runs."],
+                   buttons=[Button("Save", True, default=True), Button("Remove", "remove"), Button("Cancel", None)])
+        choice = d.run(self.screen, self.draw)
+        if choice is None:
+            return
+        try:
+            if choice == "remove":
+                self.store.remove_set(name.value.strip().lower())
+                self.message.say(f"Removed {name.value.strip()}.")
+            else:
+                self.store.save_set(name.value, [f.value for f in steps])
+                self.message.say(f"Saved {name.value.strip().lower()}.")
+        except _store.StoreError as exc:
+            self.message.say(str(exc), error=True)
+
+    def send(self, region=None, initial="", immediate=False):
+        """F2: one dialog, then the signed publish, then the results in the right panel."""
+        aimed = self.aim(region)
+        if not aimed:
+            return
+        targets, target_line = aimed
         history = list(dict.fromkeys(l["command"] for l in reversed(self.store.history(None, 50))))
         for d in targets[:1]:
             history = list(dict.fromkeys(history + [l["command"] for l in reversed(self.store.history(d["node"], 50))]))
