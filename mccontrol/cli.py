@@ -107,7 +107,7 @@ def _devices(store, _args):
         print("no devices yet: mccontrol add <name> <node-hex>")
         return 0
     for d in rows:
-        print(f"{d['name']:18} {d['node'][:8]}  {d.get('region', '?'):4}  last sent {d['last_sent'] or '-':20} "
+        print(f"{(d['name'] or '(unnamed)'):18} {d['node'][:8]}  {d.get('region', '?'):4}  last sent {d['last_sent'] or '-':20} "
               f"{d['last_result'] or '':12} {d['notes']}")
     return 0
 
@@ -115,7 +115,7 @@ def _devices(store, _args):
 def _remove(store, args):
     device = _device(store, args.device)
     store.remove_device(device["node"])
-    print(f"forgot {device['name']}")
+    print(f"forgot {device['name'] or device['node']}")
     return 0
 
 
@@ -132,7 +132,7 @@ def _send(store, args, command=None):
     region = args.device.upper() if args.all else None
     why = actions.caution(command)
     if why and not args.dry_run and not args.yes:
-        where = f"EVERY node in {region}" if args.all else device["name"]
+        where = f"EVERY node in {region}" if args.all else (device["name"] or device["node"])
         print(f"'{command}' {why}\nSend it to {where}? [y/N] ", end="", flush=True)
         if input().strip().lower() != "y":
             print("not sent")

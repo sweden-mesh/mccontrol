@@ -60,7 +60,7 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
                                       nodes_to_hear=hear,
                                       wait_secs=wait_secs or config.get("wait_secs", 20))
     lines = []
-    names = {d["node"]: d["name"] for d in store.devices()}
+    names = {d["node"]: (d["name"] or d["node"]) for d in store.devices()}
     for node in hear:
         result = answers.get(node)
         store.record(node, command, topic, result, note="broadcast" if broadcast else "")
@@ -86,11 +86,12 @@ def discover(store, region, wait_secs=None):
     return found
 
 
-def adopt(store, entry, name=None):
-    """Remember a discovered node, by the first eight characters of its key unless named."""
-    name = (name or "").strip() or entry["node"][:8]
+def adopt(store, entry, name=""):
+    """Remember a discovered node; unnamed until you name it, since the control plane
+    carries no name (a name-plus-number is used if the name is taken)."""
+    name = (name or "").strip()
     base, n = name, 2
-    while any(d["name"].lower() == name.lower() for d in store.devices()):
+    while name and any(d["name"].lower() == name.lower() for d in store.devices()):
         name = f"{base}-{n}"
         n += 1
     return store.add_device(name, entry["node"], entry["region"], "found by discovery")

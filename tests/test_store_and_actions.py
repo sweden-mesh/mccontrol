@@ -168,8 +168,10 @@ def test_discover_finds_the_nodes_that_answer_your_signature_and_marks_the_known
     assert found[0]["known_as"] == "LOUTEST" and found[1]["known_as"] is None
     assert found[0]["outcome"] == "> on" and found[1]["outcome"].startswith("refused: rate-limited")
     entry = actions.adopt(store, found[1])
-    assert entry["name"] == "BBBBBBBB" and entry["region"] == "JKG"
+    assert entry["name"] == "" and entry["region"] == "JKG"          # unnamed until you name it
+    assert store.device("BBBBBBBB")["node"] == "BBBBBBBB"
     assert actions.adopt(store, dict(found[1], node="CCCCCCCC"), name="UGO")["name"] == "UGO"
+    assert actions.adopt(store, dict(found[1], node="DDDDDDDD"), name="UGO")["name"] == "UGO-2"
 
 
 def test_discovery_broadcasts_one_signed_read_on_the_control_broker(store, monkeypatch):

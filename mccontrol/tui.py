@@ -207,7 +207,7 @@ class App:
                 if d is None:
                     s.put(6 + i, 1, f" {opt}   ", attr)
                     continue
-                s.put(6 + i, 1, f" {opt}   {d['name'][:19]:19} {d['node'][:8]}  {(d.get('region') or '?')[:4]:4}  "
+                s.put(6 + i, 1, f" {opt}   {(d['name'] or '(unnamed)')[:19]:19} {d['node'][:8]}  {(d.get('region') or '?')[:4]:4}  "
                                 f"{(d['last_sent'] or '-')[:19]:19}  {(d['last_result'] or '')[:14]}", attr)
             s.put(21, 1, "Use arrows to move, type an option on a row, Enter to run.")
             s.keys("F3=Exit   F5=Refresh   F6=Discover   F12=Cancel")
@@ -304,9 +304,17 @@ class App:
             if exit_key(self.win, key):
                 return
             if key == curses.KEY_F6 and found:
-                added = self.remember(found, [cursor_row])
-                s.message = f"{found[cursor_row]['node']} remembered." if added else \
-                            f"{found[cursor_row]['node']} is already {found[cursor_row]['known_as']}."
+                e = found[cursor_row]
+                if e["known_as"]:
+                    s.message = f"{e['node']} is already {e['known_as']}."
+                    continue
+                s.put(21, 1, f"Name for {e['node']} (Enter for none):")
+                name = s.read_line(21, 40, 30)
+                if name is None:
+                    continue
+                entry = actions.adopt(self.store, e, name)
+                e["known_as"] = entry["name"] or entry["node"]
+                s.message = f"{e['node']} remembered" + (f" as {entry['name']}." if entry["name"] else ".")
                 continue
             if key == curses.KEY_F7 and found:
                 added = self.remember(found, range(len(found)))
@@ -341,7 +349,7 @@ class App:
         for i in rows:
             if not found[i]["known_as"]:
                 entry = actions.adopt(self.store, found[i])
-                found[i]["known_as"] = entry["name"]
+                found[i]["known_as"] = entry["name"] or entry["node"]
                 added += 1
         return added
 
@@ -400,7 +408,7 @@ class App:
         s.frame()
         s.put(2, 1, "Press Enter to confirm your choice for 4=Remove.")
         s.put(3, 1, "Press F12 to return to change your choice.")
-        s.put(5, 3, f"Name . . . :  {device['name']}")
+        s.put(5, 3, f"Name . . . :  {device['name'] or '(unnamed)'}")
         s.put(6, 3, f"Node . . . :  {device['node']}")
         s.put(8, 3, "The device is forgotten here. Nothing is sent to it; its history file stays.")
         if s.wait("Enter=Confirm   F12=Cancel") in (curses.KEY_ENTER, 10, 13):
@@ -409,7 +417,7 @@ class App:
     def display_device_screen(self, device):
         s = Screen(self.win, "Display Device")
         s.frame()
-        s.put(3, 3, f"Name . . . . . :  {device['name']}")
+        s.put(3, 3, f"Name . . . . . :  {device['name'] or '(unnamed)'}")
         s.put(4, 3, f"Node . . . . . :  {device['node']}")
         s.put(5, 3, f"Notes  . . . . :  {device['notes']}")
         s.put(6, 3, f"Added  . . . . :  {device['added']}   Region: {device.get('region') or '?'}")
@@ -446,7 +454,7 @@ class App:
         while True:
             if not immediate:
                 s.frame()
-                target = f"EVERY node in {region}" if broadcast else f"{device['name']}  ({device['node'][:8]}, {device.get('region') or '?'})"
+                target = f"EVERY node in {region}" if broadcast else f"{device['name'] or '(unnamed)'}  ({device['node'][:8]}, {device.get('region') or '?'})"
                 s.put(2, 1, "Type the command, press Enter. Nothing is sent until you confirm.")
                 s.put(4, 3, f"To . . . . . . :  {target}")
                 s.put(5, 3, "Command  . . . :")
@@ -483,7 +491,7 @@ class App:
         s.frame()
         s.put(2, 1, "This command takes something away. Press Enter to send it, F12 to cancel.")
         s.put(4, 3, f"Command  . . . :  {command}")
-        s.put(5, 3, f"To . . . . . . :  {f'EVERY node in {region}' if broadcast else device['name']}")
+        s.put(5, 3, f"To . . . . . . :  {f'EVERY node in {region}' if broadcast else (device['name'] or device['node'])}")
         for i, line in enumerate(textwrap.wrap(f"It {why}", 72)):
             s.put(7 + i, 3, line)
         if broadcast:
@@ -493,7 +501,7 @@ class App:
     # -- history, keys, config ---------------------------------------------------------
 
     def history_screen(self, device):
-        s = Screen(self.win, f"Command History: {device['name'] if device else 'all devices'}")
+        s = Screen(self.win, f"Command History: {(device['name'] or device['node']) if device else 'all devices'}")
         lines = self.store.history(device["node"] if device else None, limit=200)
         rows = []
         for line in reversed(lines):
