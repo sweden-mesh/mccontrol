@@ -26,6 +26,14 @@ HEIGHT = 24
 EXIT_KEYS = (curses.KEY_F3, curses.KEY_F12, 27)
 
 
+def cursor(visible):
+    """Show or hide the cursor where the terminal allows it, and carry on where it does not."""
+    try:
+        curses.curs_set(1 if visible else 0)
+    except curses.error:
+        pass
+
+
 class Screen:
     """Draws one 80x24 screen in the style and reads input from it."""
 
@@ -60,17 +68,17 @@ class Screen:
         """A field: type, Backspace, Enter; F3/F12/Esc return None."""
         buf = list(initial)
         self.put(y, x, "_" * width)
-        curses.curs_set(1)
+        cursor(True)
         while True:
             self.put(y, x, ("*" * len(buf) if secret else "".join(buf)).ljust(width, "_")[-width:])
             self.win.move(y, min(x + len(buf), x + width - 1))
             self.win.refresh()
             key = self.win.getch()
             if key in EXIT_KEYS:
-                curses.curs_set(0)
+                cursor(False)
                 return None
             if key in (curses.KEY_ENTER, 10, 13):
-                curses.curs_set(0)
+                cursor(False)
                 return "".join(buf)
             if key in (curses.KEY_BACKSPACE, 127, 8):
                 if buf:
@@ -95,12 +103,15 @@ class App:
     def __init__(self, stdscr, store):
         self.stdscr = stdscr
         self.store = store
-        curses.curs_set(0)
-        if curses.has_colors():
-            curses.start_color()
-            curses.use_default_colors()
-            curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-            stdscr.bkgd(" ", curses.color_pair(1))
+        cursor(False)
+        try:
+            if curses.has_colors():
+                curses.start_color()
+                curses.use_default_colors()
+                curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+                stdscr.bkgd(" ", curses.color_pair(1))
+        except curses.error:
+            pass                                   # monochrome is still a green screen in spirit
         stdscr.keypad(True)
         self.win = stdscr
 
@@ -461,7 +472,27 @@ class App:
 
 
 def run(store):
+    import os
+    import sys
+
     def _main(stdscr):
+        h, w = stdscr.getmaxyx()
+        if h < HEIGHT or w < WIDTH:
+            stdscr.addstr(0, 0, f"This screen needs {WIDTH}x{HEIGHT}; the terminal is {w}x{h}. "
+                                f"Make it larger and start again, or use the command line.")
+            stdscr.getch()
+            return 2
         App(stdscr, store).main_menu()
-    curses.wrapper(_main)
-    return 0
+        return 0
+
+    if not sys.stdout.isatty():
+        print("mccontrol: the screens need a terminal; use the subcommands instead "
+              "(mccontrol --help)", file=sys.stderr)
+        return 2
+    os.environ.setdefault("ESCDELAY", "25")       # Esc answers at once instead of after a second
+    try:
+        return curses.wrapper(_main)
+    except curses.error as exc:
+        print(f"mccontrol: this terminal ({os.environ.get('TERM', '?')}) cannot run the screens: "
+              f"{exc}. Use the subcommands instead (mccontrol --help).", file=sys.stderr)
+        return 2
