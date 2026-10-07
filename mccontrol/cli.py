@@ -27,7 +27,7 @@ def build_parser():
         "--force", action="store_true", help="replace an existing key (silences provisioned nodes)")
     sub.add_parser("key", help="print the public key to provision with 'set mqtt.cmd.pubkey'")
     c = sub.add_parser("config", help="show or change the control broker")
-    for name in ("broker", "username", "password"):
+    for name in ("broker", "username", "password", "beacon-url"):
         c.add_argument(f"--{name}")
     c.add_argument("--port", type=int)
     c.add_argument("--wait-secs", type=int)
@@ -108,9 +108,12 @@ def _key(store, _args):
 def _config(store, args):
     changes = {k: getattr(args, k) for k in ("broker", "username", "password", "port")}
     changes["wait_secs"] = args.wait_secs
+    changes["beacon_url"] = args.beacon_url
     if any(v is not None for v in changes.values()):
         store.save_config(**changes)
     for key, value in store.config().items():
+        if key in ("shortcuts", "sets"):
+            continue                              # their own commands list them
         print(f"{key:12} {'(set)' if key == 'password' else value}")
     return 0
 

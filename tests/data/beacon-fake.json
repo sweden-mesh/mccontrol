@@ -1,0 +1,181 @@
+{
+ "/nodes": {
+  "items": [
+   {
+    "id": "5840a7d6-076d-4996-a978-b13c6ac1bc30",
+    "publicKey": "13b58595d141b1ab02a7fd0fb4f2fae3e7d895a1416ca672e14ce53287ed40fb",
+    "nodeType": 2,
+    "nodeTypeName": "repeater",
+    "name": "SE-JKP-TORPA7TYU",
+    "isObserver": true,
+    "observerId": "38dd5381-949c-4c3e-89dd-33dc549729ad",
+    "lat": 57.766788,
+    "lng": 14.146244,
+    "radio": "869.618,62.5,8",
+    "iatas": [
+     {
+      "iata": "JKG",
+      "lastHeard": 1791404530461
+     }
+    ],
+    "knownNeighborCount": 9,
+    "stale": false,
+    "possiblyForeign": false
+   },
+   {
+    "id": "28a85ce7-3521-453b-9ea2-470965183353",
+    "publicKey": "4ac61a7ff4800a079a7311ca606a4c7037fe6943d40e53932230142829a4f786",
+    "nodeType": 2,
+    "nodeTypeName": "repeater",
+    "name": "SE-JKG-Gisebo-4AC6",
+    "isObserver": true,
+    "observerId": "867a1b43-3f2e-48c4-9ef5-3008a905cfdc",
+    "lat": 57.8462,
+    "lng": 14.2668,
+    "radio": "869.618,62.5,8",
+    "iatas": [
+     {
+      "iata": "JKG",
+      "lastHeard": 1791404053546
+     }
+    ],
+    "knownNeighborCount": 19,
+    "stale": false,
+    "possiblyForeign": false
+   },
+   {
+    "id": "0f303dad-a7a5-452e-bcf4-878083019494",
+    "publicKey": "fd70036998df08de39475c39072dbb465460ff5e9d65a6fc962d2dadb522c899",
+    "nodeType": 2,
+    "nodeTypeName": "repeater",
+    "name": "SE-JKG-Br\u00e5neryd-FD70",
+    "isObserver": false,
+    "lat": 57.771191,
+    "lng": 14.28885,
+    "iatas": [
+     {
+      "iata": "JKG",
+      "lastHeard": 1791403464188
+     }
+    ],
+    "knownNeighborCount": 4,
+    "stale": false,
+    "possiblyForeign": false
+   }
+  ],
+  "nextCursor": null,
+  "hasMore": false
+ },
+ "/observers/867a1b43-3f2e-48c4-9ef5-3008a905cfdc": {
+  "id": "867a1b43-3f2e-48c4-9ef5-3008a905cfdc",
+  "displayName": "SE-JKG-Gisebo-4AC6",
+  "observerType": "meshcore/esp32s3-v1.17.0-ar-10-observer-8530d4bb",
+  "iata": "JKG",
+  "status": "online",
+  "scopes": [
+   "#se"
+  ],
+  "publicKey": "4ac61a7ff4800a079a7311ca606a4c7037fe6943d40e53932230142829a4f786",
+  "softwareVersion": "meshcore/esp32s3-v1.17.0-ar-10-observer-8530d4bb",
+  "hardwareModel": "Heltec V3",
+  "firmwareVersion": "esp32s3-v1.17.0-ar-10-observer-8530d4bb",
+  "firmwareBuild": "",
+  "radioFreqMhz": 869.618,
+  "radioSf": 8,
+  "radioBwKhz": 62.5,
+  "radioCr": 5,
+  "batteryLevel": 4.261,
+  "uptimeSeconds": 1496188,
+  "statusMetadata": {
+   "model": "Heltec V3",
+   "radio": "869.617981,62.5,8,5",
+   "stats": {
+    "errors": 10,
+    "queue_len": 0,
+    "battery_mv": 4261,
+    "noise_floor": -114,
+    "recv_errors": 13369,
+    "rx_air_secs": 25369,
+    "tx_air_secs": 5518,
+    "uptime_secs": 1496188,
+    "packets_sent": 9065,
+    "internal_heap": 117524,
+    "packets_received": 44345
+   },
+   "origin": "SE-JKG-Gisebo-4AC6",
+   "repeat": "on",
+   "status": "online",
+   "origin_id": "4AC61A7FF4800A079A7311CA606A4C7037FE6943D40E53932230142829A4F786",
+   "timestamp": "2026-10-07T20:50:37.506288+00:00",
+   "client_version": "meshcore/esp32s3-v1.17.0-ar-10-observer-8530d4bb",
+   "firmware_version": "esp32s3-v1.17.0-ar-10-observer-8530d4bb"
+  },
+  "lastStatusAt": 1791406238583,
+  "firstSeen": 1791020729932,
+  "lastSeen": 1791406238583,
+  "observationCount": 3202,
+  "brokers": [
+   {
+    "name": "mqtt1",
+    "lastSeenAt": 1791406238583,
+    "lastPacketAt": 1791406235846
+   }
+  ]
+ },
+ "/observers/867a1b43-3f2e-48c4-9ef5-3008a905cfdc/telemetry": {
+  "range": "24h",
+  "interval": "6h",
+  "points": [
+   {
+    "t": 1791309600000,
+    "batteryMv": 3982,
+    "airtimeTxSecs": 27,
+    "airtimeRxSecs": 94,
+    "noiseFloorDb": -115.333336,
+    "uptimeSeconds": 1417585,
+    "queueLength": 0,
+    "receiveErrors": 48
+   },
+   {
+    "t": 1791331200000,
+    "batteryMv": 4081,
+    "airtimeTxSecs": 73,
+    "airtimeRxSecs": 304,
+    "noiseFloorDb": -112.833336,
+    "uptimeSeconds": 1439155,
+    "queueLength": 0,
+    "receiveErrors": 147
+   },
+   {
+    "t": 1791352800000,
+    "batteryMv": 4279,
+    "airtimeTxSecs": 127,
+    "airtimeRxSecs": 798,
+    "noiseFloorDb": -116.166664,
+    "uptimeSeconds": 1463702,
+    "queueLength": 0,
+    "receiveErrors": 316
+   },
+   {
+    "t": 1791374400000,
+    "batteryMv": 3938,
+    "airtimeTxSecs": 116,
+    "airtimeRxSecs": 725,
+    "noiseFloorDb": -113,
+    "uptimeSeconds": 1482354,
+    "queueLength": 0,
+    "receiveErrors": 280
+   },
+   {
+    "t": 1791396000000,
+    "batteryMv": 3988,
+    "airtimeTxSecs": 31,
+    "airtimeRxSecs": 132,
+    "noiseFloorDb": -116.666664,
+    "uptimeSeconds": 1493153,
+    "queueLength": 0,
+    "receiveErrors": 67
+   }
+  ]
+ }
+}

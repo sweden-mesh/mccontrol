@@ -28,6 +28,9 @@ DEFAULT_CONFIG = {
     "password": "",
     "ttl_secs": envelope.DEFAULT_TTL_SECS,
     "wait_secs": 20,
+    # Statistics come from a Beacon server (read-only HTTP, no credentials); one URL, since
+    # one Beacon covers a country, and another region's Beacon is this one setting.
+    "beacon_url": "https://beacon.meshat.se/api/v1",
 }
 
 # Alt+1..9 on the main screen and `mccontrol alt <n>` on the command line: a command each,
