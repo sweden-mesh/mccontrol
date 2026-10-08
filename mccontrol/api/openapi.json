@@ -319,6 +319,9 @@
      },
      "404": {
       "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
      }
     },
     "requestBody": {
@@ -1443,8 +1446,12 @@
       }
      },
      "registered": {
-      "$ref": "#/components/schemas/Registration",
-      "nullable": true
+      "nullable": true,
+      "allOf": [
+       {
+        "$ref": "#/components/schemas/Registration"
+       }
+      ]
      }
     },
     "description": "The control broker and how long to wait; command sets and shortcuts have their own routes.",
@@ -1548,8 +1555,12 @@
       "type": "string"
      },
      "registered": {
-      "$ref": "#/components/schemas/Registration",
-      "nullable": true
+      "nullable": true,
+      "allOf": [
+       {
+        "$ref": "#/components/schemas/Registration"
+       }
+      ]
      },
      "provision": {
       "type": "array",
@@ -2602,8 +2613,12 @@
       "nullable": true
      },
      "error": {
-      "$ref": "#/components/schemas/ErrorBody",
-      "nullable": true
+      "nullable": true,
+      "allOf": [
+       {
+        "$ref": "#/components/schemas/ErrorBody"
+       }
+      ]
      }
     },
     "example": {
@@ -3070,8 +3085,12 @@
       "nullable": true
      },
      "registered": {
-      "$ref": "#/components/schemas/Registration",
-      "nullable": true
+      "nullable": true,
+      "allOf": [
+       {
+        "$ref": "#/components/schemas/Registration"
+       }
+      ]
      },
      "ok": {
       "type": "boolean"
