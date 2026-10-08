@@ -382,7 +382,7 @@ def test_2_changes_a_device_and_4_forgets_one_after_a_confirm(api):
     text = walk(api, [(b"1\r", 0.8), (b"2\r", 0.6), (b"\x08\x08\x08Near\r", 0.8), (DOWN, 0.2), (b"4\r", 0.6), (F[12], 0.4),
                       (b"4\r", 0.6), (b"\r", 0.8)])
     assert "Change Device" in text and "Saved." in text
-    assert "Confirm Forget of Device" in text and "its history file stays" in text and "Forgotten." in text
+    assert "Confirm Forget of Device" in text and "Nothing is sent to it" in text and "Forgotten." in text
     names = {d["node"]: d["name"] for d in store.devices()}
     assert names == {"FD700369": "Near", "4AC61A7F": "Gisebo"}         # the cursor stayed on Near; the row under it went
 
@@ -552,5 +552,21 @@ def test_a_resize_redraws_the_screen_at_the_new_size_at_once(api):
         fcntl.ioctl(s.fd, termios.TIOCSWINSZ, struct.pack("HHHH", 43, 132, 0, 0))
         s.pump(lambda new: b"Result" in new, 2.0)                           # no key typed
         assert b"Result" in s.out[mark:]
+    finally:
+        s.close()
+
+
+def test_a_confirm_is_answered_only_by_a_key_typed_once_it_is_shown(api):
+    _server, _url, store = api
+    s = Session(api)
+    try:
+        s.drive([(b"1\r", 0.8)])
+        os.write(s.fd, F[7] + b"4\r\r")                             # typed during the wait: dropped
+        s.pump(lambda new: b"from Beacon" in new, 3.0)                # the wait is over
+        os.write(s.fd, b"4\r\r")                                    # no wait: the confirm drops the second Enter
+        s.pump(lambda new: b"Confirm" in new, 2.0)
+        text = s.drive([(b"", 0.3)])
+        assert "Confirm Forget of Device" in text and "Forgotten." not in text
+        assert len(store.devices()) == 3
     finally:
         s.close()

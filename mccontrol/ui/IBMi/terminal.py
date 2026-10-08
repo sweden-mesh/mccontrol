@@ -40,6 +40,7 @@ class Terminal:
     def __init__(self, win):
         self.win = win
         self.message = ""
+        self.repaint = False            # a Ctrl+L typed during a wait, for after it
         self.attr = {"normal": 0, "bright": curses.A_BOLD, "field": curses.A_UNDERLINE, "error": curses.A_BOLD,
                      "grey": curses.A_DIM, "cursor": curses.A_REVERSE, "legend": 0}
         try:
@@ -156,8 +157,24 @@ class Terminal:
 
     def poll(self):
         """F3, F12 or Esc if one was typed, else -1: how a wait notices a cancel. Any other
-        key typed during the wait is kept for after it, the 5250's type-ahead."""
-        held, found = [], -1
+        key typed during a wait is dropped: what follows the wait is another screen, and a
+        key meant for this one must never answer that one. A Ctrl+L is kept for after it."""
+        found = -1
+        for key in self._pending():
+            if key in EXIT:
+                found = key
+        return found
+
+    def discard(self):
+        """Drop what was typed ahead, so the next key read is a fresh one: before a Confirm
+        screen, and when a wait ends. A Ctrl+L among it repaints."""
+        self._pending()
+        if self.repaint:
+            self.repaint = False
+            self.win.clearok(True)
+
+    def _pending(self):
+        keys = []
         while True:
             self.win.nodelay(True)
             try:
@@ -165,19 +182,16 @@ class Terminal:
             finally:
                 self.win.nodelay(False)
             if key == -1:
-                break
+                return keys
             if key == 27:
                 curses.ungetch(27)
                 key = self.key()
-            if key in EXIT:
-                found = key
+            if key == 12:
+                self.repaint = True
             elif key == curses.KEY_RESIZE:
                 self.resized()
-            elif key >= 0:
-                held.append(key)
-        for key in reversed(held):
-            curses.ungetch(key)
-        return found
+            else:
+                keys.append(key)
 
     def edit(self, y, x, width, value="", secret=False, recall=None):
         """One input field: type, Backspace, Left/Right do nothing clever. Returns `(key,

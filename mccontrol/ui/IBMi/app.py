@@ -48,7 +48,8 @@ class App:
             job = start(*a, **k)
         except ApiError as exc:
             if exc.code == "confirm_required" and "confirm" in k and not k["confirm"]:
-                lines = [f"'{c['command']}' {c['caution']}" for c in exc.cautions] or [exc.message]
+                lines = [f"'{c['command']}' {c['caution']}" for c in exc.cautions] or [
+                    exc.message.replace(" Send again with confirm: true.", "")]
                 lines += [f"To:  {about}"] if about else []
                 if confirm(self.t, "Confirm Command", lines, "This takes something away. Press Enter to send it, F12 to cancel."):
                     return self.job(start, *a, about=about, **dict(k, confirm=True))
@@ -68,6 +69,8 @@ class App:
         except ApiError as exc:
             self.t.message = exc.message
             return None
+        finally:
+            self.t.discard()
         if job["status"] == "failed":
             self.t.message = (job.get("error") or {}).get("message", "failed")
             return None

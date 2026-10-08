@@ -226,7 +226,8 @@ def show(term, title, lines, keys=("F3=Exit   F12=Cancel",), done=(), context="m
 
 
 def confirm(term, title, lines, prompt="Press Enter to confirm, F12 to cancel."):
-    """A Confirm screen: True on Enter."""
+    """A Confirm screen: True on Enter, and only on an Enter typed once it is shown."""
+    term.discard()
     while True:
         w, _h = term.size
         term.frame(title, ["F12=Cancel"])
