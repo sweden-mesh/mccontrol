@@ -39,7 +39,15 @@ class Job:
         self.outcomes = {}              # key -> outcome, in landing order
         self.result = None
         self.error = None
+        self.stopped = False            # the work gave up something because of a cancel
         self.lock = threading.Lock()
+
+    def stopping(self):
+        """Asked where the work can stop early: True, and remembered, once cancelled. A job
+        whose work never asks ran to the end, and is done however late the cancel came."""
+        if self.cancel.is_set():
+            self.stopped = True
+        return self.stopped
 
     def update(self, **progress):
         with self.lock:
@@ -83,7 +91,7 @@ class Registry:
                 error = {"code": code, "message": message}
             with job.lock:
                 job.result, job.error = result, error
-                job.status = "failed" if error else ("cancelled" if job.cancel.is_set() else "done")
+                job.status = "failed" if error else ("cancelled" if job.stopped else "done")
                 job.finished = _store._now()
 
         threading.Thread(target=run, name=f"mccontrol-job-{job.id}", daemon=True).start()
@@ -131,7 +139,7 @@ def ticker(job, text, names=None, command=""):
                 if not job.landed(node):
                     job.land({"node": node, "name": names.get(node) or node, "command": command, "ok": None,
                               "code": None, "code_name": None, "reply": None, "verified": None, "line": "answered"})
-        return job.cancel.is_set()
+        return job.stopping()
     return tick
 
 
@@ -222,7 +230,7 @@ def start_send(ctx, _p, _q, body):
         answered, asked, lines, topics = 0, 0, [], []
         job.update(expected=len(devices))
         for i, d in enumerate(devices):         # one signed publish per device, to its own topic
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             label = _label(d)
             text = lambda _n, a=answered, label=label, i=i: f"{a} of {len(devices)} answered; waiting for {label} ({i + 1} of {len(devices)})"
@@ -267,7 +275,7 @@ def start_run_set(ctx, _p, _q, body):
         lines, runs = [], []
         job.update(expected=len(devices))
         for d in devices:
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             label = _label(d)
             l, stopped = actions.run_set(store, steps, device=d, dry_run=dry, wait_secs=wait, on_step=on_step(job, label),
@@ -300,7 +308,7 @@ def start_discover(ctx, _p, _q, body):
         found = []
         job.update(steps=len(regions))
         for i, region in enumerate(regions):
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             job.update(step=i)
             part = actions.discover(store, region, wait_secs=wait,
@@ -334,7 +342,7 @@ def start_refresh_names(ctx, _p, _q, body):
         lines = []
         job.update(expected=len(devices))
         for i, d in enumerate(devices):
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             label = _label(d)
             n, v, l = actions.refresh_names(store, [d], wait_secs=wait,
@@ -360,7 +368,7 @@ def start_refresh_fleet(ctx, _p, _q, body):
         updated = failed = 0
         job.update(expected=len(devices))
         for i, d in enumerate(devices):
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             job.update(text=f"Beacon: {i} of {len(devices)} asked")
             u, f = actions.refresh_fleet(store, [d])
@@ -387,25 +395,16 @@ def start_statistics(ctx, _p, _q, body):
     store = ctx.store
 
     def work(job):
-        lines = actions.statistics(store, d, range_, interval, live=live,
+        lines, sample, points = actions.statistics(store, d, range_, interval, live=live, details=True,
                                    progress=ticker(job, lambda n: "answered" if n else "waiting for the live sample"),
                                    script=ctx.script)
         if not lines[0].startswith("live"):             # a live answer is kept by send() itself
             summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
             store.remember_read(d["node"], "stats (Beacon)", summary[:60])
         job.update(text="done")
-        return {"node": d["node"], "lines": lines, "sample": _or_none(beacon.stats, store, d),
-                "points": _or_none(beacon.telemetry, store, d, range_, interval)}
+        return {"node": d["node"], "lines": lines, "sample": sample, "points": points}
 
     return 202, ctx.jobs.start("statistics", work).snapshot()
-
-
-def _or_none(read, *args):
-    """Beacon's numbers for a dashboard beside the lines, or None where it has none."""
-    try:
-        return read(*args)
-    except beacon.BeaconError:
-        return None
 
 
 def start_test(ctx, _p, _q, _b):
