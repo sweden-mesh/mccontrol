@@ -3,7 +3,8 @@ Keys on the main screen
   F1        this help, about the screen or dialog you are on
   Shift+F1  the help contents;  Alt+F1  the previous help topic
   F2        send a command to the tagged devices, or the cursor device
-  F3        the cursor device's history as a window (Enter does the same)
+  Enter     the command list for the cursor device: see [[commandlist]]
+  F3        the cursor device's history as a window
   F4        edit the cursor device: name, region, notes
   F5        discover: find the repeaters in a region that accept your key
   F6        read the cursor device's region map (sends "region")
@@ -15,7 +16,8 @@ Keys on the main screen
   r         refresh the Batt and Seen columns from Beacon, tagged or all
   n         read name and version from the tagged or cursor devices: [[devices]]
   Ins Space tag the row and move down;  * invert;  + - tag or untag a region
-  Tab       switch panels;  Enter  open;  Esc  close a dialog or menu
+  Tab       cycle the three panels (devices, history, last answers);
+            Enter on a last-answers line reads it again;  Esc  close
   Ctrl+L    redraw the screen
   Mouse     where the terminal has one: a row takes the cursor, a key-bar
             label presses it, a menu title opens it. Never needed.

@@ -30,3 +30,7 @@ refreshes by itself; s, r and n ask when you do.
 Every wait -- a send, a discovery, a set, a read from Beacon -- is a box
 over the work with what is happening, the running count and a bar over
 the wait. Esc stops waiting early and keeps what has come.
+
+The right side is two panels: the history (or a send's results) above,
+and "Last answers" below -- what the cursor device last said to each read,
+with its age (see [[reads]]).

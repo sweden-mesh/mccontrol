@@ -24,8 +24,9 @@ A name ending in ` ?` is a device nothing has been heard from for seven days aft
 the control plane or by Beacon — and is a device to look at, not a verdict. Nothing refreshes by
 itself.
 
-The left panel is your device directory; the right panel follows the cursor (history), or
-shows a send's results, or what a discovery found. Ins tags rows, `*` inverts, `+`/`-` tag a
+The left panel is your device directory; the upper right panel follows the cursor (history), or
+shows a send's results, or what a discovery found; the lower right keeps what the cursor device
+last answered to each read, with its age. Ins tags rows, `*` inverts, `+`/`-` tag a
 region. Dialogs take the one or two values a verb needs; Esc always cancels.
 
 ## Install
@@ -48,7 +49,8 @@ library. 80x24 is the minimum; wider terminals get wider panels.
 |---|---|
 | F1 | help for where you are; Shift+F1 the contents; links are followed with Enter, Backspace or Alt+F1 goes back |
 | F2 | send a command to the tagged devices, or the cursor device; Up recalls earlier commands |
-| F3 / Enter | the cursor device's history as a window; on the right panel, Enter opens a reply |
+| Enter | the command list for the cursor device, by group, type to filter; a command's parameter is asked for as radio buttons, checkboxes or a text field with examples, and the reply opens when it arrives |
+| F3 | the cursor device's history as a window; on the right panel, Enter opens a reply |
 | F4 | edit the device: name, region, notes |
 | F5 | discover: the repeaters in a region that accept your key (`JKG, GOT` for several, `*` for every region you have); on the found list, F5 adds the tagged and F7 adds all |
 | F6 | read the cursor device's region map |
@@ -57,7 +59,7 @@ library. 80x24 is the minimum; wider terminals get wider panels.
 | F9 / F10 | the menu / quit |
 | Alt+1..9 | a command per key to the tagged or cursor device, no dialog: `region`, `ver`, `get name`, `get autoreply`, `get radio`, `get repeat` as shipped; Options > Shortcuts edits them |
 | Ins, Space, `*`, `+`, `-` | tag a row, invert, tag or untag a region |
-| Tab | switch panels |
+| Tab | cycle the three panels: devices, history, last answers (Enter there reads it again) |
 | `n` | read `get name` and `ver` from the tagged or cursor devices: an unnamed device takes the fleet's name, the Ver column fills (sortable) |
 | `r` | refresh the directory's Batt and Seen columns from Beacon for the tagged devices, or all; never automatic |
 | `s` | the cursor device's statistics from Beacon (battery, uptime, noise floor, airtime, packets, errors, with the sample's age, and 24 h of history); View menu for 48 h and 7 d |
@@ -101,6 +103,8 @@ mccontrol run add-scope loutest se-jkp   # a command set, step by step, stopping
 mccontrol stats loutest --range 48h      # from Beacon (beacon.meshat.se by default; mccontrol config --beacon-url for another)
 mccontrol fleet                          # the directory with Batt and Seen refreshed from Beacon
 mccontrol refresh [device...]            # get name and ver over the control plane; names the unnamed
+mccontrol reads loutest                  # what it last answered to each read, with the age
+mccontrol commands                       # the command table, by group, with each one's parameter kind
 mccontrol history loutest
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```

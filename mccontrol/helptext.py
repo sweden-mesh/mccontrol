@@ -56,5 +56,5 @@ def as_text(name):
 
 # Which topic F1 opens from where.
 CONTEXT = {"main": "screen", "send": "send", "discover": "discover", "edit": "devices",
-           "forget": "devices", "keys": "signing", "setup": "broker", "test": "broker", "shortcuts": "shortcuts", "sets": "sets", "runset": "sets", "stats": "stats",
+           "forget": "devices", "keys": "signing", "setup": "broker", "test": "broker", "shortcuts": "shortcuts", "sets": "sets", "runset": "sets", "stats": "stats", "commands": "commandlist", "reads": "reads",
            "region": "send", "found": "discover"}
