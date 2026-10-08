@@ -137,7 +137,8 @@ def serve(store=None, transport=None, port=0):
     server.daemon_threads = True
     server.ctx = Context(store if store is not None else _store.Store())
     server.scripted = transport is not None
-    threading.Thread(target=server.serve_forever, name="mccontrol-api", daemon=True).start()
+    # a short poll: stop() waits for it, and a command line starts and stops a server per command
+    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, name="mccontrol-api", daemon=True).start()
     return server, f"http://127.0.0.1:{server.server_address[1]}"
 
 

@@ -293,3 +293,10 @@ def test_devices_can_be_listed_in_the_order_they_were_added(api):
     listing = call(url, "GET", "/devices?sort=added")[1]
     assert [d["node"] for d in listing["devices"]] == ["4AC61A7F", "65C1D12C", "FD700369"]
     assert listing["sort"] == "added" and "added" in listing["sorts"]
+
+
+def test_a_server_stops_at_once():
+    server, _url = api_server.serve(store=object())
+    start = time.monotonic()
+    api_server.stop(server)
+    assert time.monotonic() - start < 0.2
