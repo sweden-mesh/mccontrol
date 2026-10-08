@@ -22,6 +22,18 @@ Keys on the main screen
   Mouse     where the terminal has one: a row takes the cursor, a key-bar
             label presses it, a menu title opens it. Never needed.
 
+The menus (F9, or Alt+ the title's first letter) hold the rest:
+
+  Devices   discover, edit, forget, sort, names and versions, tag a region
+  Send      to the tagged or cursor device, to all in a region, read
+            regions, Command set (run one: see [[sets]]), the shortcuts
+  View      Statistics, Last 48 hours, Last 7 days, Refresh Batt/Seen
+  Keys      Show public key: the provisioning line, Register, Replace
+            key, or create or import one when there is none: [[signing]]
+  Options   Broker and Test the broker ([[broker]]), Shortcuts (edit the
+            nine slots: [[shortcuts]]), Command sets (define, change,
+            remove), Directory columns
+
 In a dialog: Tab and Shift+Tab move between fields and buttons, Enter
 presses the highlighted default button from anywhere, Esc cancels. See
 [[dialogs]].

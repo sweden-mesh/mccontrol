@@ -112,12 +112,13 @@ def _key_names():
 
 # The topics that are how an interface works; every interface has its own text for each.
 MECHANICS = {"index", "keys", "screen", "dialogs", "commandlist", "devices", "send"}
+EXTRA = {}          # an interface's own text for a topic outside MECHANICS, by interface, when one is earned
 
 
 def test_every_key_an_interfaces_help_names_is_a_key_it_has():
     for ui, names in _key_names().items():
         paths = sorted((helptext.HERE / ui).glob("*.txt"))
-        assert MECHANICS <= {p.stem for p in paths}, ui
+        assert {p.stem for p in paths} == MECHANICS | EXTRA.get(ui, set()), ui
         for path in paths:
             text = path.read_text(encoding="utf-8")
             unknown = [k for k in named_keys(text) if not _has(k, names)]
