@@ -275,3 +275,14 @@ def test_nothing_in_the_api_imports_curses_and_the_document_ships_with_the_packa
     assert not [p.name for p in here.glob("*.py") if re.search(r"^\s*(import|from) +[\w.]*curses", p.read_text(encoding="utf-8"), re.M)]
     assert '"api/*.json"' in (here.parents[1] / "pyproject.toml").read_text(encoding="utf-8")
     assert (here.parents[1] / "docs" / "api" / "openapi.json").samefile(here / "openapi.json")
+
+
+def test_without_a_store_the_server_opens_the_one_in_mccontrol_home(tmp_path, monkeypatch):
+    from mccontrol import store as _store
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    _store.Store().add_device("Home", "4AC61A7F", "JKG")
+    server, url = api_server.serve()
+    try:
+        assert [d["name"] for d in call(url, "GET", "/devices")[1]["devices"]] == ["Home"]
+    finally:
+        api_server.stop(server)

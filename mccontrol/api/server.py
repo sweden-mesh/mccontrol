@@ -11,7 +11,7 @@ import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import transport
+from .. import store as _store, transport
 from . import errors, jobs, routes
 
 MAX_BODY = 1 << 20
@@ -125,8 +125,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def serve(store, transport=None, port=0):
-    """Start the API on 127.0.0.1 (a free port unless given) in a daemon thread.
+def serve(store=None, transport=None, port=0):
+    """Start the API on 127.0.0.1 (a free port unless given) in a daemon thread, over
+    `store`, or with none the one in MCCONTROL_HOME (or the default directory).
 
     `transport`, for tests: a scripted `{node or "node|command": [code, reply]}` object that
     stands in for the broker, as MCCONTROL_FAKE_RESULTS does. Returns `(server, base_url)`."""
@@ -134,7 +135,7 @@ def serve(store, transport=None, port=0):
         _transport().FAKE_SCRIPT = transport
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
-    server.ctx = Context(store)
+    server.ctx = Context(store if store is not None else _store.Store())
     server.scripted = transport is not None
     threading.Thread(target=server.serve_forever, name="mccontrol-api", daemon=True).start()
     return server, f"http://127.0.0.1:{server.server_address[1]}"
