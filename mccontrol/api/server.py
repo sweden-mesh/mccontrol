@@ -101,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
         query = {k: v[0] for k, v in urllib.parse.parse_qs(url.query, keep_blank_values=True).items()}
         try:
             origin = self.headers.get("Origin")
-            if origin is not None and origin != self.server.origin:
+            if origin is not None and origin not in self.server.origins:
                 raise errors.ApiError(403, "forbidden", "a request from another origin")
             _t, func, params = match(method, path)
             status, payload = func(self.server.ctx, params, query, self._body())
@@ -164,6 +164,8 @@ def serve(store=None, transport=None, port=0):
     server.ctx = Context(store if store is not None else _store.Store(), transport)
     server.secret = secrets.token_urlsafe(32)
     server.origin = f"http://127.0.0.1:{server.server_address[1]}"
+    # the page /docs serves may be opened by either name for the loopback; nothing else
+    server.origins = (server.origin, f"http://localhost:{server.server_address[1]}")
     # a short poll: stop() waits for it, and a command line starts and stops a server per command
     thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, name="mccontrol-api", daemon=True)
     try:

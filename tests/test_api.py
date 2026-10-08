@@ -379,6 +379,11 @@ def test_another_origin_and_a_body_that_is_not_json_are_refused(api):
     status, out = raw(url + "jobs/send", "POST", body, {"Content-Type": "text/plain"})
     assert status == 415 and json.loads(out)["error"]["code"] == "unsupported_media_type"
     assert raw(url + "jobs", headers={"Origin": origin})[0] == 200
+    port = int(origin.rsplit(":", 1)[1])
+    assert raw(url + "jobs", headers={"Origin": f"http://localhost:{port}"})[0] == 200
+    for other in (f"http://localhost:{port + 1}", f"https://localhost:{port}", f"http://localhost:{port}.evil.example",
+                  f"http://127.0.0.1:{port + 1}", "http://localhost"):
+        assert raw(url + "jobs", headers={"Origin": other})[0] == 403, other
     assert json.loads(raw(url + "jobs")[1])["jobs"] == []                    # nothing started
 
 
