@@ -49,9 +49,12 @@ def outcome_line(result, version=None):
     table or the version is wrong -- and is said as such rather than hidden."""
     if result is None:
         return "no answer"
+    if result.verified is False:
+        return f"BAD SIGNATURE: the line on this node's result topic was not signed by its key -- forged or altered; reply ignored"
+    tag = " [signed]" if result.verified else ""        # an r1 (older firmware) carries no mark
     if result.ok:
-        return result.reply or "OK"
-    line = f"refused: {result.code_name}"
+        return (result.reply or "OK") + tag
+    line = f"refused: {result.code_name}" + tag
     if result.code == 14 and version and firmware.admits(version, result.command):
         line += f" [the table says {firmware.entry_for(version)[0]} admits this: the table or the version is wrong]"
     return line + (f" -- {result.help}" if result.help else "")

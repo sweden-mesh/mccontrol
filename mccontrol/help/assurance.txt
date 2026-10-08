@@ -38,12 +38,13 @@ What this does not give you
   (the signing key, the identity key, erase) are not admitted at all.
   Delivery: the broker can drop or delay a command. That shows as
   silence or as expired, never as a wrong command running.
-  Trustworthy results: a result line is not signed. Anyone on the
-  broker can publish "ok" in a repeater's name, so a result on its own
-  proves only that something answered. Confirm a change with a read
-  ("get ...") whose answer you can judge, or by what the repeater then
-  does on the air. Signed results need a firmware change; it is on the
-  backlog.
+  Trustworthy results from older firmware: up to ar-10 a result line
+  is not signed, so anyone on the broker can publish "ok" in such a
+  repeater's name. From ar-11 the node signs every result with its own
+  key and the tool checks it: a result marked [signed] is the node's
+  word, a BAD SIGNATURE line is a forgery and is ignored, and an
+  unmarked line is an r1 from older firmware -- confirm those with a
+  read whose answer you can judge.
   A stolen key: whoever reads key.seed can sign as you. It is kept
   readable only by you; replacing it (Keys menu) silences every
   repeater until each is re-provisioned over serial.

@@ -1,6 +1,7 @@
 import pytest
 
 from mccontrol import envelope
+from Crypto.Signature import eddsa
 
 SEED = "11" * 32
 
@@ -162,3 +163,36 @@ def test_a_registration_line_is_signed_by_the_key_it_names_and_a_broker_can_chec
     assert envelope.verify_registration(line.replace(public, other)) is None
     assert envelope.verify_registration(line.replace("1700000000", "1700000001")) is None
     assert envelope.verify_registration("reg1|short|1|sig") is None
+
+
+# ---- signed results: r2 ----------------------------------------------------------------
+
+def _signed_result(seed, topic, line):
+    sig = eddsa.new(envelope.key_from_seed(seed), "rfc8032").sign(envelope.signed_message(topic, line))
+    return f"{line}|{sig.hex().upper()}"
+
+
+def test_an_r2_verifies_with_the_nodes_key_and_a_forged_one_is_a_finding():
+    node_seed = "33" * 32
+    key = envelope.public_key_hex(node_seed)
+    topic = f"meshcore/JKG/{key}/res"
+    line = "r2|42|0|get txdelay|> 0.5"
+    payload = _signed_result(node_seed, topic, line)
+    r = envelope.parse_result(payload, key[:8], topic=topic, key_hex=key)
+    assert r.verified is True and r.ok and r.reply == "> 0.5" and r.counter == 42
+    # the same line signed by someone else's key: not this node's word
+    forged = _signed_result("44" * 32, topic, line)
+    f = envelope.parse_result(forged, key[:8], topic=topic, key_hex=key)
+    assert f.verified is False and not f.ok                       # a forged ok is not ok
+    # an altered reply under the real signature
+    altered = payload.replace("> 0.5", "> 0.6")
+    assert envelope.parse_result(altered, key[:8], topic=topic, key_hex=key).verified is False
+    # the right signature on another topic
+    assert envelope.parse_result(payload, key[:8], topic="meshcore/JKG/all/cmd", key_hex=key).verified is False
+    # without a key to check with, an r2 is unverified, not refused
+    u = envelope.parse_result(payload, key[:8])
+    assert u.verified is None and u.ok and u.reply == "> 0.5"
+    # an r1 from older firmware: nothing to check
+    assert envelope.parse_result("r1|42|0|get txdelay|> 0.5", key[:8], topic=topic, key_hex=key).verified is None
+    # a malformed r2
+    assert envelope.parse_result("r2|42|0|x|y|short", key[:8]) is None

@@ -125,7 +125,9 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
     def on_message(_c, _u, msg):
         leaf = envelope.node_from_result_topic(msg.topic)
         node = leaf[:envelope.NODE_HEX_LEN] if leaf else None
-        result = envelope.parse_result(msg.payload, node)
+        # the key to verify an r2 with: the topic's own leaf when it is the whole key
+        key_hex = leaf if leaf and len(leaf) == envelope.KEY_HEX_LEN else keys.get(node)
+        result = envelope.parse_result(msg.payload, node, topic=msg.topic, key_hex=key_hex)
         if result is None or result.counter != counter:
             return
         with lock:
@@ -181,13 +183,14 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
         if not leaf:
             return
         node = leaf[:envelope.NODE_HEX_LEN]
-        result = envelope.parse_result(msg.payload, node)
+        key_hex = leaf if len(leaf) == envelope.KEY_HEX_LEN else None
+        result = envelope.parse_result(msg.payload, node, topic=msg.topic, key_hex=key_hex)
         if result is None or result.counter != counter:
             return
         with lock:
             # the leaf says which firmware the node runs: a whole key is kept for its topics
             found[node] = {"node": node, "region": region.upper(), "code": result.code,
-                           "reply": result.reply, "key": leaf if len(leaf) == envelope.KEY_HEX_LEN else None}
+                           "reply": result.reply, "key": key_hex, "verified": result.verified}
 
     client = (client_factory or _client)(config, seed_hex)
     client.on_message = on_message

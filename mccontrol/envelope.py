@@ -267,17 +267,26 @@ def verify_registration(payload):
         return None
 
 
+SIGNED_RESULT_VERSION = "r2"
+
+
 class Result:
-    """One line a node published to its /res topic. Silence is its absence, never an instance."""
+    """One line a node published to its /res topic. Silence is its absence, never an instance.
 
-    __slots__ = ("node", "counter", "code", "command", "reply")
+    `verified` is True only for an `r2` whose signature checked against the node's key;
+    None for an `r1` (older firmware: nothing to check); False for an `r2` that did not
+    verify -- a forged or altered line, which is a finding, not a result."""
 
-    def __init__(self, node, counter, code, command, reply):
+    __slots__ = ("node", "counter", "code", "command", "reply", "verified")
+
+    def __init__(self, node, counter, code, command, reply, verified=None):
         self.node, self.counter, self.code, self.command, self.reply = node, counter, code, command, reply
+        self.verified = verified
 
     @property
     def ok(self):
-        return self.code == 0
+        """Ran, and -- when signed -- said so in the node's own voice. A forged ok is not ok."""
+        return self.code == 0 and self.verified is not False
 
     @property
     def code_name(self):
@@ -288,8 +297,13 @@ class Result:
         return RESULT_HELP.get(self.code, "")
 
 
-def parse_result(payload, node=None):
-    """One /res line as a Result, or None for anything that is not one."""
+def parse_result(payload, node=None, topic=None, key_hex=None):
+    """One /res line as a Result, or None for anything that is not one.
+
+    An `r2` (ar-11 and later) carries the node's Ed25519 signature over `"<topic>\n"` and
+    the line before the last separator; with `topic` and the node's 64-hex `key_hex` it is
+    checked and `verified` set. Without a key (an ar-10 device whose whole key is not known)
+    an `r2` is reported as unverified rather than refused."""
     if payload is None:
         return None
     if isinstance(payload, (bytes, bytearray)):
@@ -297,8 +311,22 @@ def parse_result(payload, node=None):
             payload = payload.decode("utf-8")
         except UnicodeDecodeError:
             return None
-    parts = payload.split(FIELD_SEP, RESULT_FIELDS - 1)
-    if len(parts) != RESULT_FIELDS or parts[0] != RESULT_VERSION:
+    verified = None
+    line = payload
+    if payload.startswith(SIGNED_RESULT_VERSION + FIELD_SEP):
+        split = payload.rfind(FIELD_SEP)
+        if split < 0 or len(payload) - split - 1 != SIG_HEX_LEN:
+            return None
+        line, sig_hex = payload[:split], payload[split + 1:]
+        if topic and key_hex:
+            try:
+                key = eddsa.import_public_key(bytes.fromhex(key_hex))
+                eddsa.new(key, "rfc8032").verify(signed_message(topic, line), bytes.fromhex(sig_hex))
+                verified = True
+            except ValueError:
+                verified = False
+    parts = line.split(FIELD_SEP, RESULT_FIELDS - 1)
+    if len(parts) != RESULT_FIELDS or parts[0] not in (RESULT_VERSION, SIGNED_RESULT_VERSION):
         return None
     try:
         counter, code = int(parts[1]), int(parts[2])
@@ -306,7 +334,7 @@ def parse_result(payload, node=None):
         return None
     if counter < 0 or code < 0:
         return None
-    return Result(node, counter, code, parts[3], parts[4])
+    return Result(node, counter, code, parts[3], parts[4], verified)
 
 
 def node_from_result_topic(topic):

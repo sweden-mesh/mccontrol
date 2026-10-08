@@ -169,8 +169,9 @@ a time does the same job. `mccontrol help protocol` has the rest.
 What that buys, and what it does not: no one on the broker can alter a field, move a command
 to another node or region, turn it into a broadcast, or replay it at a node that has seen it;
 a captured envelope can run once at most, and only within its life. The broker can still
-drop or delay a command, read everything, and publish a forged *result* -- results are not
-signed, so confirm a change with a read rather than with the `ok`. Each property is a test
+drop or delay a command and read everything. A result from firmware ar-11 or later is signed by
+the node and shown `[signed]`; a forged one shows as BAD SIGNATURE and is ignored; an unsigned
+`r1` from older firmware is shown as is -- confirm those with a read rather than with the `ok`. Each property is a test
 in `tests/test_envelope.py`; `mccontrol help assurance` is the argument in full.
 
 ## Tests

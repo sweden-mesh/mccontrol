@@ -432,3 +432,33 @@ def test_registering_publishes_the_signed_key_once_and_remembers_the_brokers_ok(
             return types.SimpleNamespace(wait_for_publish=lambda timeout=0: None)
     ok, detail = transport.register(store.config(), store.seed(), wait_secs=0, client_factory=_Silent)
     assert not ok and "no acknowledgement" in detail
+
+
+def test_a_signed_result_is_shown_verified_and_a_forged_one_is_not_kept(store, monkeypatch):
+    from Crypto.Signature import eddsa
+    from mccontrol import envelope
+    store.create_key()
+    node_seed = "33" * 32
+    key = envelope.public_key_hex(node_seed)
+    store.add_device("New", key, "JKG")
+    topic = f"meshcore/JKG/{key}/res"
+
+    def signed_by(seed, line):
+        sig = eddsa.new(envelope.key_from_seed(seed), "rfc8032").sign(envelope.signed_message(topic, line))
+        return f"{line}|{sig.hex().upper()}"
+
+    def fake_send(cfg, seed, t, cmd, nodes_to_hear=(), keys=None, **k):
+        counter = 1
+        line = f"r2|{counter}|0|{cmd}|> v1.17.1-ar-11"
+        payload = signed_by(fake_send.signer, line)
+        return "p", {key[:8]: envelope.parse_result(payload, key[:8], topic=topic, key_hex=key)}
+    fake_send.signer = node_seed
+    monkeypatch.setattr(actions.transport, "send", fake_send)
+    monkeypatch.setattr(actions.transport, "FAKE_WAIT_SECS", 0.0)
+    _t, _p, answers, lines = actions.send(store, "ver", device=store.device("new"))
+    assert answers[key[:8]].verified is True and "> v1.17.1-ar-11 [signed]" in lines[0]
+    assert store.reads("new")[0][1] == "> v1.17.1-ar-11"
+    fake_send.signer = "44" * 32                                   # a stranger signing in the node's name
+    _t, _p, answers, lines = actions.send(store, "get name", device=store.device("new"))
+    assert "BAD SIGNATURE" in lines[0] and not answers[key[:8]].ok
+    assert [c for c, _r, _at in store.reads("new")] == ["ver"]    # the forged line was not kept
