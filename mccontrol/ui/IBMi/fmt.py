@@ -72,7 +72,7 @@ def firmware_note(greyed, versions):
     return f"{greyed} greyed: need a newer build; this device reports {reported}"
 
 
-def _revision(version):
+def _revision(version):          # until GET /devices/{ref}/commands carries `revision` (T-02)
     text = (version or "").lower()
     at = text.find("-ar-")
     if at < 0:
