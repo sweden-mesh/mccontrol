@@ -226,6 +226,21 @@ def test_a_job_is_cancelled_and_keeps_what_landed(api, monkeypatch):
     assert [o["node"] for o in job["outcomes"]] == ["4AC61A7F"]
 
 
+def test_a_job_that_ran_to_the_end_is_done_however_late_the_cancel(api, monkeypatch):
+    _server, url, _store = api
+    import threading
+    release = threading.Event()
+    monkeypatch.setattr(transport, "test_connection",
+                        lambda *a, **k: release.wait(5) and [("connect and sign in", True, "faked")])
+    _s, job = call(url, "POST", "/jobs/test", {})
+    assert job["cancellable"] is False
+    time.sleep(0.3)
+    assert call(url, "DELETE", f"/jobs/{job['id']}")[1]["cancel_requested"] is True
+    release.set()
+    job = finish(url, job)
+    assert job["status"] == "done" and job["result"]["ok"] is True and job["cancel_requested"] is True
+
+
 def test_a_command_set_stops_at_the_first_refusal(api):
     _server, url, store = api
     call(url, "PUT", "/sets/two", {"steps": ["region", "get autoreply"]})
