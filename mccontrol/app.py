@@ -7,7 +7,7 @@ matters is in the store; the screen is redrawn from it after every key.
 
 import curses
 
-from . import actions, beacon, commands, denylist, directory, envelope, helptext, store as _store, transport
+from . import actions, beacon, commands, denylist, directory, envelope, firmware, helptext, store as _store, transport
 from .ui import (Button, ChoiceBox, Dialog, Field, HelpWindow, KeyBar, ListBox, ListView, Menu, MenuBar, MenuItem, Progress, waiting,
                  Message, Panel, confirm, notice)
 from .ui.screen import KEY_ENTER, run as _run
@@ -629,11 +629,32 @@ class App:
         aimed = self.aim()
         if not aimed:
             return
-        _targets, target_line = aimed
-        items = [(group, [(c.text + {"none": "", "choice": "  <" + "|".join(x or "-" for x in c.choices) + ">",
-                                     "multi": "  <...>", "text": "  <...>"}[c.kind], c) for c in cs])
-                 for group, cs in commands.grouped()]
+        targets, target_line = aimed
+        # What the targets' firmware admits: a command any of them would refuse is greyed
+        # out and not selectable, so no command slot is spent to be told not-allowed.
+        versions = [d.get("ver") for d in targets]
+        tags = sorted({firmware.entry_for(v)[0] for v in versions})
+        items = []
+        greyed = 0
+        for group, cs in commands.grouped():
+            rows = []
+            for c in cs:
+                probe = commands.build(c, [c.choices[-1]] if c.kind in ("choice", "multi") and c.choices
+                                       else ([c.examples[0]] if c.kind == "text" and c.examples and not c.examples[0].startswith("<") else []))
+                if c.text in ("get", "set"):
+                    probe = "get autoreply" if c.text == "get" else "set txdelay 0.5"
+                label = c.text + {"none": "", "choice": "  <" + "|".join(x or "-" for x in c.choices) + ">",
+                                  "multi": "  <...>", "text": "  <...>"}[c.kind]
+                if all(firmware.admits(v, probe) for v in versions):
+                    rows.append((label, c))
+                else:
+                    greyed += 1
+                    rows.append((label, c, firmware.needs(probe) or "no build"))
+            items.append((group, rows))
         box = ListBox(f"Commands  to {target_line[:40]}", items, width=66, height=min(22, self.screen.size[1] - 2))
+        if greyed:
+            reported = ", ".join(firmware.revision(v) and f"ar-{firmware.revision(v)}" or "unknown" for v in versions[:3])
+            box.note = f"{greyed} greyed: need a newer build; this device reports {reported} (n reads the version)"
         picked = box.run(self.screen, self.draw)
         if picked is None:
             return

@@ -73,6 +73,16 @@ INS = b"\x1b[2~"
 DOWN = b"\x1bOB"
 
 
+def _far_on(tag):
+    """A prepare hook: Far reports the given firmware tag, so the command list offers what
+    that build admits (an unknown version is treated as the oldest, ar-10)."""
+    def prepare(home):
+        devs = json.loads((home / "devices.json").read_text())
+        next(d for d in devs if d["name"] == "Far")["ver"] = f"esp32s3-v1.17.1-{tag}-observer-2c079ed7"
+        (home / "devices.json").write_text(json.dumps(devs))
+    return prepare
+
+
 def test_the_directory_shows_every_device_with_its_columns_and_tags(tmp_path):
     text, _ = walk(tmp_path, [(INS, 0.3), (INS, 0.3)])
     assert "Devices" in text and "History" in text
@@ -327,7 +337,7 @@ def test_enter_on_a_device_opens_the_command_list_and_runs_a_bare_command(tmp_pa
     fake = json.dumps({"FD700369|ver": [0, "> esp32s3-v1.17.1-ar-10"]})
     # Enter opens the list; typing "ver" filters it to the one entry; Enter runs it
     text, home = walk(tmp_path, [(b"\r", 0.6), (b"ver", 0.4), (b"\r", 2.0), (b"\r", 0.4)],
-                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=5.0)
+                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=5.0, prepare=_far_on("ar-11"))
     # the stream carries only changed cells, so a string may arrive in pieces: match loosely
     assert re.search(r"Commands\s+to\s+Far", text) and re.search(r"--\s+reads\s+--", text)
     assert "Filter:" in text                                  # the typed letters arrive one cell at a time
@@ -346,7 +356,7 @@ def test_a_choice_command_offers_radio_buttons_and_previews_what_it_sends(tmp_pa
     # ... then the caution's Confirm, where Left moves to "Send anyway" and Enter sends
     text, home = walk(tmp_path, [(b"\r", 0.6), (b"set autoreply", 0.4), (b"\r", 0.6), (DOWN, 0.3), (b"\r", 0.6),
                                  (b"\x1bOD", 0.3), (b"\r", 2.0), (b"\r", 0.4)],
-                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=7.0)
+                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=7.0, prepare=_far_on("ar-11"))
     assert "(*) on" in text and "(*) off" in text
     assert "Sends:" in text and re.search(r"Command:\s+set\s+autoreply\s+off", text)   # the preview, then the caution's line
     assert "stops this repeater answering test requests" in text
@@ -357,14 +367,14 @@ def test_a_choice_command_offers_radio_buttons_and_previews_what_it_sends(tmp_pa
 def test_a_text_command_shows_examples_and_sends_what_was_typed(tmp_path):
     fake = json.dumps({"FD700369|region put se-jkp *": [0, "OK"]})
     text, home = walk(tmp_path, [(b"\r", 0.6), (b"region put", 0.4), (b"\r", 0.6), (b"se-jkp *", 0.3), (b"\r", 2.0), (b"\r", 0.4)],
-                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=6.0)
+                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=6.0, prepare=_far_on("ar-11"))
     assert "Examples: se-jkp *   se-jkp-mul se-jkp" in text
     assert "Reply: region put se-jkp *" in text
     assert '"command": "region put se-jkp *"' in (home / "history" / "FD700369.jsonl").read_text()
 
 
 def test_backing_out_of_a_parameter_sends_nothing(tmp_path):
-    text, home = walk(tmp_path, [(b"\r", 0.6), (b"region put", 0.4), (b"\r", 0.6), (b"\x1b", 0.5)])
+    text, home = walk(tmp_path, [(b"\r", 0.6), (b"region put", 0.4), (b"\r", 0.6), (b"\x1b", 0.5)], prepare=_far_on("ar-11"))
     assert "Examples:" in text
     assert not (home / "history" / "FD700369.jsonl").exists()
 
@@ -430,3 +440,21 @@ def test_a_wait_writes_the_box_once(tmp_path):
     assert raw.count("Discovering") == 1, raw.count("Discovering")
     assert raw.count("Esc stops waiting") == 1
     assert raw.count("Found 0 new, 1 old") >= 1            # the count line did change, and was written
+
+
+def test_the_command_list_greys_out_what_the_devices_firmware_does_not_admit(tmp_path):
+    # Far on ar-10: Enter opens the list; "ver" narrows it to a greyed entry; Enter does nothing
+    text, home = walk(tmp_path, [(b"\r", 0.6), (b"ver", 0.4), (b"\r", 0.8), (b"\x1b", 0.3)], prepare=_far_on("ar-10"))
+    assert re.search(r"need a newer build;\s+this device reports ar-10", text)
+    assert "Reply: ver" not in text and not (home / "history" / "FD700369.jsonl").exists()
+    # an unknown version is the oldest: the same greying, said as unknown
+    text, _ = walk(tmp_path / "unknown", [(b"\r", 0.6), (b"get stats", 0.4), (b"\r", 0.8), (b"\x1b", 0.3)])
+    assert re.search(r"this device reports unknown", text)
+
+
+def test_a_refusal_the_table_did_not_expect_is_a_finding(tmp_path):
+    fake = json.dumps({"FD700369|ver": [14, ""]})
+    # the result line is clipped by the panel; Tab to it and Enter opens the whole line
+    text, _ = walk(tmp_path, [(b"\x1b2", 1.5), (b"\t", 0.3), (b"\r", 0.6)], env={"MCCONTROL_FAKE_RESULTS": fake},
+                   prepare=_far_on("ar-11"), cols=120, seconds=4.0)
+    assert "the table says ar-11 admits this" in text

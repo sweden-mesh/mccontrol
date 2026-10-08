@@ -73,7 +73,8 @@ def build_parser():
     fl.add_argument("device", nargs="*", help="only these devices (default: all)")
     rf = sub.add_parser("refresh", help="read name and version from devices over the control plane")
     rf.add_argument("device", nargs="*", help="devices (default: all)")
-    sub.add_parser("commands", help="the commands the tool offers, by group, with their parameter kind")
+    cm = sub.add_parser("commands", help="the commands the tool offers, by group, with their parameter kind")
+    cm.add_argument("device", nargs="?", help="mark what this device's firmware does not admit")
     rd = sub.add_parser("reads", help="what a device last answered to each read, newest first")
     rd.add_argument("device")
     sc = sub.add_parser("shortcuts", help="list the Alt+1..9 shortcuts, or set one")
@@ -265,14 +266,22 @@ def _reads(store, args):
     return 0
 
 
-def _commands(_store_, _args):
-    from . import commands
+def _commands(store, args):
+    from . import commands, firmware
+    version = _device(store, args.device).get("ver") if args.device else None
+    if args.device:
+        print(f"{args.device}: firmware {firmware.entry_for(version)[0]} ({version or 'version unknown; mccontrol refresh reads it'})")
     for group, items in commands.grouped():
         print(f"{group}:")
         for c in items:
             how = {"none": "", "choice": " <" + "|".join(x or "-" for x in c.choices) + ">",
                    "multi": " <" + " ".join(c.choices) + " ...>", "text": " <" + (c.examples[0] if c.examples else "text") + ">"}[c.kind]
-            print(f"  {c.text}{how}" + ("   (kept)" if c.read else ""))
+            mark = ""
+            if args.device:
+                probe = "get autoreply" if c.text == "get" else ("set txdelay 0.5" if c.text == "set" else c.text + (" x" if c.kind != "none" else ""))
+                if not firmware.admits(version, probe):
+                    mark = f"   -- needs {firmware.needs(probe) or 'a build that admits it'}"
+            print(f"  {c.text}{how}" + ("   (kept)" if c.read else "") + mark)
     return 0
 
 

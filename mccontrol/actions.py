@@ -2,7 +2,7 @@
 
 import datetime
 
-from . import beacon, commands, denylist, envelope, nodestats, store as _store, transport
+from . import beacon, commands, denylist, envelope, firmware, nodestats, store as _store, transport
 from .store import _now as _store_now
 
 # Commands that take something away from a repeater. Each is sent only after the person has
@@ -43,13 +43,18 @@ def caution(command):
     return None
 
 
-def outcome_line(result):
-    """One line describing a result, as the screens and the log show it."""
+def outcome_line(result, version=None):
+    """One line describing a result, as the screens and the log show it. A not-allowed
+    from a node whose firmware the table says admits the command is a finding -- the
+    table or the version is wrong -- and is said as such rather than hidden."""
     if result is None:
         return "no answer"
     if result.ok:
         return result.reply or "OK"
-    return f"refused: {result.code_name}" + (f" -- {result.help}" if result.help else "")
+    line = f"refused: {result.code_name}"
+    if result.code == 14 and version and firmware.admits(version, result.command):
+        line += f" [the table says {firmware.entry_for(version)[0]} admits this: the table or the version is wrong]"
+    return line + (f" -- {result.help}" if result.help else "")
 
 
 def send(store, command, device=None, region=None, dry_run=False, wait_secs=None, progress=None):
@@ -83,12 +88,13 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
                                       progress=progress)
     lines = []
     names = {d["node"]: (d["name"] or d["node"]) for d in store.devices()}
+    versions = {d["node"]: d.get("ver") for d in store.devices()}
     for node in hear:
         result = answers.get(node)
         store.record(node, command, topic, result, note="broadcast" if broadcast else "")
         if result is not None and result.ok and commands.is_read(command) and node in names:
             store.remember_read(node, command, result.reply or "OK")
-        lines.append(f"{names.get(node, node[:8])[:12]:12} {outcome_line(result)}")
+        lines.append(f"{names.get(node, node[:8])[:12]:12} {outcome_line(result, versions.get(node))}")
     if broadcast:
         store.record(None, command, topic, None,
                      note=f"{len(answers)} of {len(hear)} answered")

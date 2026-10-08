@@ -252,17 +252,21 @@ class ListBox:
         self.filter = ""
         self.cursor = 0
         self.top = 0
-        self.rows = []                 # (kind, text, value): kind is "head" or "item"
+        self.note = ""                 # one line above the hint: why the greyed entries are grey
+        self.rows = []                 # (kind, text, value): kind is "head", "item" or "grey"
         self._rebuild()
 
     def _rebuild(self):
         f = self.filter.lower()
         rows = []
         for group, entries in self.items:
-            hits = [(label, value) for label, value in entries if f in label.lower()]
+            hits = [e for e in entries if f in e[0].lower()]
             if hits:
                 rows.append(("head", group, None))
-                rows += [("item", label, value) for label, value in hits]
+                # an entry may carry a third element: a reason it is greyed out (drawn dim,
+                # skipped by the cursor like a header; Enter on it says the reason)
+                rows += [("grey" if len(e) > 2 and e[2] else "item", e[0], e[2] if len(e) > 2 and e[2] else e[1])
+                         for e in hits]
         self.rows = rows
         self.cursor = min(self.cursor, max(0, len(rows) - 1))
         self._settle(+1)
@@ -274,7 +278,7 @@ class ListBox:
             self.cursor = 0
             return
         steps = 0
-        while self.rows[self.cursor][0] == "head" and steps < n:
+        while self.rows[self.cursor][0] in ("head", "grey") and steps < n:
             self.cursor = (self.cursor + direction) % n
             steps += 1
         page = self.height - 6
@@ -308,10 +312,14 @@ class ListBox:
             kind, text, _v = self.rows[idx]
             if kind == "head":
                 screen.put(y + 3 + i, x + 2, f"-- {text} --".ljust(inner)[:inner], c.dialog | curses.A_DIM)
+            elif kind == "grey":
+                screen.put(y + 3 + i, x + 2, ("  " + text).ljust(inner)[:inner], c.dialog | curses.A_DIM)
             else:
                 attr = c.cursor if idx == self.cursor else c.dialog
                 screen.put(y + 3 + i, x + 2, ("  " + text).ljust(inner)[:inner], attr)
         screen.put(y + height - 2, x + 2, self.hint[:inner], c.dialog | curses.A_DIM)
+        if self.note:
+            screen.put(y + height - 3, x + 2, self.note[:inner].ljust(inner), c.dialog | curses.A_BOLD)
 
     def run(self, screen, redraw_under=None):
         while True:

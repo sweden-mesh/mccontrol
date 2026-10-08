@@ -124,3 +124,13 @@ def test_reads_prints_what_the_device_last_answered(tmp_path, monkeypatch, capsy
     capsys.readouterr()
     assert cli.main(["reads", "loutest"]) == 0
     assert "ver                          > v1.17.1-ar-10" in capsys.readouterr().out
+
+
+def test_commands_marks_what_a_devices_firmware_lacks(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    assert cli.main(["add", "Old", NODE, "jkg", ""]) == 0
+    capsys.readouterr()
+    assert cli.main(["commands", "old"]) == 0
+    out = capsys.readouterr().out
+    assert "old: firmware ar-10 (version unknown" in out
+    assert "  ver   (kept)   -- needs ar-11" in out and "  get autoreply   (kept)\n" in out
