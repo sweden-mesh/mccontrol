@@ -87,32 +87,55 @@ def public_key_hex(seed_hex):
     return key_from_seed(seed_hex).public_key().export_key(format="raw").hex().upper()
 
 
-# A node is named on the control topics by the first four bytes of its public key: eight hex
-# characters, as the repeater firmware builds its own topics (`MyMesh::setupMqttControl`,
-# `toHex(node_hex, self_id.pub_key, 4)`). A full 64-character key is accepted anywhere a node is
-# given and cut to that.
+# A node is NAMED by the first eight hex characters of its public key everywhere a person
+# sees it. On the control topics the firmware uses either form: builds up to ar-10 name the
+# node by those eight characters (`toHex(node_hex, self_id.pub_key, 4)`); from ar-11
+# (2026-10-08) by the whole 64-character key, as the observer's status topics do, so a
+# broker's ACL can match the token login against the topic. The fleet runs both for months,
+# so a topic takes whichever leaf the device carries: its stored `key` when known, its id
+# otherwise.
 NODE_HEX_LEN = 8
+KEY_HEX_LEN = 64
 
 
 class NodeIdError(ValueError):
     pass
 
 
+def _hex(value):
+    text = (value or "").strip().upper()
+    if any(c not in "0123456789ABCDEF" for c in text):
+        raise NodeIdError("a node is named by the hex of its public key")
+    return text
+
+
 def node_id(value):
     """Eight upper-case hex characters, from a prefix or a whole public key."""
-    text = (value or "").strip().upper()
-    if len(text) < NODE_HEX_LEN or any(c not in "0123456789ABCDEF" for c in text):
+    text = _hex(value)
+    if len(text) < NODE_HEX_LEN:
         raise NodeIdError("a node is named by the first 8 hex characters of its public key")
     return text[:NODE_HEX_LEN]
 
 
-def command_topic(iata, node=None):
-    leaf = node_id(node) if node else "all"
+def node_key(value):
+    """The whole key, 64 upper-case hex characters, or None when only a prefix was given."""
+    text = _hex(value)
+    return text if len(text) == KEY_HEX_LEN else None
+
+
+def topic_leaf(node, key=None):
+    """What names the node on its topics: the whole key when known (ar-11), else the id."""
+    full = node_key(key) if key else node_key(node)
+    return full or node_id(node)
+
+
+def command_topic(iata, node=None, key=None):
+    leaf = topic_leaf(node, key) if node else "all"
     return f"{TOPIC_PREFIX}{iata.upper()}/{leaf}/cmd"
 
 
-def result_topic(iata, node):
-    return f"{TOPIC_PREFIX}{iata.upper()}/{node_id(node)}/res"
+def result_topic(iata, node, key=None):
+    return f"{TOPIC_PREFIX}{iata.upper()}/{topic_leaf(node, key)}/res"
 
 
 def is_transmit(command):
@@ -246,7 +269,11 @@ def parse_result(payload, node=None):
 
 
 def node_from_result_topic(topic):
+    """The leaf of a result topic as published: 8 or 64 hex, or None for anything else."""
     parts = (topic or "").split("/")
     if len(parts) < 3 or parts[-1] != "res":
         return None
-    return parts[-2]
+    leaf = parts[-2].upper()
+    if len(leaf) not in (NODE_HEX_LEN, KEY_HEX_LEN) or any(c not in "0123456789ABCDEF" for c in leaf):
+        return None
+    return leaf

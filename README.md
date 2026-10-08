@@ -131,7 +131,9 @@ A region belongs to a device, not to the configuration.
 ## The protocol
 
 The envelope is the one the Observer auto-reply firmware verifies (`src/helpers/MqttControlLogic.h`
-there): `v1|counter|expiry|command|signature`, signed over the topic and the body together, so a
+there): the node's topic is named by its whole 64-hex key from firmware ar-11 and by the first
+8 hex before that -- the tool keeps the key per device and addresses each by the form its
+firmware uses, showing the 8-hex id as the name; `v1|counter|expiry|command|signature`, signed over the topic and the body together, so a
 command captured from one node cannot be replayed at another. The node checks the signature,
 that the counter is higher than the last it accepted, the expiry, its rate limit, and a deny
 list of commands (since 2026-10-08 everything the console answers travels except identity, the

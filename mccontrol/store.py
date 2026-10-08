@@ -194,8 +194,9 @@ class Store:
                   or d["node"].upper().startswith(ref.upper())]
         return prefix[0] if len(prefix) == 1 else None
 
-    def add_device(self, name, node, region, notes=""):
+    def add_device(self, name, node, region, notes="", key=None):
         try:
+            key = envelope.node_key(key) if key else envelope.node_key(node)   # a whole key given as the node is kept
             node = envelope.node_id(node)
         except envelope.NodeIdError as exc:
             raise StoreError(str(exc)) from None
@@ -209,7 +210,7 @@ class Store:
         if any(d["node"] == node for d in devices):
             raise StoreError("that node is already in the list")
         entry = {"name": name, "node": node, "region": region, "notes": notes.strip(), "added": _now(),
-                 "last_sent": None, "last_result": None}
+                 "last_sent": None, "last_result": None, "key": key}
         devices.append(entry)
         self._write_json(self.root / "devices.json", devices)
         return entry

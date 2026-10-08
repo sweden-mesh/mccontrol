@@ -346,3 +346,44 @@ def test_a_good_answer_to_a_read_is_kept_and_a_refusal_keeps_the_last_good_one(s
     answers[NODE] = envelope.parse_result("r1|1|0|get name|> Gisebo", NODE)
     actions.send(store, "get  name", device=store.device("loutest"))
     assert [c for c, _r, _at in store.reads("loutest")][0] == "get name"           # normalised, newest first
+
+
+def test_a_device_keeps_its_whole_key_and_commands_go_to_the_topic_it_listens_on(store, monkeypatch):
+    store.create_key()
+    KEY = "4AC61A7FF4800A079A7311CA606A4C7037FE6943D40E53932230142829A4F786"
+    store.add_device("New", KEY, "JKG")                       # a whole key given as the node
+    store.add_device("Old", "BBBBBBBB", "JKG")                 # only the id: an ar-10 node
+    assert store.device("new")["node"] == "4AC61A7F" and store.device("new")["key"] == KEY
+    assert store.device("old")["key"] is None
+    seen = {}
+
+    def fake_send(cfg, seed, topic, cmd, nodes_to_hear=(), keys=None, **k):
+        seen["topic"], seen["keys"] = topic, dict(keys or {})
+        return "p", {}
+    monkeypatch.setattr(actions.transport, "send", fake_send)
+    actions.send(store, "ver", device=store.device("new"))
+    assert seen["topic"] == f"meshcore/JKG/{KEY}/cmd"
+    actions.send(store, "ver", device=store.device("old"))
+    assert seen["topic"] == "meshcore/JKG/BBBBBBBB/cmd"
+    actions.send(store, "ver", region="JKG")
+    assert seen["topic"] == "meshcore/JKG/all/cmd" and seen["keys"] == {"4AC61A7F": KEY}
+
+
+def test_discovery_learns_a_known_devices_key_from_its_whole_key_topic(store, monkeypatch):
+    from mccontrol import transport
+    store.create_key()
+    store.add_device("Old", "4AC61A7F", "JKG")
+    KEY = "4AC61A7FF4800A079A7311CA606A4C7037FE6943D40E53932230142829A4F786"
+
+    class _Keyed(_FakeClient):
+        def publish(self, topic, payload, qos=0):
+            import types
+            counter = payload.split("|")[1]
+            self.on_message(self, None, types.SimpleNamespace(topic=f"meshcore/JKG/{KEY}/res",
+                                                               payload=f"r1|{counter}|0|get autoreply|> on".encode()))
+            return types.SimpleNamespace(wait_for_publish=lambda timeout=0: None)
+    monkeypatch.setattr(transport, "_client", _Keyed)
+    monkeypatch.setattr(transport, "_wait", lambda *a, **k: None)
+    found = actions.discover(store, "JKG")
+    assert found[0]["node"] == "4AC61A7F" and found[0]["key"] == KEY and found[0]["known_as"] == "Old"
+    assert store.device("old")["key"] == KEY                  # learned, so the next command uses it

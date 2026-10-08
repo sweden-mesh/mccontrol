@@ -76,14 +76,16 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     region = (region or device.get("region") or "").upper()
     if not region:
         raise envelope.EnvelopeError(f"{device['name']} has no region; change the device and set it")
-    topic = envelope.command_topic(region, None if broadcast else device["node"])
+    topic = envelope.command_topic(region, None if broadcast else device["node"],
+                                   None if broadcast else device.get("key"))
     hear = ([d["node"] for d in store.devices() if (d.get("region") or "").upper() == region]
             if broadcast else [device["node"]])
+    keys = {d["node"]: d.get("key") for d in store.devices() if d.get("key")}
     if dry_run:
         payload = envelope.build(store.seed(), topic, 0, command)
         return topic, payload, {}, [f"would publish to {topic}", payload, "not sent (dry run)"]
     payload, answers = transport.send(dict(config, region=region), store.seed(), topic, command,
-                                      nodes_to_hear=hear,
+                                      nodes_to_hear=hear, keys=keys,
                                       wait_secs=wait_secs or config.get("wait_secs", 20),
                                       progress=progress)
     lines = []
@@ -261,6 +263,12 @@ def discover(store, region, wait_secs=None, progress=None):
                                wait_secs=wait_secs or config.get("wait_secs", 20), progress=progress)
     for entry in found:
         entry["known_as"] = known.get(entry["node"])
+        # a node answering on a whole-key topic (ar-11) tells us its key: keep it on a
+        # device we already have, so its next command goes to the topic it listens on
+        if entry.get("key") and entry["node"] in known:
+            d = store.device(entry["node"])
+            if d and d.get("key") != entry["key"]:
+                store.update_device(entry["node"], key=entry["key"])
         entry["outcome"] = outcome_line(envelope.Result(entry["node"], 0, entry["code"],
                                                         transport.DISCOVERY_COMMAND, entry["reply"]))
         entry["name"] = ""
@@ -271,6 +279,7 @@ def discover(store, region, wait_secs=None, progress=None):
             _p, names = transport.send(dict(config, region=region.upper()), store.seed(),
                                        envelope.command_topic(region), "get name",
                                        nodes_to_hear=[e["node"] for e in found],
+                                       keys={e["node"]: e["key"] for e in found if e.get("key")},
                                        wait_secs=min(10, wait_secs or config.get("wait_secs", 20)))
         except transport.BrokerError:
             names = {}
@@ -289,4 +298,4 @@ def adopt(store, entry, name=""):
     while name and any(d["name"].lower() == name.lower() for d in store.devices()):
         name = f"{base}-{n}"
         n += 1
-    return store.add_device(name, entry["node"], entry["region"], "found by discovery")
+    return store.add_device(name, entry["node"], entry["region"], "found by discovery", key=entry.get("key"))

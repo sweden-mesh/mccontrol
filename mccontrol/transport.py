@@ -86,7 +86,7 @@ def _wait(total, done, answered, progress):
 
 
 def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl_secs=None,
-         counter=None, progress=None):
+         counter=None, progress=None, keys=None):
     """Sign `command` for `topic`, publish it, and collect results from `nodes_to_hear`.
 
     Returns `(payload, {node: Result})`. A node missing from the dict did not answer within
@@ -101,12 +101,14 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
         _wait(FAKE_WAIT_SECS, lambda: False, lambda: list(faked), progress)
         return payload, faked
     answers = {}
+    keys = keys or {}                      # node id -> whole key where known (ar-11 topics)
     lock = threading.Lock()
     all_in = threading.Event()
     wanted = set(nodes_to_hear)
 
     def on_message(_c, _u, msg):
-        node = envelope.node_from_result_topic(msg.topic)
+        leaf = envelope.node_from_result_topic(msg.topic)
+        node = leaf[:envelope.NODE_HEX_LEN] if leaf else None
         result = envelope.parse_result(msg.payload, node)
         if result is None or result.counter != counter:
             return
@@ -120,7 +122,7 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
     _connect(client, config)
     try:
         for node in wanted:
-            client.subscribe(envelope.result_topic(config["region"], node), qos=1)
+            client.subscribe(envelope.result_topic(config["region"], node, keys.get(node)), qos=1)
         info = client.publish(topic, payload, qos=1)
         info.wait_for_publish(timeout=10)
         if wanted:
@@ -152,19 +154,24 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
     faked = _fake(topic, DISCOVERY_COMMAND, counter, ())
     if faked is not None:
         _wait(FAKE_WAIT_SECS, lambda: False, lambda: list(faked), progress)
-        return [{"node": n, "region": region.upper(), "code": r.code, "reply": r.reply}
+        return [{"node": n[:envelope.NODE_HEX_LEN], "region": region.upper(), "code": r.code, "reply": r.reply,
+                 "key": n if len(n) == envelope.KEY_HEX_LEN else None}
                 for n, r in sorted(faked.items())]
     found = {}
     lock = threading.Lock()
 
     def on_message(_c, _u, msg):
-        node = envelope.node_from_result_topic(msg.topic)
+        leaf = envelope.node_from_result_topic(msg.topic)
+        if not leaf:
+            return
+        node = leaf[:envelope.NODE_HEX_LEN]
         result = envelope.parse_result(msg.payload, node)
-        if result is None or result.counter != counter or not node or len(node) != envelope.NODE_HEX_LEN:
+        if result is None or result.counter != counter:
             return
         with lock:
-            found[node.upper()] = {"node": node.upper(), "region": region.upper(),
-                                   "code": result.code, "reply": result.reply}
+            # the leaf says which firmware the node runs: a whole key is kept for its topics
+            found[node] = {"node": node, "region": region.upper(), "code": result.code,
+                           "reply": result.reply, "key": leaf if len(leaf) == envelope.KEY_HEX_LEN else None}
 
     client = (client_factory or _client)(config)
     client.on_message = on_message

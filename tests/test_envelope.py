@@ -52,7 +52,8 @@ def test_only_triggers_transmit():
 def test_result_topics():
     assert envelope.command_topic("jkg") == "meshcore/JKG/all/cmd"
     assert envelope.command_topic("JKG", "AB12CD34") == "meshcore/JKG/AB12CD34/cmd"
-    assert envelope.command_topic("JKG", "ab12cd34" + "ff" * 28) == "meshcore/JKG/AB12CD34/cmd"
+    # a whole key names the node by the whole key from ar-11 (2026-10-08); it used to be cut to 8
+    assert envelope.command_topic("JKG", "ab12cd34" + "ff" * 28) == "meshcore/JKG/AB12CD34" + "FF" * 28 + "/cmd"
     assert envelope.node_from_result_topic("meshcore/JKG/AB12CD34/res") == "AB12CD34"
     assert envelope.node_from_result_topic("meshcore/JKG/AB12CD34/cmd") is None
     with pytest.raises(envelope.NodeIdError):
@@ -123,3 +124,26 @@ def test_a_result_is_not_signed_so_it_proves_nothing_on_its_own():
     # The gap the argument names: anyone on the broker can publish this line.
     forged = envelope.parse_result("r1|1700000000|0|set autoreply.delay 60|ok", "4AC61A7F")
     assert forged is not None and forged.ok
+
+
+# ---- the two topic forms (ar-10: 8 hex; ar-11: the whole key) --------------------------
+
+KEY = "4AC61A7FF4800A079A7311CA606A4C7037FE6943D40E53932230142829A4F786"
+
+
+def test_a_topic_takes_the_whole_key_when_known_and_the_id_otherwise():
+    assert envelope.command_topic("jkg", "4AC61A7F") == "meshcore/JKG/4AC61A7F/cmd"
+    assert envelope.command_topic("jkg", "4AC61A7F", KEY) == f"meshcore/JKG/{KEY}/cmd"
+    assert envelope.command_topic("jkg", KEY) == f"meshcore/JKG/{KEY}/cmd"          # a whole key as the node
+    assert envelope.result_topic("jkg", "4ac61a7f", KEY.lower()) == f"meshcore/JKG/{KEY}/res"
+    assert envelope.command_topic("jkg") == "meshcore/JKG/all/cmd"
+    assert envelope.node_key("4AC61A7F") is None and envelope.node_key(KEY) == KEY
+    assert envelope.node_id(KEY) == "4AC61A7F"
+
+
+def test_a_result_topic_yields_the_leaf_as_published_and_nothing_else():
+    assert envelope.node_from_result_topic("meshcore/JKG/4AC61A7F/res") == "4AC61A7F"
+    assert envelope.node_from_result_topic(f"meshcore/JKG/{KEY.lower()}/res") == KEY
+    assert envelope.node_from_result_topic("meshcore/JKG/4AC6/res") is None
+    assert envelope.node_from_result_topic("meshcore/JKG/all/cmd") is None
+    assert envelope.node_from_result_topic("meshcore/JKG/zz-not-hex/res") is None
