@@ -152,24 +152,3 @@ class KeyBar:
         cell = max(6, width // 10)
         n = x // cell + 1
         return n if 1 <= n <= 10 else None
-
-
-class Message:
-    """One line above the key bar: the last outcome, cleared by the next key."""
-
-    def __init__(self):
-        self.text = ""
-        self.error = False
-
-    def say(self, text, error=False):
-        self.text, self.error = text, error
-
-    def clear(self):
-        self.text = ""
-
-    def draw(self, screen):
-        w, h = screen.size
-        attr = screen.colors.error if self.error else screen.colors.message
-        screen.put(h - 2, 0, " " * w, screen.colors.desktop)
-        if self.text:
-            screen.put(h - 2, 1, self.text[: w - 2], attr)

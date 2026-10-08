@@ -104,7 +104,7 @@ def test_every_widget_draws_on_a_terminal():
     script = """
 import sys; sys.path.insert(0, %r)
 import curses
-from mccontrol.ui import Screen, Panel, ListView, KeyBar, Message
+from mccontrol.ui import Screen, Panel, ListView, KeyBar
 def main(win):
     s = Screen(win)
     left = Panel(1, 0, 40, 20, "Devices"); left.active = True; left.footer = "2 of 3 tagged"
@@ -113,12 +113,11 @@ def main(win):
     v = ListView(left); v.set_rows(["LOUTEST   4AC61A7F JKG", "UGO       AB6B9285 JKG", "FAR  FD700369 GOT"])
     v.tags = {0, 1}; v.draw(s)
     KeyBar(["Help", "Send", "Hist", "Edit", "Disco", "Regns", "All", "Del", "Menu", "Quit"]).draw(s)
-    m = Message(); m.say("3 of 3 answered"); m.draw(s)
     s.refresh(); s.key()
 curses.wrapper(main)
 """ % os.getcwd()
     text = _pty_run(script)
-    for needle in ("Devices", "History", "2 of 3 tagged", "LOUTEST", "FD700369", "3 of 3 answered"):
+    for needle in ("Devices", "History", "2 of 3 tagged", "LOUTEST", "FD700369"):
         assert needle in text, needle
     # attribute changes become spaces once the escape codes are stripped, so the number and
     # its label are matched with room between them

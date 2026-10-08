@@ -9,7 +9,7 @@ import curses
 
 from . import actions, beacon, commands, denylist, directory, envelope, firmware, helptext, store as _store, transport
 from .ui import (Button, ChoiceBox, Dialog, Field, HelpWindow, KeyBar, ListBox, ListView, Menu, MenuBar, MenuItem, Progress, waiting,
-                 Message, Panel, confirm, notice)
+                 Panel, confirm, notice)
 from .ui.screen import KEY_ENTER, run as _run
 
 KEYS = ["Help", "Send", "Hist", "Edit", "Disco", "Regns", "All", "Del", "Menu", "Quit"]
@@ -19,13 +19,12 @@ class App:
     def __init__(self, screen, store):
         self.screen = screen
         self.store = store
-        self.message = Message()
         self.keybar = KeyBar(KEYS)
         self.sort = "name"
         self.devices = []
         w, h = screen.size
         split = w // 2
-        total = h - 3
+        total = h - 2                                # the menu bar above, the key bar below
         lower_h = max(5, total // 3)                 # "Last answers" under the history
         self.left = Panel(1, 0, split, total, "Devices")
         self.right = Panel(1, split, w - split, total - lower_h, "History")
@@ -87,7 +86,7 @@ class App:
             return
         self.store.save_config(shortcuts=[f.value.strip() for f in fields])
         self.menu.menus[1] = self.send_menu()
-        self.message.say("Shortcuts saved.")
+        self.outcome("Shortcuts", "Shortcuts saved.")
 
     def reload(self):
         """Rows from the store, keeping the cursor on the same device and tags on the same nodes."""
@@ -185,7 +184,6 @@ class App:
         self.view.draw(s)
         self.reads_view.draw(s)
         self.menu.draw(s)
-        self.message.draw(s)
         self.keybar.draw(s)
         s.refresh()
 
@@ -197,7 +195,6 @@ class App:
         while True:
             self.draw()
             key = self.screen.key()
-            self.message.clear()
             if key == curses.KEY_F10:
                 return 0
             if key == 12 or key == curses.KEY_RESIZE:        # Ctrl+L, or the terminal changed size
@@ -301,7 +298,7 @@ class App:
         if action.startswith("sort:"):
             self.sort = action[5:]
             self.reload()
-            self.message.say(f"Sorted by {self.sort}.")
+            self.outcome("Sort", f"Sorted by {self.sort}.")
         elif action.startswith("tag:"):
             self.tag_region(action[4:] == "+")
         elif action == "help":
@@ -409,7 +406,7 @@ class App:
                 if confirm(self.screen, "Replace key", ["Every repeater provisioned with the current key will stop accepting commands."],
                            "silences every node until each is re-provisioned over serial.", yes="Replace", redraw_under=self.draw):
                     self.store.create_key(overwrite=True)
-                    self.message.say("Key replaced.")
+                    self.outcome("Signing key", "Key replaced. Re-provision every repeater with the new public key.")
             return
         d = Dialog("Signing key", body=["No signing key yet."], width=50,
                    buttons=[Button("Create", "create", default=True), Button("Import", "import"), Button("Cancel", None)])
@@ -417,13 +414,13 @@ class App:
         try:
             if choice == "create":
                 self.store.create_key()
-                self.message.say("Key created; see Keys again for the provisioning command.")
+                self.outcome("Signing key", "Key created; open Keys again for the provisioning command.")
             elif choice == "import":
                 f = Field("Seed", "", width=64, secret=True)
                 d2 = Dialog("Import a seed", fields=[f], body=["Paste the 64-hex private seed."], width=76)
                 if d2.run(self.screen, self.draw):
                     self.store.import_key(f.value)
-                    self.message.say("Key imported.")
+                    self.outcome("Signing key", "Key imported.")
         except (_store.StoreError, envelope.EnvelopeError) as exc:
             self.refuse(str(exc))
 
@@ -442,7 +439,7 @@ class App:
             self.store.save_config(broker=fields[0].value.strip(), port=int(fields[1].value), username=fields[2].value.strip(),
                                    password=fields[3].value, wait_secs=int(fields[4].value),
                                    beacon_url=fields[5].value.strip())
-            self.message.say("Saved.")
+            self.outcome("Control broker", "Saved.")
         except ValueError:
             self.refuse("Port and wait seconds must be numbers.")
 
@@ -480,7 +477,7 @@ class App:
             return
         self.reload()
         self.show_history(self.cursor_device)
-        self.message.say("Saved.")
+        self.outcome("Device", "Saved.")
 
     def forget(self):
         """F8: forget the cursor device, after a confirm. Its history file stays."""
@@ -494,7 +491,7 @@ class App:
         self.store.remove_device(d["node"])
         self.reload()
         self.show_history(self.cursor_device)
-        self.message.say("Forgotten.")
+        self.outcome("Forget", "Forgotten.")
 
     def outcome(self, title, headline, lines=()):
         """What an action came to, as a window over the work: the headline first, then the
@@ -731,7 +728,7 @@ class App:
             return
         self.store.save_config(columns=picked or list(directory.COLUMNS))
         self.reload()
-        self.message.say("Columns: " + ", ".join(directory.chosen(picked)) + ".")
+        self.outcome("Directory columns", "Columns: " + ", ".join(directory.chosen(picked)) + ".")
 
     def sets_dialog(self):
         """Options > Command sets: one set at a time, by name; empty steps are dropped."""
@@ -750,10 +747,10 @@ class App:
         try:
             if choice == "remove":
                 self.store.remove_set(name.value.strip().lower())
-                self.message.say(f"Removed {name.value.strip()}.")
+                self.outcome("Command sets", f"Removed {name.value.strip()}.")
             else:
                 self.store.save_set(name.value, [f.value for f in steps])
-                self.message.say(f"Saved {name.value.strip().lower()}.")
+                self.outcome("Command sets", f"Saved {name.value.strip().lower()}.")
         except _store.StoreError as exc:
             self.refuse(str(exc))
 

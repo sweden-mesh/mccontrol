@@ -399,7 +399,8 @@ def test_options_columns_picks_what_an_80_column_directory_shows(tmp_path):
         devs = json.loads((home / "devices.json").read_text())
         devs[0]["ver"] = "esp32s3-v1.17.1-ar-10-observer-42f48ce9"
         (home / "devices.json").write_text(json.dumps(devs))
-    keys = [(b"\x1bo", 0.5), (b"d", 0.5)] + [(b" ", 0.15), (DOWN, 0.15)] * 4 + [(b"\r", 0.8)]
+    # ... Enter saves; Enter again closes the "Columns: ..." window so the directory is redrawn last
+    keys = [(b"\x1bo", 0.5), (b"d", 0.5)] + [(b" ", 0.15), (DOWN, 0.15)] * 4 + [(b"\r", 0.8), (b"\r", 0.5)]
     text, _ = walk(tmp_path, keys, prepare=with_version)
     assert "Columns: ver, result." in text
     last_header = text[text.rindex("Name   "):][:40]

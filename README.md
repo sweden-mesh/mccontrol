@@ -12,8 +12,7 @@ see what came back, and keep a history per device. One screen, every verb on a f
 ║▸(unnamed)       65C1D12C JKG  -      ║║                                       ║
 ║ Far             FD700369 GOT  1 d    ║║                                       ║
 ╚═ 2 of 3 tagged ══════════════════════╝╚═══════════════════════════════════════╝
- 2 of 2 answered.
- 1Help  2Send  3Hist  4Edit  5Disco  6Regns  7All  8Del  9Menu  10Quit
+  1Help  2Send  3Hist  4Edit  5Disco  6Regns  7All  8Del  9Menu  10Quit
 ```
 
 The colours are Turbo Pascal's: a black menu bar and key bar with the hot letters and key
