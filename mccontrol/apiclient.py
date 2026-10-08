@@ -203,7 +203,8 @@ class Client:
 
         `on_progress(job)` is called after every poll; returning True cancels the job (the
         way a progress callback's True stops a wait), and the wait goes on until the server
-        says it has stopped. `timeout` seconds without finishing is an ApiError."""
+        says it has stopped. `timeout` seconds without finishing cancels the job and raises
+        an ApiError, so nothing is left running behind the caller."""
         start = time.monotonic()
         cancelled = False
         while True:
@@ -211,8 +212,17 @@ class Client:
             if job["status"] in FINISHED:
                 return job
             if on_progress and on_progress(job) and not cancelled:
-                self.cancel_job(job_id)
-                cancelled = True
+                cancelled = self._cancel_quietly(job_id)
             if timeout is not None and time.monotonic() - start > timeout:
-                raise ApiError("timeout", f"job {job_id} still running after {timeout} s", 0)
+                self._cancel_quietly(job_id)
+                raise ApiError("timeout", f"job {job_id} still running after {timeout} s; cancelled", 0)
             time.sleep(poll)
+
+    def _cancel_quietly(self, job_id):
+        """Cancel; a job that finished in the meantime is not an error here."""
+        try:
+            self.cancel_job(job_id)
+        except ApiError as exc:
+            if exc.code != "finished":
+                raise
+        return True
