@@ -26,3 +26,7 @@ status seen by Beacon. It is a device to look at, not a verdict: the
 control plane may be off, or the node may answer another key now. A
 device never sent to carries no mark, since nothing is known. Nothing
 refreshes by itself; s, r and n ask when you do.
+
+Every wait -- a send, a discovery, a set, a read from Beacon -- is a box
+over the work with what is happening, the running count and a bar over
+the wait. Esc stops waiting early and keeps what has come.

@@ -168,3 +168,71 @@ def notice(screen, title, lines, redraw_under=None):
     d = Dialog(title, body=lines, buttons=[Button("OK", True, default=True)], width=max(40, min(76, max((len(l) for l in lines), default=20) + 6)))
     d.focus = 0
     return d.run(screen, redraw_under)
+
+
+class Progress:
+    """A wait, the early-90s way: a framed box over the work with what is happening, a
+    second line with the running count, and a bar that fills over the wait. Esc stops the
+    wait early and keeps what has come.
+
+        p = Progress(screen, "Discovering", "Asking every node in JKG with one signed read", redraw)
+        stop = p.tick("Found 2 new, 1 old", 0.4)     # draws; True when Esc was pressed
+        p.close()
+    """
+
+    WIDTH = 60
+
+    def __init__(self, screen, title, line, redraw_under=None):
+        self.screen, self.title, self.line, self.redraw_under = screen, title, line, redraw_under
+        self.status = ""
+        self.cancelled = False
+
+    def tick(self, status, fraction, elapsed=None, total=None):
+        self.status = status
+        if self.redraw_under:
+            self.redraw_under()
+        self.draw(fraction, elapsed, total)
+        self.screen.refresh()
+        self.screen.win.nodelay(True)
+        try:
+            while True:
+                k = self.screen.win.getch()
+                if k == -1:
+                    break
+                if k == 27:
+                    self.cancelled = True
+        finally:
+            self.screen.win.nodelay(False)
+        return self.cancelled
+
+    def draw(self, fraction, elapsed=None, total=None):
+        w, h = self.screen.size
+        width, height = min(self.WIDTH, w - 4), 7
+        y, x = max(1, (h - height) // 2), max(2, (w - width) // 2)
+        c = self.screen.colors
+        self.screen.shadow(y, x, width, height)
+        self.screen.fill(y, x, width, height, c.dialog)
+        self.screen.frame(y, x, width, height, c.dialog, self.title)
+        inner = width - 4
+        self.screen.put(y + 1, x + 2, self.line[:inner], c.dialog)
+        self.screen.put(y + 2, x + 2, self.status[:inner], c.dialog | curses.A_BOLD)
+        bar = inner - 8
+        filled = int(round(bar * max(0.0, min(1.0, fraction))))
+        clock = f"{int(elapsed):>2}/{int(total)}s" if total else ""
+        self.screen.put(y + 4, x + 2, "[" + "█" * filled + "░" * (bar - filled) + "] " + clock, c.dialog)
+        self.screen.put(y + 5, x + 2, "Esc stops waiting and keeps what has come"[:inner], c.dialog | curses.A_DIM)
+
+    def close(self):
+        if self.redraw_under:
+            self.redraw_under()
+            self.screen.refresh()
+
+
+def waiting(screen, title, line, redraw_under, describe):
+    """A `progress` callback for the transport, drawn as a Progress box. `describe(nodes)`
+    turns the nodes answered so far into the status line. Returns `(callback, box)`."""
+    box = Progress(screen, title, line, redraw_under)
+
+    def progress(elapsed, total, nodes):
+        return box.tick(describe(nodes), elapsed / total if total else 1.0, elapsed, total)
+    return progress, box

@@ -8,7 +8,7 @@ matters is in the store; the screen is redrawn from it after every key.
 import curses
 
 from . import actions, beacon, directory, envelope, helptext, store as _store, transport
-from .ui import (Button, Dialog, Field, HelpWindow, KeyBar, ListView, Menu, MenuBar, MenuItem,
+from .ui import (Button, Dialog, Field, HelpWindow, KeyBar, ListView, Menu, MenuBar, MenuItem, Progress, waiting,
                  Message, Panel, confirm, notice)
 from .ui.screen import KEY_ENTER, run as _run
 
@@ -420,6 +420,10 @@ class App:
         self.show_history(self.cursor_device)
         self.message.say("Forgotten.")
 
+    def waiting(self, title, line, describe):
+        """A Progress box over the work, as the transport's progress callback."""
+        return waiting(self.screen, title, line, self.draw, describe)
+
     def aim(self, region=None):
         """Where a send goes: `(targets, target_line)`, or None with the reason said."""
         targets = [] if region else self.targets
@@ -472,16 +476,27 @@ class App:
                                     "One or more steps take something away.", redraw_under=self.draw):
             return
         lines, stopped = [], None
+        setname = name.value.strip()
         try:
             if region:
-                lines, stopped = actions.run_set(self.store, steps, region=region)
+                progress, box = self.waiting(f"Running {setname}", f"Every node in {region}, {len(steps)} steps",
+                                             lambda nodes: f"{len(nodes)} answered this step")
+                try:
+                    lines, stopped = actions.run_set(self.store, steps, region=region, progress=progress)
+                finally:
+                    box.close()
             else:
                 for dev in targets:
-                    self.message.say(f"Running {name.value.strip()} on {dev.get('name') or dev['node']}...")
-                    self.draw()
-                    l, s = actions.run_set(self.store, steps, device=dev)
+                    progress, box = self.waiting(f"Running {setname}", f"{dev.get('name') or dev['node']}, {len(steps)} steps",
+                                                 lambda nodes: "answered" if nodes else "waiting for the answer")
+                    try:
+                        l, s = actions.run_set(self.store, steps, device=dev, progress=progress)
+                    finally:
+                        box.close()
                     lines += l
                     stopped = s if stopped is None else stopped
+                    if box.cancelled:
+                        break
         except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
             self.message.say(str(exc), error=True)
             return
@@ -496,15 +511,17 @@ class App:
         if not d:
             self.message.say("No device under the cursor.", error=True)
             return
-        self.message.say("Asking Beacon...")
-        self.draw()
         name = d.get("name") or d["node"]
+        box = Progress(self.screen, "Statistics", f"Asking Beacon about {name}", self.draw)
+        box.tick("one read, a few seconds", 0.0)
         try:
             lines = actions.statistics(self.store, d, range_, interval)
         except beacon.BeaconError as exc:
+            box.close()
             self.show_results(f"Stats: {name[:28]}", [f"no statistics: {exc}"])
             self.message.say(f"No statistics: {exc}", error=True)
             return
+        box.close()
         self.show_results(f"Stats: {name[:28]}", lines)
         self.message.say(lines[0] + ". Enter opens a line; the cursor returns to history.")
 
@@ -515,9 +532,12 @@ class App:
         if not devices:
             self.message.say("No devices to refresh.", error=True)
             return
-        self.message.say(f"Asking Beacon about {len(devices)} device(s)...")
-        self.draw()
-        updated, failed = actions.refresh_fleet(self.store, devices)
+        box = Progress(self.screen, "Batt and Seen", f"Asking Beacon about {len(devices)} device(s)", self.draw)
+        box.tick("one read each, a few seconds", 0.0)
+        try:
+            updated, failed = actions.refresh_fleet(self.store, devices)
+        finally:
+            box.close()
         self.reload()
         self.message.say(f"Refreshed {updated} of {len(devices)} from Beacon"
                          + (f"; {failed} without statistics." if failed else "."), error=bool(failed))
@@ -532,9 +552,12 @@ class App:
         if len(devices) > 3 and not confirm(self.screen, "Confirm", [f"{len(devices)} devices, two signed reads each."],
                                             "Each read spends one of the node's command slots this hour.", redraw_under=self.draw):
             return
-        self.message.say(f"Reading name and version from {len(devices)} device(s)...")
-        self.draw()
-        named, versioned, lines = actions.refresh_names(self.store, devices)
+        progress, box = self.waiting("Names and versions", f"get name and ver to {len(devices)} device(s)",
+                                     lambda nodes: "answered" if nodes else "waiting for the answer")
+        try:
+            named, versioned, lines = actions.refresh_names(self.store, devices, progress=progress)
+        finally:
+            box.close()
         self.reload()
         self.show_results("Names and versions", lines)
         self.message.say(f"{versioned} of {len(devices)} gave a version; {named} named.", error=versioned < len(devices))
@@ -594,18 +617,31 @@ class App:
                                f"It {why}", redraw_under=self.draw):
             return
         self.message.say("Sending...")
-        self.draw()
         try:
             if region:
-                _t, _p, answers, lines = actions.send(self.store, command, region=region)
-                asked = len([d for d in self.store.devices() if (d.get("region") or "").upper() == region])
+                expected = [d["node"] for d in self.store.devices() if (d.get("region") or "").upper() == region]
+                progress, box = self.waiting("Sending", f"{command[:40]}  to every node in {region}",
+                                             lambda nodes: f"{len(nodes)} of {len(expected)} known answered")
+                try:
+                    _t, _p, answers, lines = actions.send(self.store, command, region=region, progress=progress)
+                finally:
+                    box.close()
+                asked = len(expected)
             else:
                 answers, lines, asked = {}, [], 0
-                for d in targets:                      # one signed publish per device, each to its own topic
-                    _t, _p, a, l = actions.send(self.store, command, device=d)
+                for i, d in enumerate(targets):        # one signed publish per device, each to its own topic
+                    label = d.get("name") or d["node"]
+                    progress, box = self.waiting("Sending", f"{command[:40]}  to {label} ({i + 1} of {len(targets)})",
+                                                 lambda nodes: "answered" if nodes else "waiting for the answer")
+                    try:
+                        _t, _p, a, l = actions.send(self.store, command, device=d, progress=progress)
+                    finally:
+                        box.close()
                     answers.update(a)
                     lines += l
                     asked += 1
+                    if box.cancelled:
+                        break
         except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
             self.message.say(str(exc), error=True)
             return
@@ -624,13 +660,21 @@ class App:
         if not region:
             return
         asked = ", ".join(actions.regions_asked(region, self.store)) or region
-        self.message.say(f"Asking every node in {asked} with one signed read per region...")
-        self.draw()
+        known = {d["node"] for d in self.devices}
+
+        def describe(nodes):
+            new = sum(1 for n in nodes if n not in known)
+            return f"Found {new} new, {len(nodes) - new} old"
+        progress, box = self.waiting("Discovering", f"Asking every node in {asked} with one signed read per region",
+                                     describe)
         try:
-            found = actions.discover(self.store, region)
+            found = actions.discover(self.store, region, progress=progress)
         except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
+            box.close()
             self.message.say(str(exc), error=True)
             return
+        finally:
+            box.close()
         self.found = found
         lines = [self.found_line(e) for e in found]
         self.show_results(f"Found in {asked}: {len(found)}", lines or ["(no node answered)"])

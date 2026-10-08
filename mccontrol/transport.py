@@ -45,6 +45,9 @@ def _connect(client, config, timeout=10.0):
         raise BrokerError(f"{config['broker']} refused the connection: {verdict.get('why')}")
 
 
+FAKE_WAIT_SECS = 0.6      # a faked send still waits a little, so a screen's bar can be seen to move
+
+
 def _fake(topic, command, counter, nodes):
     """For the interface's pseudo-terminal tests only: MCCONTROL_FAKE_RESULTS holds a JSON
     object `{node: [code, reply]}` and no broker is touched. Unset in normal use."""
@@ -64,18 +67,37 @@ def _fake(topic, command, counter, nodes):
     return answers
 
 
+TICK_SECS = 0.2
+
+
+def _wait(total, done, answered, progress):
+    """Wait up to `total` seconds, calling `progress(elapsed, total, answered())` every tick
+    (a screen draws a bar from it); stop early when `done()` or when progress returns True
+    (the person pressed Esc). The results so far are kept either way."""
+    start = time.monotonic()
+    while True:
+        elapsed = time.monotonic() - start
+        if progress and progress(min(elapsed, total), total, answered()):
+            return
+        if done() or elapsed >= total:
+            return
+        time.sleep(min(TICK_SECS, max(0.0, total - elapsed)))
+
+
 def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl_secs=None,
-         counter=None):
+         counter=None, progress=None):
     """Sign `command` for `topic`, publish it, and collect results from `nodes_to_hear`.
 
     Returns `(payload, {node: Result})`. A node missing from the dict did not answer within
-    `wait_secs`; that is reported as silence, never as an empty result.
+    `wait_secs`; that is reported as silence, never as an empty result. `progress` is called
+    through the wait as `_wait` describes.
     """
     counter = int(time.time()) if counter is None else counter
     payload = envelope.build(seed_hex, topic, counter, command,
                              ttl_secs=ttl_secs or config.get("ttl_secs", envelope.DEFAULT_TTL_SECS))
     faked = _fake(topic, command, counter, nodes_to_hear)
     if faked is not None:
+        _wait(FAKE_WAIT_SECS, lambda: False, lambda: list(faked), progress)
         return payload, faked
     answers = {}
     lock = threading.Lock()
@@ -101,7 +123,7 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
         info = client.publish(topic, payload, qos=1)
         info.wait_for_publish(timeout=10)
         if wanted:
-            all_in.wait(wait_secs)
+            _wait(wait_secs, all_in.is_set, lambda: list(answers), progress)
     finally:
         client.loop_stop()
         client.disconnect()
@@ -114,7 +136,7 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
 DISCOVERY_COMMAND = "get autoreply"
 
 
-def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, counter=None):
+def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, counter=None, progress=None):
     """The nodes in `region` that accept your signing key: `[{node, region, code, reply}]`.
 
     One signed broadcast of a read to `meshcore/{IATA}/all/cmd` on the control broker, then
@@ -128,6 +150,7 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
                              ttl_secs=config.get("ttl_secs", envelope.DEFAULT_TTL_SECS))
     faked = _fake(topic, DISCOVERY_COMMAND, counter, ())
     if faked is not None:
+        _wait(FAKE_WAIT_SECS, lambda: False, lambda: list(faked), progress)
         return [{"node": n, "region": region.upper(), "code": r.code, "reply": r.reply}
                 for n, r in sorted(faked.items())]
     found = {}
@@ -149,7 +172,7 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
         client.subscribe(f"{envelope.TOPIC_PREFIX}{region.upper()}/+/res", qos=1)
         info = client.publish(topic, payload, qos=1)
         info.wait_for_publish(timeout=10)
-        time.sleep(wait_secs)
+        _wait(wait_secs, lambda: False, lambda: list(found), progress)
     finally:
         client.loop_stop()
         client.disconnect()

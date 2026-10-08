@@ -37,7 +37,7 @@ def outcome_line(result):
     return f"refused: {result.code_name}" + (f" -- {result.help}" if result.help else "")
 
 
-def send(store, command, device=None, region=None, dry_run=False, wait_secs=None):
+def send(store, command, device=None, region=None, dry_run=False, wait_secs=None, progress=None):
     """Sign and send `command` to one device, or with `region` to every node in that region.
 
     Returns `(topic, payload, {node: Result}, lines)`, where `lines` is what to show.
@@ -61,7 +61,8 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
         return topic, payload, {}, [f"would publish to {topic}", payload, "not sent (dry run)"]
     payload, answers = transport.send(dict(config, region=region), store.seed(), topic, command,
                                       nodes_to_hear=hear,
-                                      wait_secs=wait_secs or config.get("wait_secs", 20))
+                                      wait_secs=wait_secs or config.get("wait_secs", 20),
+                                      progress=progress)
     lines = []
     names = {d["node"]: (d["name"] or d["node"]) for d in store.devices()}
     for node in hear:
@@ -81,7 +82,7 @@ def fill(steps, arg):
     return [s.replace("{arg}", (arg or "").strip()) for s in steps]
 
 
-def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=None, on_step=None):
+def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=None, on_step=None, progress=None):
     """Send `steps` in order to one device (or every node in `region`), stopping at the first
     refusal or silence. Returns `(lines, stopped_at)`: what to show, and the index of the
     step that stopped it, or None when every step was answered ok."""
@@ -90,7 +91,7 @@ def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=Non
         if on_step:
             on_step(i, command)
         _t, _p, answers, step_lines = send(store, command, device=device, region=region,
-                                           dry_run=dry_run, wait_secs=wait_secs)
+                                           dry_run=dry_run, wait_secs=wait_secs, progress=progress)
         lines.append(f"-- {i + 1}/{len(steps)}: {command}")
         lines += step_lines
         if dry_run:
@@ -137,7 +138,7 @@ def refresh_fleet(store, devices, now=None):
     return updated, failed
 
 
-def refresh_names(store, devices, wait_secs=None):
+def refresh_names(store, devices, wait_secs=None, progress=None):
     """`get name` and `ver` to each device, one signed read each: an unnamed device takes the
     fleet's name, every device stores `ver`. Returns `(named, versioned, lines)`. A node whose
     firmware admits neither answers not-allowed and keeps what it had."""
@@ -148,7 +149,7 @@ def refresh_names(store, devices, wait_secs=None):
         changes = {}
         for command in ("get name", "ver"):
             try:
-                _t, _p, answers, _l = send(store, command, device=d, wait_secs=wait_secs)
+                _t, _p, answers, _l = send(store, command, device=d, wait_secs=wait_secs, progress=progress)
             except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
                 lines.append(f"{label[:12]:12} {command}: {exc}")
                 continue
@@ -182,7 +183,7 @@ def regions_asked(text, store):
     return seen
 
 
-def discover(store, region, wait_secs=None):
+def discover(store, region, wait_secs=None, progress=None):
     """The nodes in `region` that answer a command signed with your key, marked if known.
     `region` may name several (`JKG, GOT`) or `*`; one signed read per region, one list."""
     regions = regions_asked(region, store)
@@ -192,13 +193,13 @@ def discover(store, region, wait_secs=None):
     if len(regions) > 1:
         found = []
         for one in regions:
-            found += discover(store, one, wait_secs)
+            found += discover(store, one, wait_secs, progress)
         return found
     region = regions[0]
     config = store.config()
     known = {d["node"]: d["name"] for d in store.devices()}
     found = transport.discover(config, store.seed(), region,
-                               wait_secs=wait_secs or config.get("wait_secs", 20))
+                               wait_secs=wait_secs or config.get("wait_secs", 20), progress=progress)
     for entry in found:
         entry["known_as"] = known.get(entry["node"])
         entry["outcome"] = outcome_line(envelope.Result(entry["node"], 0, entry["code"],

@@ -298,3 +298,14 @@ def test_f1_works_when_the_terminal_sends_a_sequence_the_description_lacks(tmp_p
     assert "Help: The screen" in text
     text, _ = walk(tmp_path / "b", [(b"\x1b[21~", 0.6)])      # F10 the VT220 way: quits
     assert "Help:" not in text
+
+
+def test_a_wait_is_a_progress_box_with_a_count_and_a_bar_that_fills(tmp_path):
+    fake = json.dumps({"4AC61A7F": [0, "> on"], "AAAA1111": [0, "> on"]})
+    text, _ = walk(tmp_path, [(DOWN, 0.3), (F[5], 0.5), (b"\r", 2.0)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "Discovering" in text and "Asking every node in JKG" in text
+    assert "Found 1 new, 1 old" in text                      # AAAA1111 is new, Gisebo is known
+    assert re.search(r"\[█+░*\]", text) and "Esc stops waiting" in text
+    assert "/0s" in text                                      # the clock, over the faked wait
+    text, _ = walk(tmp_path / "send", [(DOWN, 0.3), (b"\x1b2", 1.5)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "Sending" in text and "ver  to Gisebo (1 of 1)" in text and "answered" in text
