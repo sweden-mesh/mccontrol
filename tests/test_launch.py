@@ -105,5 +105,5 @@ def test_an_unreachable_api_is_the_cli_message_and_exits_1(home, ran, monkeypatc
     monkeypatch.setattr(launch, "serve", serve)
     url = "http://127.0.0.1:9/nothing/"
     assert cli.main(["--ui", "MeshcoreCommander", "--api", url]) == 1
-    assert capsys.readouterr().err.startswith(f"mccontrol: the mccontrol API at {url.rstrip('/')} cannot be reached")
+    assert capsys.readouterr().err == "mccontrol: the mccontrol API at 127.0.0.1:9 cannot be reached: Connection refused\n"
     assert ran == []

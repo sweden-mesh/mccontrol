@@ -172,8 +172,9 @@ def test_api_uses_a_running_server_and_starts_none(api, monkeypatch, capsys):
     assert cli.main(["--api", url, "send", "gisebo", "region"]) == 0
     assert "Gisebo       > * F" in capsys.readouterr().out
     assert store.history("4AC61A7F")[-1]["command"] == "region"
-    assert cli.main(["--api", f"http://127.0.0.1:{closed_port()}", "devices"]) == 1
-    assert "cannot be reached" in capsys.readouterr().err
+    port = closed_port()
+    assert cli.main(["--api", f"http://127.0.0.1:{port}/the-secret/", "devices"]) == 1
+    assert capsys.readouterr().err == f"mccontrol: the mccontrol API at 127.0.0.1:{port} cannot be reached: Connection refused\n"
 
 
 def test_a_job_shows_its_progress_on_stderr_and_a_dry_run_shows_none(api, monkeypatch, capsys):
