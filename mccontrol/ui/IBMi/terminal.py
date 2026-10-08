@@ -15,6 +15,13 @@ EXIT = (curses.KEY_F3, curses.KEY_F12, 27)
 MIN_WIDTH, MIN_HEIGHT = 80, 24
 
 
+def fmt_small(w, h):
+    """The notice a terminal below the minimum gets, in what room there is."""
+    import textwrap
+    text = f"This needs {MIN_WIDTH}x{MIN_HEIGHT}; the terminal is {w}x{h}. Make it larger to go on."
+    return textwrap.wrap(text, max(10, w - 1))[: max(1, h)]
+
+
 def fkey(n):
     return curses.KEY_F0 + n
 
@@ -113,6 +120,9 @@ class Terminal:
         """One key, after the frame is on the terminal. Ctrl+L repaints and is not returned;
         a resize is returned as KEY_RESIZE, for the screen to draw itself again at the new
         size; Esc then a digit is Alt+digit, returned negative; an unknown sequence is drained."""
+        if self.too_small():            # checked on every read: a shrink mid-session included
+            self.wait_for_room()
+            return curses.KEY_RESIZE
         while True:
             self.flush()
             key = self.win.getch()
@@ -143,6 +153,23 @@ class Terminal:
             finally:
                 self.win.nodelay(False)
             return SEQUENCES.get(bytes(tail).decode("latin-1"), 27)
+
+    def too_small(self):
+        w, h = self.size
+        return w < MIN_WIDTH or h < MIN_HEIGHT
+
+    def wait_for_room(self):
+        """Below 80x24 no screen is drawn, only what it needs, until the terminal grows back;
+        keys typed meanwhile are dropped. The caller then draws its screen again."""
+        while self.too_small():
+            w, h = self.size
+            self.win.erase()
+            for i, line in enumerate(fmt_small(w, h)):
+                self.put(i, 0, line)
+            self.flush()
+            if self.win.getch() == curses.KEY_RESIZE:
+                self.resized()
+        self.win.clearok(True)
 
     def resized(self):
         """After KEY_RESIZE: take the size from the terminal itself. curses may keep the
@@ -238,7 +265,7 @@ def start(main):
         w, h = term.size
         if w < MIN_WIDTH or h < MIN_HEIGHT:
             term.put(0, 0, f"This needs {MIN_WIDTH}x{MIN_HEIGHT}; the terminal is {w}x{h}.")
-            term.key()
+            term.win.getch()
             return 2
         return main(term)
 

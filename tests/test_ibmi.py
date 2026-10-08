@@ -570,3 +570,24 @@ def test_a_confirm_is_answered_only_by_a_key_typed_once_it_is_shown(api):
         assert len(store.devices()) == 3
     finally:
         s.close()
+
+
+def test_below_80x24_the_screen_waits_for_room_and_comes_back_when_it_grows(api):
+    import fcntl, struct, termios
+    _server, _url, store = api
+    s = Session(api, fixed=False)
+    try:
+        mark = len(s.out)
+        fcntl.ioctl(s.fd, termios.TIOCSWINSZ, struct.pack("HHHH", 18, 60, 0, 0))
+        s.pump(lambda new: b"needs" in new, 2.0)
+        small = STRIP.sub(" ", s.out[mark:].decode("utf-8", "replace"))
+        assert "This needs 80x24; the terminal is 60x18." in small and "Select one of" not in small
+        os.write(s.fd, b"1\r")                                      # dropped while too small
+        s.pump(lambda new: False, 0.3)
+        mark = len(s.out)
+        fcntl.ioctl(s.fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        s.pump(lambda new: b"===>" in new, 2.0)
+        back = STRIP.sub(" ", s.out[mark:].decode("utf-8", "replace"))
+        assert "MCCONTROL Main Menu" in back and "Work with Devices" not in back
+    finally:
+        s.close()
