@@ -590,6 +590,10 @@ def test_without_a_utf8_locale_the_board_draws_in_ascii(tmp_path):
     screen = walk.screen
     assert "+--" in screen and "| " in screen and "DEVICES" in screen and "Gisebo" in screen
     assert not set(screen) & set("╭╮╰╯│─▁▂▃▄▅▆▇█◆◉●↵␣")
+    hints = screen.splitlines()[-1]
+    assert "Enter cmds" in hints and "Space tag" in hints and "Encmds" not in hints and "Sptag" not in hints
+    walk(tmp_path / "click", [(_click(hints.index("cmds"), 23), 0.8)], env={"LANG": "C", "LC_ALL": "C"})
+    assert "COMMANDS" in walk.screen                # the hit box is where cmds is painted
 
 
 def test_a_resize_reflows_the_board_from_80x24_to_120x40(tmp_path):

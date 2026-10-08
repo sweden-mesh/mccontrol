@@ -198,10 +198,15 @@ class Board:
         h, w = self.win.getmaxyx()
         return w, h
 
+    def fold(self, text):
+        """`text` as the terminal can show it: ASCII where the locale cannot carry the rest."""
+        if self.g is art.ASCII:
+            return text.translate(PLAIN).encode("ascii", "replace").decode("ascii")
+        return text
+
     def put(self, y, x, text, role="base", attr=0):
         w, h = self.size
-        if self.g is art.ASCII:                 # a terminal that cannot carry the rest
-            text = text.translate(PLAIN).encode("ascii", "replace").decode("ascii")
+        text = self.fold(text)
         if not (0 <= y < h) or x >= w or x < 0:
             return
         try:
@@ -374,12 +379,13 @@ class Board:
         self.put(y, x, " " * (w - 1), "dim")
         self.hits, col = [], 1
         for key, label in HINTS:
-            if col + len(key) + len(label) + 1 >= w:
+            shown = self.fold(key)              # measured as drawn: Enter, not the arrow
+            if col + len(shown) + len(label) + 1 >= w:
                 break
-            self.put(y, col, key, "cursor")
-            self.put(y, col + len(key) + 1, label, "dim")
-            self.hits.append((y, col, col + len(key) + len(label), key))
-            col += len(key) + len(label) + 2
+            self.put(y, col, shown, "cursor")
+            self.put(y, col + len(shown) + 1, label, "dim")
+            self.hits.append((y, col, col + len(shown) + len(label), key))
+            col += len(shown) + len(label) + 2
 
     def draw_toasts(self, bottom):
         now = time.monotonic()
