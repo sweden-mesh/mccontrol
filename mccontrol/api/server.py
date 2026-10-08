@@ -165,7 +165,14 @@ def serve(store=None, transport=None, port=0):
     server.secret = secrets.token_urlsafe(32)
     server.origin = f"http://127.0.0.1:{server.server_address[1]}"
     # a short poll: stop() waits for it, and a command line starts and stops a server per command
-    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, name="mccontrol-api", daemon=True).start()
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, name="mccontrol-api", daemon=True)
+    try:
+        thread.start()
+    except BaseException:               # Ctrl+C before the caller has the handle: leave nothing serving
+        if thread.is_alive():
+            server.shutdown()
+        server.server_close()
+        raise
     return server, f"{server.origin}/{server.secret}/"
 
 

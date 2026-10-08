@@ -380,3 +380,19 @@ def test_another_origin_and_a_body_that_is_not_json_are_refused(api):
     assert status == 415 and json.loads(out)["error"]["code"] == "unsupported_media_type"
     assert raw(url + "jobs", headers={"Origin": origin})[0] == 200
     assert json.loads(raw(url + "jobs")[1])["jobs"] == []                    # nothing started
+
+
+def test_an_interrupt_while_the_server_starts_leaves_nothing_serving(monkeypatch):
+    import threading
+    started, real = [], threading.Thread.start
+
+    def start(self):
+        real(self)
+        if self.name == "mccontrol-api":
+            started.append(self)
+            raise KeyboardInterrupt
+    monkeypatch.setattr(threading.Thread, "start", start)
+    with pytest.raises(KeyboardInterrupt):
+        api_server.serve(store=object())
+    started[0].join(1)
+    assert not started[0].is_alive()
