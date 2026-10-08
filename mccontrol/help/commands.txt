@@ -54,6 +54,9 @@ A region tree line with "|" (region def a|* b|*) cannot travel: "|" is the
 envelope's field separator. Add names one at a time with region put.
 
 "trigger" commands transmit on the air and are refused as a broadcast.
-A node on older firmware admits only the auto-reply family, the region
-map, the triggers and a dozen reads, and answers not-allowed to the rest;
-the tool reports that as the node said it.
+A node on the ar-10 firmware (the build in the field) admits only the
+auto-reply family, the triggers and a dozen reads, and answers
+not-allowed to the rest; the command list greys those out for it (see
+[[commandlist]]), and "mccontrol commands <device>" marks them. A
+not-allowed from a node whose firmware should admit the command is
+said as a finding: the tool's table or the device's version is wrong.

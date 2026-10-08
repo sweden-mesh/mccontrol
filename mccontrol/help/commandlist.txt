@@ -17,6 +17,16 @@ What Enter does depends on what the command needs:
   free text     a field, with examples beside it (region put se-jkp *,
                 set txdelay 0.5); an empty value asks again
 
+Grey entries are commands the device's firmware does not admit: the
+cursor skips them and the note above the hint says how many, what the
+device reports (ar-10, or "unknown", which counts as the oldest) and
+that "n" reads the version. The fleet runs several firmware versions
+for months, so this is how a command slot is never spent on a
+not-allowed. ar-10, the build in the field, admits the auto-reply
+settings, the two triggers and a dozen reads; ar-11 admits everything
+on the deny list's far side (ver, get name, get stats, the region map,
+the tuning writes, reboot...). To make the grey go away, flash.
+
 A command that takes something away still asks first (see [[cautions]]),
 and one the firmware would refuse is stopped before it is signed, with
 the reason (see [[commands]]). F2 is the same send with a free command

@@ -51,7 +51,7 @@ the directory shows.
 |---|---|
 | F1 | help for where you are; Shift+F1 the contents; links are followed with Enter, Backspace or Alt+F1 goes back |
 | F2 | send a command to the tagged devices, or the cursor device; Up recalls earlier commands |
-| Enter | the command list for the cursor device, by group, type to filter; a command's parameter is asked for as radio buttons, checkboxes or a text field with examples, and the reply opens when it arrives |
+| Enter | the command list for the cursor device, by group, type to filter; a command's parameter is asked for as radio buttons, checkboxes or a text field with examples, and the reply opens when it arrives. Commands the device's firmware does not admit are grey and skipped (`mccontrol/firmware.py` knows what each build admits; an unknown version counts as the oldest) |
 | F3 | the cursor device's history as a window; on the right panel, Enter opens a reply |
 | F4 | edit the device: name, region, notes |
 | F5 | discover: the repeaters in a region that accept your key (`JKG, GOT` for several, `*` for every region you have); on the found list, F5 adds the tagged and F7 adds all |
@@ -107,7 +107,7 @@ mccontrol stats loutest --range 48h      # from Beacon (beacon.meshat.se by defa
 mccontrol fleet                          # the directory with Batt and Seen refreshed from Beacon
 mccontrol refresh [device...]            # get name and ver over the control plane; names the unnamed
 mccontrol reads loutest                  # what it last answered to each read, with the age
-mccontrol commands                       # the command table, by group, with each one's parameter kind
+mccontrol commands [device]              # the command table; with a device, what its firmware lacks is marked
 mccontrol history loutest
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```
