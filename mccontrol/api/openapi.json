@@ -180,14 +180,15 @@
       "name": "sort",
       "in": "query",
       "required": false,
-      "description": "name, region, last sent or version",
+      "description": "name, region, last sent, version, or added (the order the devices were added in)",
       "schema": {
        "type": "string",
        "enum": [
         "name",
         "region",
         "last sent",
-        "version"
+        "version",
+        "added"
        ]
       }
      },

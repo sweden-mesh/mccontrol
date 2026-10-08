@@ -286,3 +286,10 @@ def test_without_a_store_the_server_opens_the_one_in_mccontrol_home(tmp_path, mo
         assert [d["name"] for d in call(url, "GET", "/devices")[1]["devices"]] == ["Home"]
     finally:
         api_server.stop(server)
+
+
+def test_devices_can_be_listed_in_the_order_they_were_added(api):
+    _server, url, _store = api
+    listing = call(url, "GET", "/devices?sort=added")[1]
+    assert [d["node"] for d in listing["devices"]] == ["4AC61A7F", "65C1D12C", "FD700369"]
+    assert listing["sort"] == "added" and "added" in listing["sorts"]

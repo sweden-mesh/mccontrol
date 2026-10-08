@@ -167,13 +167,14 @@ def create_key(ctx, _p, _q, body):
 
 def list_devices(ctx, _p, query, _b):
     sort = query.get("sort", "name")
-    sorts = list(directory.SORTS) + ["version"]
+    sorts = list(directory.SORTS) + ["version", "added"]
     if sort not in sorts:
         raise bad(f"sort is one of {', '.join(sorts)}")
     width = _int(query, "width", 100)
     columns = ctx.store.config().get("columns")
     tags = tags_view(ctx)
-    return 200, {"devices": [view(ctx, d, columns, width) for d in directory.sorted_devices(ctx.store.devices(), sort)],
+    rows = ctx.store.devices() if sort == "added" else directory.sorted_devices(ctx.store.devices(), sort)
+    return 200, {"devices": [view(ctx, d, columns, width) for d in rows],
                  "sort": sort, "sorts": sorts, "columns": directory.chosen(columns),
                  "all_columns": list(directory.COLUMNS), "header": directory.header(width, columns),
                  "footer": tags["footer"], "tagged": tags["tagged"]}
