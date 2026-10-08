@@ -43,7 +43,7 @@ def walk(tmp_path, keys, seconds=3.0, env=None, cols=80, rows=24, prepare=None):
         os.environ["MCCONTROL_HOME"] = str(home)
         os.environ.update(env or {})
         sys.path.insert(0, os.getcwd())
-        os.execvp(sys.executable, [sys.executable, "-c", "import sys; sys.path.insert(0, %r); from mccontrol import cli; sys.exit(cli.main([]))" % os.getcwd()])
+        os.execvp(sys.executable, [sys.executable, "-c", "import sys; sys.path.insert(0, %r); from mccontrol import cli; sys.exit(cli.main([\"--ui\", \"MeshcoreCommander\"]))" % os.getcwd()])
     time.sleep(0.8)
     for k, delay in keys:
         os.write(fd, k)
@@ -422,7 +422,7 @@ def test_a_wait_writes_the_box_once(tmp_path):
         os.environ.update({"TERM": "xterm", "COLUMNS": "80", "LINES": "24", "MCCONTROL_HOME": str(home),
                            "MCCONTROL_FAKE_RESULTS": fake, "MCCONTROL_FAKE_WAIT": "2"})
         os.execvp(sys.executable, [sys.executable, "-c",
-                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([])" % os.getcwd()])
+                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([\"--ui\", \"MeshcoreCommander\"])" % os.getcwd()])
     out = b""
 
     def pump(secs):
@@ -490,7 +490,7 @@ def test_a_greyed_entry_is_drawn_in_the_disabled_colour_and_names_the_build(tmp_
         fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
         os.environ.update({"TERM": "xterm", "COLUMNS": "80", "LINES": "24", "MCCONTROL_HOME": str(home)})
         os.execvp(sys.executable, [sys.executable, "-c",
-                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([])" % os.getcwd()])
+                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([\"--ui\", \"MeshcoreCommander\"])" % os.getcwd()])
     out = b""
 
     def pump(secs):

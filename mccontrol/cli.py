@@ -22,6 +22,7 @@ from . import actions, envelope, store as _store, transport
 
 def build_parser():
     p = argparse.ArgumentParser(prog="mccontrol", description=__doc__.split("\n")[0])
+    p.add_argument("--ui", metavar="NAME", help="the interface to start; the last one used when not given")
     sub = p.add_subparsers(dest="command")
     sub.add_parser("keygen", help="create the signing key").add_argument(
         "--force", action="store_true", help="replace an existing key (silences provisioned nodes)")
@@ -98,8 +99,8 @@ def main(argv=None):
     store = _store.Store()
     try:
         if args.command is None:
-            from .ui.MeshcoreCommander import app
-            return app.run(store)
+            from . import launch
+            return launch.run(store, args.ui)
         return COMMANDS[args.command](store, args)
     except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
         print(f"mccontrol: {exc}", file=sys.stderr)
