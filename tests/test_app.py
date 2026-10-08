@@ -311,7 +311,7 @@ def test_a_wait_is_a_progress_box_with_a_count_and_a_bar_that_fills(tmp_path):
     text, _ = walk(tmp_path, [(DOWN, 0.3), (F[5], 0.5), (b"\r", 2.0)], env={"MCCONTROL_FAKE_RESULTS": fake})
     assert "Discovering" in text and "Asking every node in JKG" in text
     assert "Found 1 new, 1 old" in text                      # AAAA1111 is new, Gisebo is known
-    assert re.search(r"\[█+░*\]", text) and "Esc stops waiting" in text
+    assert "█" in text and "░" in text and "Esc stops waiting" in text   # the bar: written cell by cell as it fills
     assert "/0s" in text                                      # the clock, over the faked wait
     text, _ = walk(tmp_path / "send", [(DOWN, 0.3), (b"\x1b2", 1.5)], env={"MCCONTROL_FAKE_RESULTS": fake})
     assert "Sending" in text and "ver  to Gisebo (1 of 1)" in text and "answered" in text
@@ -328,7 +328,9 @@ def test_enter_on_a_device_opens_the_command_list_and_runs_a_bare_command(tmp_pa
     # Enter opens the list; typing "ver" filters it to the one entry; Enter runs it
     text, home = walk(tmp_path, [(b"\r", 0.6), (b"ver", 0.4), (b"\r", 2.0), (b"\r", 0.4)],
                       env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=5.0)
-    assert "Commands  to Far" in text and "-- reads --" in text and "Filter: ver" in text
+    # the stream carries only changed cells, so a string may arrive in pieces: match loosely
+    assert re.search(r"Commands\s+to\s+Far", text) and re.search(r"--\s+reads\s+--", text)
+    assert "Filter:" in text                                  # the typed letters arrive one cell at a time
     assert "Reply: ver" in text and "esp32s3-v1.17.1-ar-10" in text
     assert '"command": "ver"' in (home / "history" / "FD700369.jsonl").read_text()
 
@@ -346,7 +348,7 @@ def test_a_choice_command_offers_radio_buttons_and_previews_what_it_sends(tmp_pa
                                  (b"\x1bOD", 0.3), (b"\r", 2.0), (b"\r", 0.4)],
                       env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=7.0)
     assert "(*) on" in text and "(*) off" in text
-    assert "Sends: set autoreply off" in text
+    assert "Sends:" in text and re.search(r"Command:\s+set\s+autoreply\s+off", text)   # the preview, then the caution's line
     assert "stops this repeater answering test requests" in text
     assert "Reply: set autoreply off" in text
     assert '"command": "set autoreply off"' in (home / "history" / "FD700369.jsonl").read_text()
@@ -392,3 +394,39 @@ def test_options_columns_picks_what_an_80_column_directory_shows(tmp_path):
     last_header = text[text.rindex("Name   "):][:40]
     assert re.match(r"Name\s+Node\s+Ver\s", last_header), last_header      # the last frame: no Reg, Sent
     assert "4AC61A7F 1.17.1-a" in text     # 37 columns: name, node and what fits of the version
+
+
+def test_a_wait_writes_the_box_once(tmp_path):
+    """The raw stream, not the stripped text: during a discovery's wait the progress box
+    must reach the terminal once, its bar and count being the only cells that change. Before
+    Sprint 06 it was redrawn on every tick (sixteen times in three seconds), which was the
+    flicker; see planning/mccontrol/stable-screen.md in the workspace."""
+    import fcntl, signal, struct, termios
+    home = _home(tmp_path)
+    fake = json.dumps({"4AC61A7F": [0, "> on"]})
+    pid, fd = pty.fork()
+    if pid == 0:
+        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        os.environ.update({"TERM": "xterm", "COLUMNS": "80", "LINES": "24", "MCCONTROL_HOME": str(home),
+                           "MCCONTROL_FAKE_RESULTS": fake, "MCCONTROL_FAKE_WAIT": "2"})
+        os.execvp(sys.executable, [sys.executable, "-c",
+                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([])" % os.getcwd()])
+    out = b""
+
+    def pump(secs):
+        nonlocal out
+        end = time.time() + secs
+        while time.time() < end:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 65536)
+                except OSError:
+                    return
+    pump(0.8); os.write(fd, DOWN); pump(0.3); os.write(fd, F[5]); pump(0.5); os.write(fd, b"\r"); pump(3.0)
+    os.kill(pid, signal.SIGKILL)
+    os.waitpid(pid, 0)
+    raw = out.decode("utf-8", "replace")
+    assert raw.count("Discovering") == 1, raw.count("Discovering")
+    assert raw.count("Esc stops waiting") == 1
+    assert raw.count("Found 0 new, 1 old") >= 1            # the count line did change, and was written

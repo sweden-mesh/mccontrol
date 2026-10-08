@@ -194,7 +194,19 @@ class Screen:
             self.put(row, x + width, "  ", attr)
 
     def refresh(self):
-        self.win.refresh()
+        """Compose into curses' virtual screen only. The physical terminal is written once
+        per frame -- in key(), just before it waits, and in Progress.tick() -- so a dialog
+        drawn over the work after the work was redrawn reaches the terminal as one frame,
+        never as the work first and the dialog a moment later. That second write was the
+        flicker (planning/mccontrol/stable-screen.md in the workspace)."""
+        self.win.noutrefresh()
+
+    def flush(self):
+        """Write the composed frame to the terminal: what changed since the last one."""
+        try:
+            curses.doupdate()
+        except curses.error:
+            pass
 
     def repaint(self):
         """Redraw every cell on the next refresh, not only what changed."""
@@ -211,6 +223,7 @@ class Screen:
     def key(self):
         """One key. An Esc that a terminal sends as the start of a function-key sequence the
         library did not recognise is drained, so its tail never lands in a field."""
+        self.flush()
         key = self.win.getch()
         if key == curses.KEY_MOUSE:
             try:

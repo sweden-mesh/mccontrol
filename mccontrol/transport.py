@@ -5,6 +5,7 @@ keystrokes. The result topic is subscribed before the command is published, or a
 could answer before anyone was listening.
 """
 
+import os
 import threading
 import time
 
@@ -45,7 +46,7 @@ def _connect(client, config, timeout=10.0):
         raise BrokerError(f"{config['broker']} refused the connection: {verdict.get('why')}")
 
 
-FAKE_WAIT_SECS = 0.6      # a faked send still waits a little, so a screen's bar can be seen to move
+FAKE_WAIT_SECS = float(os.environ.get("MCCONTROL_FAKE_WAIT", "0.6"))   # a faked send still waits a little, so a bar can be seen to move
 
 
 def _fake(topic, command, counter, nodes):

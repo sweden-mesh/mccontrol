@@ -193,6 +193,7 @@ class Progress:
             self.redraw_under()
         self.draw(fraction, elapsed, total)
         self.screen.refresh()
+        self.screen.flush()                       # one frame: the work and the box together
         self.screen.win.nodelay(True)
         try:
             while True:
