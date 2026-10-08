@@ -138,16 +138,29 @@ class Terminal:
             return SEQUENCES.get(bytes(tail).decode("latin-1"), 27)
 
     def poll(self):
-        """A key if one is waiting, else -1: how a wait notices F12 or Esc."""
-        self.win.nodelay(True)
-        try:
-            key = self.win.getch()
-        finally:
-            self.win.nodelay(False)
-        if key == 27:
-            curses.ungetch(27)
-            return self.key()
-        return key
+        """F3, F12 or Esc if one was typed, else -1: how a wait notices a cancel. Any other
+        key typed during the wait is kept for after it, the 5250's type-ahead."""
+        held, found = [], -1
+        while True:
+            self.win.nodelay(True)
+            try:
+                key = self.win.getch()
+            finally:
+                self.win.nodelay(False)
+            if key == -1:
+                break
+            if key == 27:
+                curses.ungetch(27)
+                key = self.key()
+            if key in EXIT:
+                found = key
+            elif key == curses.KEY_RESIZE:
+                self.win.clearok(True)
+            elif key >= 0:
+                held.append(key)
+        for key in reversed(held):
+            curses.ungetch(key)
+        return found
 
     def edit(self, y, x, width, value="", secret=False, recall=None):
         """One input field: type, Backspace, Left/Right do nothing clever. Returns `(key,

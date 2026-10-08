@@ -22,46 +22,81 @@ DOWN, UP, TAB = b"\x1bOB", b"\x1bOA", b"\t"
 pytestmark = pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
 
 
-def walk(api, keys, seconds=0.5, cols=80, rows=24, start=0.8, raw=False):
-    """Start IBMi in a pty on a client of the fixture's server, send `keys` as (bytes,
-    delay) pairs, and return the screen text with the escape sequences stripped (`raw`:
-    as the terminal received it)."""
-    import fcntl, signal, struct, termios
-    _server, url, _store = api
-    pid, fd = pty.fork()
-    if pid == 0:
-        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
-        os.environ.update({"TERM": "xterm", "COLUMNS": str(cols), "LINES": str(rows)})
-        os.execvp(sys.executable, [sys.executable, "-c",
-                  "import sys; sys.path.insert(0, %r); from mccontrol.apiclient import Client; "
-                  "from mccontrol.ui.IBMi import run; sys.exit(run(Client(%r)))" % (os.getcwd(), url)])
-    out = b""
+STRIP = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][0-9A-B]|\x1b[=>]")
+CLEAR = b"\x1b[2J"                         # what a repaint (Ctrl+L) begins with
+TICK = 0.05
 
-    def pump(secs):
-        nonlocal out
-        end = time.time() + secs
+
+class Session:
+    """IBMi in a pty on a client of the fixture's server. Each step writes its key and a
+    Ctrl+L, and reads until that repaint has come and the pty has then been quiet for two
+    ticks; a key typed during a wait is held for after it (type-ahead), so the repaint marks
+    the step done. A step's delay is only the upper bound. `fixed=False` leaves the size to
+    the pty, so a resize reaches curses."""
+
+    def __init__(self, api, cols=80, rows=24, fixed=True):
+        import fcntl, struct, termios
+        _server, url, _store = api
+        self.pid, self.fd = pty.fork()
+        if self.pid == 0:
+            fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+            os.environ["TERM"] = "xterm"
+            if fixed:
+                os.environ.update({"COLUMNS": str(cols), "LINES": str(rows)})
+            else:
+                os.environ.pop("COLUMNS", None)
+                os.environ.pop("LINES", None)
+            os.execvp(sys.executable, [sys.executable, "-c",
+                      "import sys; sys.path.insert(0, %r); from mccontrol.apiclient import Client; "
+                      "from mccontrol.ui.IBMi import run; sys.exit(run(Client(%r)))" % (os.getcwd(), url)])
+        self.out = b""
+        self.pump(lambda new: b"===>" in new, 3.0)          # the main menu is up
+
+    def pump(self, done, limit):
+        """Read until `done(what came since)` and then two quiet ticks, or `limit` seconds."""
+        mark, end, quiet = len(self.out), time.time() + limit, 0
         while time.time() < end:
-            r, _, _ = select.select([fd], [], [], 0.05)
+            r, _, _ = select.select([self.fd], [], [], TICK)
             if r:
                 try:
-                    out += os.read(fd, 65536)
+                    self.out += os.read(self.fd, 65536)
                 except OSError:
                     return
-    pump(start)
-    for k, delay in keys:
-        os.write(fd, k)
-        pump(delay)
-        os.write(fd, b"\x0c")               # Ctrl+L after each step: the stream carries only changed
-        pump(0.1)                           # cells, so a repaint puts every frame's text in whole
-    pump(seconds)
+                quiet = 0
+            elif done(self.out[mark:]):
+                quiet += 1
+                if quiet >= 2:
+                    return
+
+    def drive(self, keys):
+        """Each (bytes, delay): the key, then a repaint; the text so far."""
+        for k, delay in keys:
+            os.write(self.fd, k + b"\x0c")
+            self.pump(lambda new: CLEAR in new, delay + 0.1)
+        return self.text()
+
+    def text(self, raw=False):
+        out = self.out.decode("utf-8", "replace")
+        return out if raw else STRIP.sub(" ", out)
+
+    def close(self):
+        import signal
+        try:
+            os.kill(self.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        os.waitpid(self.pid, 0)
+
+
+def walk(api, keys, cols=80, rows=24, raw=False):
+    """A whole walk: start, the keys, the text (`raw`: as the terminal received it)."""
+    s = Session(api, cols, rows)
     try:
-        os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    os.waitpid(pid, 0)
-    if raw:
-        return out.decode("utf-8", "replace")
-    return re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][0-9A-B]|\x1b[=>]", b" ", out).decode("utf-8", "replace")
+        s.drive(keys)
+        s.pump(lambda new: True, 0.5)
+        return s.text(raw)
+    finally:
+        s.close()
 
 
 BACKEND = {"store", "actions", "transport", "beacon", "envelope", "firmware", "denylist", "commands", "directory",
