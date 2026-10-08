@@ -51,3 +51,28 @@ def test_an_unknown_name_lists_the_interfaces_and_exits_2(home, ran, capsys):
     assert "MeshcoreCommander" in err and "no interface named 'Nothing'" in err
     assert not (home / "config.json").exists() or "ui" not in json.loads((home / "config.json").read_text())
     assert ran == []
+
+
+def test_an_api_error_out_of_an_interface_is_a_message_not_a_traceback(home, monkeypatch, capsys):
+    def run(client):
+        raise apiclient.ApiError("unreachable", "the mccontrol API cannot be reached", 0)
+    monkeypatch.setattr(MeshcoreCommander, "run", run)
+    assert cli.main(["--ui", "MeshcoreCommander"]) == 1
+    assert capsys.readouterr().err == "mccontrol: the mccontrol API cannot be reached\n"
+
+
+def test_discovery_says_why_when_the_regions_cannot_be_resolved():
+    from mccontrol.ui.MeshcoreCommander.app import App
+
+    class Client:
+        def resolve_regions(self, text):
+            raise apiclient.ApiError("unreachable", "the mccontrol API cannot be reached", 0)
+
+        def start_discover(self, *a, **k):
+            raise AssertionError("nothing may start")
+    app = App.__new__(App)                       # no terminal: only what discover() reads
+    app.client, app.right_mode, app.devices, refused = Client(), "history", [], []
+    app.ask_region = lambda *a, **k: "JKG"
+    app.refuse = lambda why, title="Not done": refused.append(why)
+    app.discover()
+    assert refused == ["the mccontrol API cannot be reached"]

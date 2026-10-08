@@ -902,7 +902,11 @@ class App:
                                  hint="One IATA code, several with commas, or * for every region you have.")
         if not region:
             return
-        asked = ", ".join(self.client.resolve_regions(region)["regions"]) or region
+        try:
+            asked = ", ".join(self.client.resolve_regions(region)["regions"]) or region
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
         known = {d["node"] for d in self.devices}
 
         def describe(job):
