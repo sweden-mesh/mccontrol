@@ -21,7 +21,11 @@ def test_the_command_line_round_trip(tmp_path, monkeypatch, capsys):
     assert "set mqtt.cmd.pubkey" in capsys.readouterr().out
     assert cli.main(["keygen"]) == 1                        # refuses to overwrite
     assert cli.main(["config", "--username", "mcoar"]) == 0
-    assert "mcoar" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "username     mcoar\npassword     (not set)\n" in out and "password_set" not in out
+    assert cli.main(["config", "--password", "hunter2"]) == 0
+    out = capsys.readouterr().out
+    assert "password     (set)\n" in out and "hunter2" not in out
     assert cli.main(["add", "LOUTEST", NODE, "jkg", "bench"]) == 0
     assert cli.main(["devices"]) == 0
     out = capsys.readouterr().out

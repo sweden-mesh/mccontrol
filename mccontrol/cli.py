@@ -185,9 +185,13 @@ def _config(api, args):
     changes = {k: v for k, v in changes.items() if v is not None}
     config = api.set_config(**changes) if changes else api.config()
     for key, value in config.items():
+        if key == "password_set":
+            continue                              # shown after the username, as the password
         if key == "columns":
             value = ",".join(value)
-        print(f"{key:12} {'(set)' if key == 'password' else value}")
+        print(f"{key:12} {value}")
+        if key == "username":
+            print(f"{'password':12} {'(set)' if config.get('password_set') else '(not set)'}")
     return 0
 
 
