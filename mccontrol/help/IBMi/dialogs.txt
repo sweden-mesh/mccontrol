@@ -1,0 +1,16 @@
+Prompts
+
+A prompt screen asks for the values a verb needs, one field per line:
+type into the field, Tab or Down to the next, Shift+Tab or Up to the one
+before. Enter does it; F3 or F12 leaves and sends nothing; F1 explains.
+In a command field Up and Down recall earlier commands instead, and on
+Send a Command F4 prompts one from the list (see [[commandlist]]).
+
+A command that takes something away from a repeater first shows a
+Confirm screen saying what it does: Enter sends it, F12 sends nothing.
+See [[cautions]].
+
+While a command is out, the message line counts the wait; F12 or Esc
+stops waiting and keeps what has come.
+
+Back to [[index]].

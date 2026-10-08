@@ -450,8 +450,9 @@ def test_11_picks_the_directory_columns(api):
 
 def test_f1_opens_help_for_the_screen_follows_a_link_and_help_names_a_topic(api):
     text = walk(api, [(b"1\r", 0.6), (F[1], 0.6), (b"\r", 0.6), (F[11], 0.6), (F[3], 0.4), (F[3], 0.4), (b"help cautions\r", 0.6)])
-    assert "Help: The screen" in text                             # Work with Devices opens "screen"
-    assert "Help: Keys on the main screen" in text                # its first link, followed with Enter
+    assert "Help: The screen" in text and "Opt column" in text    # Work with Devices opens its own "screen"
+    assert "Help: Keys on the green screen" in text               # its first link, followed with Enter: IBMi's keys
+    assert "1=Tag/untag" in text and "Alt+F1" not in text and "Options >" not in text
     assert "Help Contents" in text and "5=Display" in text
     assert "Help: Commands that take something away" in text
 

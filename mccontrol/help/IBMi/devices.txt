@@ -1,0 +1,34 @@
+Devices
+
+A device is a repeater you manage: a name you choose, its node id (the
+first eight hex characters of its public key, which is how the firmware
+names it on the control topics), the region its observers use (the IATA
+code, such as JKG), and notes.
+
+2=Change edits a device's name, region and notes. 4=Forget forgets it
+after a Confirm screen; its history file stays on disk. Devices are
+added by [[discover]] or by hand on the command line (see [[cli]]).
+
+A device with no region cannot be sent to; give it one with 2. A region
+belongs to the device, not to the program: you may run repeaters in
+several.
+
+Back to [[index]].
+
+Names and versions from the fleet. 11=Name and version, F10, or "names"
+on a ===> line sends "get name" and "ver" to the rows you typed 11 by,
+or the tagged devices, or the cursor row: a device you have not named
+takes the name the node answers with, a name you gave is kept, and every
+device stores its firmware version, shown short in the Ver column
+(1.17.1-ar-10) and sortable. Two signed reads per device, each one of
+the node's command slots this hour; more than three devices asks first.
+Firmware that admits neither read answers not-allowed and the device
+keeps what it had. "mccontrol refresh" does the same from the command
+line.
+
+The whole key. A node on the firmware of 2026-10-08 or later (ar-11)
+listens on a topic named by its whole 64-character key; older firmware
+by the first 8. The tool keeps the whole key on the device when it
+knows it -- a discovery sees it on the node's answer, and "mccontrol add
+<name> <64 hex> <region>" stores it -- and addresses each node by the
+form its firmware uses. The 8-character id stays the name you see.

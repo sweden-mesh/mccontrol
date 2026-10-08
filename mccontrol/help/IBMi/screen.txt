@@ -1,0 +1,40 @@
+The screen
+
+The main menu is a numbered list: type the number on the ===> line and
+press Enter (see [[keys]] for every selection). The box at the right says
+which broker you use, whether there is a signing key and whether it is
+registered, and how many devices you have.
+
+Work with Devices (1) is the device directory: one row per repeater you
+manage, with its name, node id, region, when you last sent to it, its
+battery and last-seen age once asked for, and what it answered. A ">"
+before a row marks it tagged: type 1 in its Opt column and press Enter.
+"tag <region>", "untag" and "invert" on the ===> line tag a region,
+clear the tags, invert them. The count of tags and the sort are at the
+right above the headings.
+
+Type an option by any number of rows and press Enter; each runs in turn.
+5=Display shows the device and its history (see [[history]]), 8=Last
+answers what it last said to each read (see [[reads]]).
+
+The line above the function keys is the message line: the outcome of the
+last thing you did, or why it was refused.
+
+Batt and Seen come from Beacon when you ask (F7); see [[stats]].
+
+A name ending in " ?" marks a device something was sent to and nothing
+heard from for seven days -- no result over the control plane and no
+status seen by Beacon. It is a device to look at, not a verdict: the
+control plane may be off, or the node may answer another key now. A
+device never sent to carries no mark, since nothing is known. Nothing
+refreshes by itself; 6, F7 and 11 ask when you do.
+
+Every wait -- a send, a discovery, a set, a read from Beacon -- shows its
+progress and the seconds waited on the message line; F12 stops waiting
+early and keeps what has come.
+
+On an 80-column terminal not every column fits: 11 on the main menu
+picks which of Reg, Sent, Batt, Seen, Ver and Result show after the name
+and node ("mccontrol config --columns ver,result" does the same).
+
+See [[send]] for sending, [[discover]] for finding repeaters.

@@ -9,6 +9,11 @@ from . import fmt
 from .panels import OptList, confirm, form, show
 from .terminal import ENTER, EXIT, fkey
 
+UI = "IBMi"                              # the name the API's help is asked for
+# Every key the screens answer, by the name the help texts give it; tests/test_help.py
+# checks this interface's help against it. Shift+F1-F9 arrive as F13-F21, as on a 5250.
+KEY_NAMES = ("F1", "F3", "F4", "F5", "F6", "F7", "F9", "F10", "F11", "F12", "F13-F21", "Shift+F1-F9", "Alt+1..9",
+             "Enter", "Esc", "Tab", "Shift+Tab", "Up", "Down", "PgUp", "PgDn", "Backspace", "Del", "Space", "Ctrl+L")
 MENU = [("1", "Work with devices"), ("2", "Send a command"), ("3", "Send a command to every node in a region"),
         ("4", "Run a command set"), ("5", "Discover devices"), ("6", "Work with command sets"),
         ("7", "Work with shortcuts"), ("8", "Work with signing key"), ("9", "Change configuration"),
@@ -813,12 +818,12 @@ class App:
         back, F11 is the contents."""
         if topic is None and context is not None:
             if self.contexts is None:
-                self.contexts = (self.call(self.c.help_index) or {}).get("context", {})
+                self.contexts = (self.call(self.c.help_index, ui=UI) or {}).get("context", {})
             topic = self.contexts.get(context, "screen")
         stack = [topic] if topic else []
         while True:
             if not stack:
-                index = self.call(self.c.help_index) or {"topics": []}
+                index = self.call(self.c.help_index, ui=UI) or {"topics": []}
                 lst = OptList(self.t, "Help Contents", VIEW_KEYS, legend=["5=Display"], header=f"{'Topic':14} Title",
                               prompt=None, context=None)
                 lst.set_rows([(f"{t['name']:14} {t['title']}", "normal", t["name"]) for t in index["topics"]])
@@ -826,7 +831,7 @@ class App:
                 if key not in ENTER or not picks:
                     return
                 stack.append(picks[0][1])
-            topic = self.call(self.c.help_topic, stack[-1])
+            topic = self.call(self.c.help_topic, stack[-1], ui=UI)
             if topic is None:
                 stack.pop()
                 if not stack:

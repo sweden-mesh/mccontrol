@@ -1,0 +1,52 @@
+Keys on the green screen
+
+Function keys, as the bottom lines of each screen label them. Everywhere:
+
+  F1        help for the screen you are on: see [[index]]
+  F3        exit: back to the screen before, or sign off from the menu
+  F12       cancel: back one screen; on a wait, stop waiting
+  F5        refresh the list
+
+On Work with Devices:
+
+  F6        discover: see [[discover]]
+  F7        Batt and Seen from Beacon for the tagged devices, or all
+  F9        send a command to the tagged devices, or the cursor row
+  F10       read names and versions: see [[devices]]
+  F11       the next sort
+  F13-F21   Shift+F1-F9, or Alt+1..9: a shortcut, see [[shortcuts]]
+
+Elsewhere: F4 on Send a Command prompts the command from the list; F6
+adds every found device on Work with Found Devices and creates a set on
+Work with Command Sets; F10 and F11 on Statistics widen it to 48 hours
+and 7 days; F10 on Change Configuration saves and tests; F11 in help
+shows the contents.
+
+Options, typed in the Opt column of Work with Devices, then Enter:
+
+  1=Tag/untag  2=Change  4=Forget  5=Display  6=Statistics  7=Commands
+  8=Last answers  9=Send  10=Regions  11=Name and version
+
+Other lists show their own options above the column headings. Space or
+Backspace clears an option; several rows may carry one at once.
+
+Main menu selections, typed on the ===> line: 1 Work with devices, 2 Send
+a command, 3 to every node in a region, 4 Run a command set, 5 Discover,
+6 Work with command sets, 7 Work with shortcuts, 8 Work with signing key,
+9 Change configuration, 10 Test the broker connection, 11 Change
+directory columns, 12 Display broadcast history, 13 Help contents, 90
+Sign off.
+
+Commands, typed on any ===> line:
+
+  send <device> <command>   all <region> <command>   discover <region>
+  run <set> [arg]   alt <n>   names   fleet   tag <region>   untag
+  invert   sort <by>   devices   help [topic]
+
+On Work with Devices they act on the tagged rows, or the cursor row:
+"send <command>" needs no device there, and "stats [24h|48h|168h]" shows
+the cursor row's statistics.
+
+Tab moves between the list and the ===> line, and between fields; Up and
+Down move the cursor, PgUp and PgDn roll a page. Enter does what was
+typed. Ctrl+L redraws the screen.

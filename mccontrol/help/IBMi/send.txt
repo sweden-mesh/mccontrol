@@ -1,0 +1,30 @@
+Sending a command
+
+Send a Command (2 on the main menu, 9 by a row, or F9) has two fields:
+the devices -- names or node ids with commas between, or *TAGGED for the
+tagged ones -- and the command. Up and Down recall earlier commands; F4
+prompts one from the list (see [[commandlist]]). Nothing is sent until
+you press Enter. Each device gets its own signed publish; Command Results
+then shows one line per device with its signature and result, and how
+many answered. 5 by a line displays the whole reply.
+
+On a ===> line, "send <device> <command>" does the same in one go, and
+on Work with Devices "send <command>" goes to the tagged rows, or the
+cursor row.
+
+3 on the main menu, or "all <region> <command>", sends to every node in
+a region instead: one signed publish to the region's broadcast topic,
+answered by every node there that holds your key. A command that
+transmits on the air (a "trigger") cannot be sent to a region; the
+firmware refuses it and so does this.
+
+Tagged devices in two different regions cannot be sent to at once: a send
+is to one region.
+
+Commands that take something away ask first; see [[cautions]]. For what a
+repeater admits, see [[commands]]. A refusal is explained in words:
+"refused: not-allowed" means the firmware does not admit that command;
+"rate-limited" means wait a few minutes; "sig-invalid" means the node
+holds a different public key than yours (see [[signing]]).
+
+Related: [[history]], [[protocol]].

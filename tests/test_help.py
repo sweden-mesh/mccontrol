@@ -104,17 +104,24 @@ def _has(key, names):
 
 
 def _key_names():
+    from mccontrol.ui.IBMi import app as ibmi
     from mccontrol.ui.MeshcoreCommander import app as commander
-    return {"MeshcoreCommander": commander.KEY_NAMES}
+    return {"MeshcoreCommander": commander.KEY_NAMES, "IBMi": ibmi.KEY_NAMES}
+
+
+# The topics that are how an interface works; every interface has its own text for each.
+MECHANICS = {"index", "keys", "screen", "dialogs", "commandlist", "devices", "send"}
 
 
 def test_every_key_an_interfaces_help_names_is_a_key_it_has():
     for ui, names in _key_names().items():
         paths = sorted((helptext.HERE / ui).glob("*.txt"))
-        assert paths, ui
+        assert MECHANICS <= {p.stem for p in paths}, ui
         for path in paths:
-            unknown = [k for k in named_keys(path.read_text(encoding="utf-8")) if not _has(k, names)]
+            text = path.read_text(encoding="utf-8")
+            unknown = [k for k in named_keys(text) if not _has(k, names)]
             assert not unknown, (ui, path.name, unknown)
+            assert ui == "MeshcoreCommander" or not MENU.search(text), (ui, path.name, MENU.findall(text))
 
 
 def test_the_shared_texts_name_no_interfaces_keys_or_menus():
