@@ -85,9 +85,10 @@ firmware refuses it.
 - **Command sets.** A named list of steps (`region put`, `region allowf`, `region save`, `region`
   is the shipped example) sent in order to the targets, stopping at the first refusal or silence;
   Send > Command set runs one, Options > Command sets defines one.
-- **Statistics.** What the fleet knows about a device, from a Beacon server (read-only HTTP, no
-  credentials): the node's status block with the sample's age, and its telemetry history. The
-  node's own counters are serial-only in the firmware, so nothing here goes over the control plane.
+- **Statistics.** The node's own counters first, by one signed `get stats` (firmware of
+  2026-10-08 or later; older firmware answers not-allowed and the view says so), then what a
+  Beacon server holds (read-only HTTP, no credentials): the status block with the sample's age
+  and the telemetry history.
 - **Help.** Topics with cross-links, a command reference, and the same text on the command line:
   `mccontrol help commands`.
 

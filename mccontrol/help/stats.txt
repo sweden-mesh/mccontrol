@@ -8,16 +8,18 @@ in six-hour steps. View > Last 48 hours and Last 7 days widen the
 history. Enter opens a line in full; moving the cursor returns the
 panel to history.
 
-Where it comes from. A repeater's counters cannot be read over the
-control plane (that read is serial-only in the firmware), so the
-numbers come from a Beacon server -- an open-source MeshCore
+Where it comes from. First the node itself: "s" sends one signed
+"get stats" (one of the node's command slots this hour), and a node on
+the firmware of 2026-10-08 or later answers its counters at that
+moment, shown as "live, just now" at the top; older firmware answers
+not-allowed and the view says so. Then a Beacon server -- an open-source MeshCore
 observation service that ingests the MQTT brokers and serves a read-
 only API with no credentials. The default is beacon.meshat.se, which
 covers Sweden; Options > Broker has the URL for another region's
 Beacon, and so does
 
   mccontrol config --beacon-url https://beacon.example/api/v1
-  mccontrol stats loutest [--range 24h|48h|168h] [--interval 1h|6h|24h]
+  mccontrol stats loutest [--live] [--range 24h|48h|168h] [--interval 1h|6h|24h]
 
 "r" (View > Refresh Batt/Seen) fills the directory's Batt and Seen
 columns -- battery in volts and the age of the node's last status --

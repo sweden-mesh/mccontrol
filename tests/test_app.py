@@ -268,9 +268,12 @@ def test_options_defines_a_set(tmp_path):
 
 def test_s_shows_the_cursor_devices_statistics_from_beacon_and_says_when_there_are_none(tmp_path):
     fake = str(pathlib.Path(__file__).parent / "data" / "beacon-fake.json")
-    text, _ = walk(tmp_path, [(DOWN, 0.3), (b"s", 1.0), (b"\x1bOA", 0.3), (b"s", 1.0)], env={"MCCONTROL_FAKE_BEACON": fake}, rows=40)   # tall: the telemetry rows sit below the stats
-    assert "Stats: Gisebo" in text and "sampled" in text and "4261 mV" in text and "dd hh:mm" in text
-    assert "Stats: Far" in text and "no statistics" in text
+    live = json.dumps({"4AC61A7F|get stats": [0, "> batt=4100mV up=99s noise=-120"], "FD700369|get stats": [14, ""]})
+    text, _ = walk(tmp_path, [(DOWN, 0.3), (b"s", 2.0), (b"\x1bOA", 0.3), (b"s", 2.0)],
+                   env={"MCCONTROL_FAKE_BEACON": fake, "MCCONTROL_FAKE_RESULTS": live}, rows=48, seconds=6.0)
+    assert "Stats: Gisebo" in text and "live, just now" in text and "4100 mV" in text     # the node's own, first
+    assert "Beacon: sampled" in text and "4261 mV" in text and "dd hh:mm" in text        # then Beacon's, with its age
+    assert "Stats: Far" in text and "no statistics" in text and "older firmware" not in text[:0]
 
 
 def test_r_refreshes_batt_and_seen_from_beacon_for_the_tagged_devices(tmp_path):

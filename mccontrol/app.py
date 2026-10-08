@@ -559,21 +559,22 @@ class App:
             self.message.say("No device under the cursor.", error=True)
             return
         name = d.get("name") or d["node"]
-        box = Progress(self.screen, "Statistics", f"Asking Beacon about {name}", self.draw)
-        box.tick("one read, a few seconds", 0.0)
+        progress, box = self.waiting("Statistics", f"get stats to {name}, then Beacon",
+                                     lambda nodes: "answered" if nodes else "waiting for the live sample")
         try:
-            lines = actions.statistics(self.store, d, range_, interval)
+            lines = actions.statistics(self.store, d, range_, interval, live=True, progress=progress)
         except beacon.BeaconError as exc:
             box.close()
             self.show_results(f"Stats: {name[:28]}", [f"no statistics: {exc}"])
             self.message.say(f"No statistics: {exc}", error=True)
             return
         box.close()
-        summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
-        try:
-            self.store.remember_read(d["node"], "stats (Beacon)", summary[:60])
-        except _store.StoreError:
-            pass
+        if not lines[0].startswith("live"):                 # a live answer is kept by send() itself
+            summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
+            try:
+                self.store.remember_read(d["node"], "stats (Beacon)", summary[:60])
+            except _store.StoreError:
+                pass
         self.reload()
         self.show_results(f"Stats: {name[:28]}", lines)
         self.message.say(lines[0] + ". Enter opens a line; the cursor returns to history.")

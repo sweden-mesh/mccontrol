@@ -31,6 +31,7 @@ ON_OFF = ("on", "off")
 TABLE = (
     # reads: what a node will tell you
     _c("ver", "reads", read=True),
+    _c("get stats", "reads", read=True),
     _c("get name", "reads", read=True),
     _c("get autoreply", "reads", read=True),
     _c("region", "reads", read=True),

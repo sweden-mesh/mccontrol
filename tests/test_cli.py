@@ -70,7 +70,7 @@ def test_stats_from_the_command_line(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
     assert cli.main(["stats", "gisebo"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("sampled ") and "battery            4261 mV" in out and "last 24h at 6h:" in out
+    assert out.startswith("Beacon: sampled ") and "battery            4261 mV" in out and "last 24h at 6h:" in out
     assert out.count("\n") >= 17
     assert cli.main(["stats", "braneryd"]) == 1
     assert "never published" in capsys.readouterr().err

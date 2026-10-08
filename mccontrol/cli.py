@@ -67,6 +67,7 @@ def build_parser():
     sts.add_argument("device")
     sts.add_argument("--range", default="24h", choices=("24h", "48h", "168h"))
     sts.add_argument("--interval", default="6h", choices=("1h", "6h", "24h"))
+    sts.add_argument("--live", action="store_true", help="send 'get stats' first (one command slot) and show it above Beacon's")
     fl = sub.add_parser("fleet", help="battery and last-seen for every device, refreshed from Beacon")
     fl.add_argument("device", nargs="*", help="only these devices (default: all)")
     rf = sub.add_parser("refresh", help="read name and version from devices over the control plane")
@@ -221,7 +222,7 @@ def _stats(store, args):
     from . import beacon
     device = _device(store, args.device)
     try:
-        print("\n".join(actions.statistics(store, device, args.range, args.interval)))
+        print("\n".join(actions.statistics(store, device, args.range, args.interval, live=args.live)))
     except beacon.BeaconError as exc:
         print(f"no statistics: {exc}", file=sys.stderr)
         return 1

@@ -2,7 +2,7 @@
 
 import datetime
 
-from . import beacon, commands, denylist, envelope, store as _store, transport
+from . import beacon, commands, denylist, envelope, nodestats, store as _store, transport
 from .store import _now as _store_now
 
 # Commands that take something away from a repeater. Each is sent only after the person has
@@ -126,16 +126,49 @@ def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=Non
     return lines, stopped
 
 
-def statistics(store, device, range_="24h", interval="6h"):
-    """The lines to show for a device's statistics: the sample with its age, then the
-    telemetry buckets. Raises `beacon.BeaconError` with the reason when there are none."""
-    sample = beacon.stats(store, device)
+def live_statistics(store, device, progress=None):
+    """One signed `get stats` to the device: `(lines, note)`. `lines` is the sample as
+    `beacon.stat_lines` lays it out, headed "live, just now"; empty when the node did not
+    answer or refused, with `note` saying which (older firmware answers not-allowed)."""
+    try:
+        _t, _p, answers, _l = send(store, "get stats", device=device, progress=progress)
+    except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
+        return [], f"live: {exc}"
+    r = answers.get(device["node"])
+    if r is None:
+        return [], "live: no answer"
+    if not r.ok:
+        return [], f"live: refused {r.code_name}" + (" (older firmware: the read needs the 2026-10-08 build)" if r.code == 14 else "")
+    block = nodestats.parse(r.reply)
+    if not block:
+        return [], f"live: {r.reply[:40]}"
+    sample = {"stats": block, "sampled_at": None, "age_secs": 0, "firmware": "", "model": "", "name": ""}
     lines = beacon.stat_lines(sample)
+    lines[0] = "live, just now (get stats)"
+    return lines, ""
+
+
+def statistics(store, device, range_="24h", interval="6h", live=False, progress=None):
+    """The lines to show for a device's statistics: the live sample first when asked for
+    and answered, then Beacon's sample with its age and the telemetry buckets. Raises
+    `beacon.BeaconError` with the reason when Beacon has none and there is no live one."""
+    head = []
+    if live:
+        live_lines, note = live_statistics(store, device, progress=progress)
+        head = live_lines + [""] if live_lines else [note, ""]
+    try:
+        sample = beacon.stats(store, device)
+    except beacon.BeaconError as exc:
+        if head and head[0].startswith("live, just now"):
+            return head + [f"Beacon: {exc}"]
+        raise
+    lines = beacon.stat_lines(sample)
+    lines[0] = "Beacon: " + lines[0]
     try:
         points = beacon.telemetry(store, device, range_, interval)
     except beacon.BeaconError as exc:
-        return lines + ["", f"no telemetry: {exc}"]
-    return lines + ["", f"last {range_} at {interval}:"] + beacon.telemetry_lines(points)
+        return head + lines + ["", f"no telemetry: {exc}"]
+    return head + lines + ["", f"last {range_} at {interval}:"] + beacon.telemetry_lines(points)
 
 
 def refresh_fleet(store, devices, now=None):
