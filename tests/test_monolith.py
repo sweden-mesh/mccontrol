@@ -619,3 +619,16 @@ def test_q_during_a_job_nothing_can_cut_short_says_it_waits():
     except _board.Quit:
         pass
     assert said == ["waiting for the broker test to finish, then quitting"]
+
+
+def test_the_launcher_lists_monolith_and_starts_it_on_a_live_api(tmp_path, monkeypatch, capsys):
+    from mccontrol import cli, launch
+    from mccontrol.ui import Monolith
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    assert cli.main([]) == 0
+    assert launch.interfaces()["Monolith"] == Monolith.DESCRIPTION and Monolith.DESCRIPTION in capsys.readouterr().out
+    assert cli.main(["--ui", "Monolith"]) == 2                  # the real run: no terminal under pytest
+    assert "Monolith needs a terminal" in capsys.readouterr().err
+    seen = []
+    monkeypatch.setattr(Monolith, "run", lambda client: seen.append(client.devices()["devices"]) or 0)
+    assert cli.main([]) == 0 and seen == [[]]                   # kept as the default, run over the API
