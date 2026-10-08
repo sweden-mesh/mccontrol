@@ -25,11 +25,16 @@ class App:
         self.devices = []
         w, h = screen.size
         split = w // 2
-        self.left = Panel(1, 0, split, h - 3, "Devices")
-        self.right = Panel(1, split, w - split, h - 3, "History")
+        total = h - 3
+        lower_h = max(5, total // 3)                 # "Last answers" under the history
+        self.left = Panel(1, 0, split, total, "Devices")
+        self.right = Panel(1, split, w - split, total - lower_h, "History")
+        self.lower = Panel(1 + total - lower_h, split, w - split, lower_h, "Last answers")
         self.left.active = True
         self.list = ListView(self.left, header=1)
         self.view = ListView(self.right)
+        self.reads_view = ListView(self.lower)
+        self.reads_rows = []                 # (command, reply, at) behind the lower panel
         self.found = []                      # the last discovery's entries
         self.right_rows = []                 # (line, full_text) pairs behind the right panel
         self.right_mode = "history"          # "history" | "results" | "found" | "regions"
@@ -96,6 +101,7 @@ class App:
                 if d["node"] == cursor_node:
                     self.list.cursor = i
         self.left.footer = directory.tag_footer(len(self.list.tags), len(self.devices))
+        self.show_reads(self.cursor_device)
 
     def show_history(self, device):
         """The right panel follows the cursor: the device's history, newest first."""
@@ -114,6 +120,28 @@ class App:
             self.view.set_rows(["(nothing sent yet)"], keep=False)
             self.right_rows = [("", ["Nothing has been sent to this device yet."])]
 
+    def show_reads(self, device):
+        """The lower right panel: what this device last answered to each read, newest first."""
+        self.reads_node = (device or {}).get("node")
+        self.reads_rows = self.store.reads(device) if device else []
+        width = self.lower.inner[2] - 1
+        rows = []
+        for command, reply, at in self.reads_rows:
+            age = directory.relative(at)
+            rows.append(f"{age:>5} {command[:12]:12} {reply}"[:width])
+        self.reads_view.set_rows(rows or ["(nothing read yet)"], keep=False)
+
+    def reread(self):
+        """Enter on a line of the lower panel: send that read again to the cursor device."""
+        if not self.reads_rows or self.reads_view.cursor >= len(self.reads_rows):
+            return
+        command = self.reads_rows[self.reads_view.cursor][0]
+        self.send(initial=command, immediate=True)
+
+    def activate(self, which):
+        for panel in (self.left, self.right, self.lower):
+            panel.active = panel is which
+
     def show_results(self, title, lines, details=None):
         """After a send or a discovery: what came back, until the cursor moves."""
         self.right_mode, self.right_node = "results", None
@@ -125,6 +153,9 @@ class App:
         d = self.cursor_device
         if self.right_mode == "history" and (d or {}).get("node") != self.right_node:
             self.show_history(d)
+        if (d or {}).get("node") != getattr(self, "reads_node", None):
+            self.reads_node = (d or {}).get("node")
+            self.show_reads(d)
         elif self.right_mode == "results" and (d or {}).get("node") != self.right_node:
             pass
 
@@ -145,10 +176,12 @@ class App:
         s.erase()
         self.left.draw(s)
         self.right.draw(s)
+        self.lower.draw(s)
         y, x, w, _h = self.left.inner
         s.put(y, x + 1, directory.header(w), s.colors.desktop | curses.A_UNDERLINE)
         self.list.draw(s)
         self.view.draw(s)
+        self.reads_view.draw(s)
         self.menu.draw(s)
         self.message.draw(s)
         self.keybar.draw(s)
@@ -200,11 +233,15 @@ class App:
                     self.do("all")
             elif key == curses.KEY_F8:
                 self.do("forget")
-            elif key == 9:
-                self.left.active, self.right.active = self.right.active, self.left.active
+            elif key == 9:                                   # Tab cycles the three panels
+                order = (self.left, self.right, self.lower)
+                current = next((i for i, p in enumerate(order) if p.active), 0)
+                self.activate(order[(current + 1) % 3])
+            elif key in KEY_ENTER and self.lower.active:
+                self.reread()
             elif key == 27 and self.right_mode == "found":
                 self.right_mode = "history"
-                self.left.active, self.right.active = True, False
+                self.activate(self.left)
                 self.show_history(self.cursor_device)
             elif key == curses.KEY_MOUSE:
                 self.click()
@@ -223,7 +260,10 @@ class App:
                 if self.right_mode != "history":
                     self.right_mode = "history"        # a moved cursor ends a result view
                 self.show_history(self.cursor_device)
+                self.show_reads(self.cursor_device)
             elif self.right.active and self.view.handle(key):
+                pass
+            elif self.lower.active and self.reads_view.handle(key):
                 pass
 
     def click(self):
@@ -243,12 +283,15 @@ class App:
             if n:
                 curses.ungetch(curses.KEY_F0 + n)
         elif self.list.click(y, x):
-            self.left.active, self.right.active = True, False
+            self.activate(self.left)
             if self.right_mode != "history":
                 self.right_mode = "history"
             self.show_history(self.cursor_device)
+            self.follow_cursor()
         elif self.view.click(y, x):
-            self.right.active, self.left.active = True, False
+            self.activate(self.right)
+        elif self.reads_view.click(y, x):
+            self.activate(self.lower)
 
     def do(self, action):
         if action == "quit":
@@ -526,6 +569,12 @@ class App:
             self.message.say(f"No statistics: {exc}", error=True)
             return
         box.close()
+        summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
+        try:
+            self.store.remember_read(d["node"], "stats (Beacon)", summary[:60])
+        except _store.StoreError:
+            pass
+        self.reload()
         self.show_results(f"Stats: {name[:28]}", lines)
         self.message.say(lines[0] + ". Enter opens a line; the cursor returns to history.")
 
@@ -736,7 +785,7 @@ class App:
         lines = [self.found_line(e) for e in found]
         self.show_results(f"Found in {asked}: {len(found)}", lines or ["(no node answered)"])
         self.right_mode = "found" if found else "results"
-        self.right.active, self.left.active = True, False
+        self.activate(self.right)
         self.message.say(f"{len(found)} answered. Ins tags, F5 adds the tagged, F7 adds all, Esc returns."
                          if found else "No node answered: none there holds your key, or its control plane is off.",
                          error=not found)

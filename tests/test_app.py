@@ -268,7 +268,7 @@ def test_options_defines_a_set(tmp_path):
 
 def test_s_shows_the_cursor_devices_statistics_from_beacon_and_says_when_there_are_none(tmp_path):
     fake = str(pathlib.Path(__file__).parent / "data" / "beacon-fake.json")
-    text, _ = walk(tmp_path, [(DOWN, 0.3), (b"s", 1.0), (b"\x1bOA", 0.3), (b"s", 1.0)], env={"MCCONTROL_FAKE_BEACON": fake})
+    text, _ = walk(tmp_path, [(DOWN, 0.3), (b"s", 1.0), (b"\x1bOA", 0.3), (b"s", 1.0)], env={"MCCONTROL_FAKE_BEACON": fake}, rows=40)   # tall: the telemetry rows sit below the stats
     assert "Stats: Gisebo" in text and "sampled" in text and "4261 mV" in text and "dd hh:mm" in text
     assert "Stats: Far" in text and "no statistics" in text
 
@@ -359,3 +359,15 @@ def test_backing_out_of_a_parameter_sends_nothing(tmp_path):
     text, home = walk(tmp_path, [(b"\r", 0.6), (b"region put", 0.4), (b"\r", 0.6), (b"\x1b", 0.5)])
     assert "Examples:" in text
     assert not (home / "history" / "FD700369.jsonl").exists()
+
+
+def test_the_lower_panel_keeps_what_the_device_answered_and_enter_reads_it_again(tmp_path):
+    fake = json.dumps({"FD700369|ver": [0, "> v1.17.1-ar-10"], "4AC61A7F|ver": [0, "> v1.16.0"]})
+    # Alt+2 reads ver on Far; cursor down to Gisebo and back; Tab twice to the lower panel; Enter re-reads
+    text, home = walk(tmp_path, [(b"\x1b2", 1.5), (DOWN, 0.4), (b"\x1bOA", 0.4), (b"\t", 0.2), (b"\t", 0.2), (b"\r", 1.5)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=6.0)
+    assert "Last answers" in text
+    assert re.search(r"now ver\s+> v1\.17\.1", text)
+    assert "(nothing read yet)" in text                    # Gisebo, before anything was read from it
+    hist = (home / "history" / "FD700369.jsonl").read_text()
+    assert hist.count('"command": "ver"') == 2            # the shortcut, then the re-read from the lower panel
