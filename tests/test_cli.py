@@ -1,4 +1,3 @@
-import ast
 import pathlib
 
 import pytest
@@ -234,24 +233,3 @@ def test_ctrl_c_outside_a_job_exits_130_and_stops_the_server(tmp_path, monkeypat
     monkeypatch.setattr(apiclient.Client, "call", interrupted)
     assert cli.main(["devices"]) == 130
     assert capsys.readouterr().err == "interrupted\n" and len(stopped) == 1
-
-def test_the_command_line_imports_only_the_client_the_server_and_the_stdlib():
-    """Every import in cli.py is the stdlib, the API client or the server that starts the
-    backend; the one exception is the door to the screens, the launcher."""
-    import sys
-    tree = ast.parse(pathlib.Path(cli.__file__).read_text(encoding="utf-8"))
-    screens = next(n for n in ast.walk(tree) if isinstance(n, ast.If) and ast.unparse(n.test) == "args.command is None")
-    exempt = {id(n) for n in ast.walk(screens)}
-    found = set()
-    for n in ast.walk(tree):
-        if id(n) in exempt:
-            continue
-        if isinstance(n, ast.Import):
-            found |= {a.name for a in n.names}
-        elif isinstance(n, ast.ImportFrom):
-            base = "." * n.level + (n.module or "")
-            found |= {base} if n.module else {base + a.name for a in n.names}
-    package = {m for m in found if m.startswith(".")}
-    assert package == {".apiclient", ".api.server"}, package
-    assert not {m for m in found - package if m.split(".")[0] not in sys.stdlib_module_names}
-    assert {(a.name) for n in ast.walk(screens) if isinstance(n, ast.ImportFrom) for a in n.names} == {"launch"}

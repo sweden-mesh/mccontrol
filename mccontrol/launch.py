@@ -10,7 +10,7 @@ import pathlib
 import sys
 
 from . import apiclient
-from .api import serve, stop
+from .api.server import serve, stop
 
 UI = pathlib.Path(__file__).with_name("ui")
 

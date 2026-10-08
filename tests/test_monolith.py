@@ -1,10 +1,9 @@
-"""Monolith: its pure helpers, its isolation from the backend, and walks of every tile and
-overlay under a pseudo-terminal against an in-process API over the scripted broker."""
-import ast
+"""Monolith: its pure helpers and walks of every tile and overlay under a pseudo-terminal
+against an in-process API over the scripted broker. What it may import is pinned in
+test_isolation.py."""
 import curses
 import json
 import os
-import pathlib
 import pty
 import re
 import select
@@ -13,39 +12,6 @@ import time
 
 from conftest import BEACON_FAKE, NODES, SCRIPT, closed_port
 from mccontrol.ui.Monolith import art
-
-PACKAGE = pathlib.Path(__file__).parents[1] / "mccontrol" / "ui" / "Monolith"
-
-
-# -- the isolation ---------------------------------------------------------------------
-
-def imports(path, package="mccontrol.ui.Monolith"):
-    """Every module `path` imports, relative imports resolved against `package`."""
-    names = []
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.Import):
-            names += [a.name for a in node.names]
-        elif isinstance(node, ast.ImportFrom):
-            base = ".".join(package.split(".")[:len(package.split(".")) - node.level + 1]) if node.level else ""
-            module = ".".join(p for p in (base, node.module) if p)
-            names += [module] if node.module else [f"{module}.{a.name}" for a in node.names]
-    return names
-
-
-def test_monolith_imports_the_client_and_nothing_else_of_the_package():
-    backend = ("store", "actions", "transport", "beacon", "envelope", "firmware", "denylist", "commands", "directory",
-               "helptext", "api", "app", "cli", "ui")
-    seen = []
-    for path in PACKAGE.glob("*.py"):
-        for name in imports(path):
-            seen.append(name)
-            if name.startswith("mccontrol.ui.Monolith") or name == "mccontrol.apiclient":
-                continue
-            assert not name.startswith("mccontrol"), f"{path.name} imports {name}"
-            assert name.split(".")[0] in sys.stdlib_module_names, f"{path.name} imports {name}, not the stdlib"
-    assert "mccontrol.apiclient" in seen and "curses" in seen
-    assert not [n for n in seen if n.split(".")[:2] in [["mccontrol", b] for b in backend]
-                and not n.startswith("mccontrol.ui.Monolith")]
 
 
 def test_monolith_has_its_entry_and_a_one_line_description():

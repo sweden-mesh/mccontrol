@@ -1,9 +1,7 @@
 """IBMi, the 5250 green screen: a walk per screen under a pseudo-terminal, against an
-in-process API server over the scripted broker (the `api` fixture), the rule that it
-imports nothing of the package but the client, and its pure formatting helpers."""
-import ast
+in-process API server over the scripted broker (the `api` fixture), and its pure formatting
+helpers. What it may import is pinned in test_isolation.py."""
 import os
-import pathlib
 import pty
 import re
 import select
@@ -15,7 +13,6 @@ import pytest
 from mccontrol import transport
 from mccontrol.ui.IBMi import fmt
 
-PACKAGE = pathlib.Path(__file__).parents[1] / "mccontrol" / "ui" / "IBMi"
 F = {n: f"\x1b[{c}~".encode() for n, c in zip(range(5, 13), (15, 17, 18, 19, 20, 21, 23, 24))}
 F.update({1: b"\x1bOP", 2: b"\x1bOQ", 3: b"\x1bOR", 4: b"\x1bOS"})
 DOWN, UP, TAB = b"\x1bOB", b"\x1bOA", b"\t"
@@ -97,53 +94,6 @@ def walk(api, keys, cols=80, rows=24, raw=False):
         return s.text(raw)
     finally:
         s.close()
-
-
-BACKEND = {"store", "actions", "transport", "beacon", "envelope", "firmware", "denylist", "commands", "directory",
-           "helptext", "api", "app", "cli", "token", "nodestats", "ui"}
-
-
-def imports(path):
-    """`(level, module, names)` for every import in a file."""
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                yield 0, alias.name, []
-        elif isinstance(node, ast.ImportFrom):
-            yield node.level, node.module or "", [a.name for a in node.names]
-
-
-def violations(path):
-    """The imports in a file an interface may not make: anything of the package but the
-    client, a relative import out of its own directory, or a backend module by bare name."""
-    out = []
-    for level, module, names in imports(path):
-        where = f"{path.name}: {'.' * level}{module} {names}"
-        if level:
-            if level > 1:
-                out.append(where)
-        elif module.split(".")[0] == "mccontrol":
-            if not (module == "mccontrol.apiclient" or (module == "mccontrol" and names == ["apiclient"])):
-                out.append(where)
-        elif module.split(".")[0] in BACKEND:
-            out.append(where)
-    return out
-
-
-def test_ibmi_imports_nothing_of_the_package_but_the_client():
-    files = sorted(PACKAGE.glob("*.py"))
-    assert len(files) >= 2
-    assert [v for path in files for v in violations(path)] == []
-
-
-def test_the_isolation_check_catches_a_backend_import(tmp_path):
-    bad = tmp_path / "bad.py"
-    for line in ("from mccontrol import store", "from mccontrol import apiclient, actions", "import mccontrol.actions",
-                 "from ... import transport", "from ..screen import Screen", "from mccontrol.api import serve", "import envelope"):
-        bad.write_text(line + "\n")
-        assert violations(bad), line
-    bad.write_text("import curses\nfrom mccontrol.apiclient import ApiError\nfrom mccontrol import apiclient\nfrom . import fmt\n")
-    assert violations(bad) == []
 
 
 def test_the_interface_has_a_description_and_an_entry():
