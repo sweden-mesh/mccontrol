@@ -516,3 +516,12 @@ def test_a_greyed_entry_is_drawn_in_the_disabled_colour_and_names_the_build(tmp_
     assert admitted > 0 and greyed > 0
     before = lambda i: "".join(re.findall(r"\x1b\[[0-9;]*m", raw[max(0, i - 60):i]))
     assert before(admitted) != before(greyed), (before(admitted), before(greyed))
+
+
+def test_esc_during_a_wait_cancels_the_job_and_keeps_what_came(tmp_path):
+    # a 30-second wait: Esc cancels the job, and the answer already in is shown at once
+    fake = json.dumps({"FD700369": [0, "> v1.17.1-ar-11"]})
+    text, home = walk(tmp_path, [(b"\x1b2", 1.5), (b"\x1b", 1.5)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake, "MCCONTROL_FAKE_WAIT": "30"})
+    assert "Sending" in text and "Sent: ver" in text and "1 of 1 answered" in text
+    assert '"command": "ver"' in (home / "history" / "FD700369.jsonl").read_text()
