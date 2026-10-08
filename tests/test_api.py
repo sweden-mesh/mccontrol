@@ -114,7 +114,9 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert call(url, "GET", "/history?limit=5")[1]["node"] is None
     assert call(url, "GET", "/devices/gisebo/reads")[1]["reads"] == []
     table = call(url, "GET", "/devices/gisebo/commands")[1]
-    assert table["firmware"] == "ar-10" and table["greyed"] > 0           # no version read yet: the oldest
+    assert table["firmware"] == "ar-10" and table["greyed"] > 0 and table["revision"] is None   # no version read yet: the oldest
+    _store.update_device("FD700369", ver="esp32s3-v1.17.1-ar-11-observer-2c079ed7")
+    assert call(url, "GET", "/devices/far/commands")[1]["revision"] == 11
     assert call(url, "GET", "/commands")[1]["node"] is None
     check = call(url, "GET", "/commands/check?command=set+prv.key+00&device=gisebo")[1]
     assert check["refusal"].startswith("denied") and check["admitted"] is False

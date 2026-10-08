@@ -88,7 +88,7 @@ def command_list(d):
                          "caution": actions.caution(sample)})
         groups.append({"group": group, "commands": rows})
     return {"node": d["node"] if d else None, "firmware": firmware.entry_for(version)[0] if d else None,
-            "version": version, "greyed": greyed, "groups": groups}
+            "version": version, "revision": firmware.revision(version) if d else None, "greyed": greyed, "groups": groups}
 
 
 def public_config(store):

@@ -2125,6 +2125,11 @@
       "type": "string",
       "nullable": true
      },
+     "revision": {
+      "type": "integer",
+      "nullable": true,
+      "description": "the ar-N number the version reports; null when it reports none"
+     },
      "greyed": {
       "type": "integer"
      },
@@ -2139,6 +2144,7 @@
      "node",
      "firmware",
      "version",
+     "revision",
      "greyed",
      "groups"
     ]
