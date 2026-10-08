@@ -106,7 +106,7 @@ def main(argv=None):
         args = build_parser().parse_args(argv)
         if args.command is None:
             from . import launch
-            return launch.run(None, args.ui)
+            return launch.run(None, args.ui, args.api)
         with _client(args) as api:
             return COMMANDS[args.command](api, args)
     except ApiError as exc:
