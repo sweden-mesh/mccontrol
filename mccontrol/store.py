@@ -167,14 +167,6 @@ class Store:
         slots = [str(s).strip() for s in slots[:SHORTCUT_SLOTS]]
         return slots + [""] * (SHORTCUT_SLOTS - len(slots))
 
-    def set_shortcut(self, n, command):
-        if not 1 <= n <= SHORTCUT_SLOTS:
-            raise StoreError(f"a shortcut is Alt+1 to Alt+{SHORTCUT_SLOTS}")
-        slots = self.shortcuts()
-        slots[n - 1] = (command or "").strip()
-        self.save_config(shortcuts=slots)
-        return slots
-
     # -- devices -----------------------------------------------------------------------
 
     def devices(self):

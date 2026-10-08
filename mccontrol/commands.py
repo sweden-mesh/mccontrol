@@ -118,8 +118,6 @@ TABLE = (
     _c("set", "node", "text", examples=("set <key> <value>: anything the console takes",)),
 )
 
-BY_TEXT = {c.text: c for c in TABLE}
-
 
 def build(command, values):
     """The command text with the chosen values appended (a `multi` joins them by spaces)."""

@@ -63,7 +63,6 @@ def stale(device, now=None, days=STALE_DAYS):
 # picks which show, so an 80-column terminal (38 columns for the directory) sees what the
 # person asked for instead of the first that fit.
 COLUMNS = ("reg", "sent", "batt", "seen", "ver", "result")
-DEFAULT_COLUMNS = COLUMNS
 
 
 def row(device, width, now=None, columns=None):
@@ -126,9 +125,3 @@ def tag_footer(tagged, total):
     if tagged:
         return f"{tagged} of {total} tagged"
     return f"{total} device{'s' if total != 1 else ''}"
-
-
-def by_region(devices, region):
-    """Indexes of the devices in `region`, for tagging a region at once."""
-    region = (region or "").upper()
-    return [i for i, d in enumerate(devices) if (d.get("region") or "").upper() == region]

@@ -43,12 +43,6 @@ def test_the_footer_counts_tags():
     assert directory.tag_footer(2, 3) == "2 of 3 tagged"
 
 
-def test_tagging_a_region():
-    assert directory.by_region(_devs(), "jkg") == [0, 1]
-    assert directory.by_region(_devs(), "GOT") == [2]
-    assert directory.by_region(_devs(), "") == []
-
-
 def test_the_fleet_columns_show_battery_in_volts_and_the_age_of_the_last_status():
     d = dict(_devs()[1], fleet={"battery_mv": 4261, "seen": (NOW - datetime.timedelta(minutes=12)).isoformat(), "firmware": "x"})
     r = directory.row(d, 100, NOW)

@@ -30,7 +30,6 @@ ADMITTED = (
     ("ar-10", 10, AR10),
     ("ar-11", 11, None),
 )
-NEWEST = ADMITTED[-1][0]
 
 
 def revision(version_text):

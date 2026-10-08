@@ -8,10 +8,11 @@ def test_every_entry_travels_and_the_groups_are_in_order():
 
 
 def test_build_appends_the_values():
-    c = commands.BY_TEXT["set autoreply"]
+    by_text = {c.text: c for c in commands.TABLE}
+    c = by_text["set autoreply"]
     assert commands.build(c, ["off"]) == "set autoreply off"
-    assert commands.build(commands.BY_TEXT["trigger test"], [""]) == "trigger test"
-    assert commands.build(commands.BY_TEXT["region put"], ["se-jkp *"]) == "region put se-jkp *"
+    assert commands.build(by_text["trigger test"], [""]) == "trigger test"
+    assert commands.build(by_text["region put"], ["se-jkp *"]) == "region put se-jkp *"
 
 
 def test_reads_are_what_is_worth_keeping():
