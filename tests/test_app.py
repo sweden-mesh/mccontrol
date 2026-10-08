@@ -509,9 +509,10 @@ def test_a_greyed_entry_is_drawn_in_the_disabled_colour_and_names_the_build(tmp_
     raw = out.decode("utf-8", "replace")
     text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][0-9A-B]", " ", raw)
     assert "(needs ar-11)" in text                                   # a greyed entry names its build
-    # the SGR before an admitted row's text differs from the one before a greyed row's
-    admitted = re.search(r"(\x1b\[[0-9;]*m)+\s*get af\b", raw)
-    greyed = re.search(r"(\x1b\[[0-9;]*m)+\s*get stats", raw)
-    assert admitted and greyed
-    sgr = lambda m: "".join(re.findall(r"\x1b\[[0-9;]*m", raw[max(0, m.start() - 40):m.start() + 1]))
-    assert sgr(admitted) != sgr(greyed)
+    # the attributes in force before an admitted row's text differ from a greyed row's:
+    # the last SGR sequences within the 60 bytes before each
+    admitted = raw.find("get af")
+    greyed = raw.find("get stats")
+    assert admitted > 0 and greyed > 0
+    before = lambda i: "".join(re.findall(r"\x1b\[[0-9;]*m", raw[max(0, i - 60):i]))
+    assert before(admitted) != before(greyed), (before(admitted), before(greyed))
