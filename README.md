@@ -112,6 +112,20 @@ mccontrol history loutest
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```
 
+## Setting up a repeater
+
+Two lines over its serial console, on the firmware of 2026-10-08 or later (ar-11):
+
+```
+set mqtt.cmd.pubkey <your 64-hex public key>     # mccontrol key prints it
+set mqtt.cmd on                                  # takes a free slot, points it at mqtt.louie.se; reboot
+```
+
+The node answers `OK - slot 3, mccontrol (mqtts://mqtt.louie.se:8883), packets off; reboot to
+apply`. A board without PSRAM runs two MQTT slots at once; with both analyzer uplinks up it
+says so and asks you to turn one off (`set mqtt2.preset none`) rather than doing it for you.
+Then `mccontrol register` once per key, so the broker checks your commands before they fan out.
+
 ## Signing in
 
 With no username configured, the tool signs in to the broker the way a node does: the
