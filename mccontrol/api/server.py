@@ -11,7 +11,6 @@ import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import transport
 from . import errors, jobs, routes
 
 MAX_BODY = 1 << 20
@@ -38,8 +37,9 @@ class Locked:
 
 
 class Context:
-    def __init__(self, store):
+    def __init__(self, store, script=None):
         self.store = Locked(store)
+        self.script = script            # this server's stand-in broker, in tests; None in use
         self.tags = set()               # node ids; the interfaces' shared tag state
         self.jobs = jobs.Registry()
 
@@ -130,12 +130,9 @@ def serve(store, transport=None, port=0):
 
     `transport`, for tests: a scripted `{node or "node|command": [code, reply]}` object that
     stands in for the broker, as MCCONTROL_FAKE_RESULTS does. Returns `(server, base_url)`."""
-    if transport is not None:
-        _transport().FAKE_SCRIPT = transport
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
-    server.ctx = Context(store)
-    server.scripted = transport is not None
+    server.ctx = Context(store, transport)
     threading.Thread(target=server.serve_forever, name="mccontrol-api", daemon=True).start()
     return server, f"http://127.0.0.1:{server.server_address[1]}"
 
@@ -145,9 +142,3 @@ def stop(server):
     server.ctx.jobs.cancel_all()
     server.shutdown()
     server.server_close()
-    if server.scripted:
-        _transport().FAKE_SCRIPT = None
-
-
-def _transport():
-    return transport

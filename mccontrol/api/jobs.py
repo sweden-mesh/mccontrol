@@ -207,7 +207,7 @@ def start_send(ctx, _p, _q, body):
             job.update(expected=len(names), text=f"0 of {len(names)} known answered")
             topic, _pl, answers, lines = actions.send(
                 store, command, region=region, dry_run=dry, wait_secs=wait,
-                progress=ticker(job, lambda n: f"{n} of {len(names)} known answered", names, command))
+                progress=ticker(job, lambda n: f"{n} of {len(names)} known answered", names, command), script=ctx.script)
             for node, name in names.items():
                 job.land(outcome(node, name, command, answers.get(node), line="not sent (dry run)" if dry else None))
             job.update(answered=len(answers), text=f"{len(answers)} of {len(names)} known answered")
@@ -221,7 +221,7 @@ def start_send(ctx, _p, _q, body):
             label = _label(d)
             text = lambda _n, a=answered, label=label, i=i: f"{a} of {len(devices)} answered; waiting for {label} ({i + 1} of {len(devices)})"
             topic, _pl, answers, l = actions.send(store, command, device=d, dry_run=dry, wait_secs=wait,
-                                                  progress=ticker(job, text))
+                                                  progress=ticker(job, text), script=ctx.script)
             r = answers.get(d["node"])
             answered += r is not None
             asked += 1
@@ -255,7 +255,8 @@ def start_run_set(ctx, _p, _q, body):
             names = _in_region(ctx, region)
             job.update(expected=len(names))
             lines, stopped = actions.run_set(store, steps, region=region, dry_run=dry, wait_secs=wait,
-                                             on_step=on_step(job, region), progress=ticker(job, lambda n: f"{n} of {len(names)} known answered"))
+                                             on_step=on_step(job, region), progress=ticker(job, lambda n: f"{n} of {len(names)} known answered"),
+                                             script=ctx.script)
             return {"steps": steps, "lines": lines, "runs": [{"target": region, "stopped_at": stopped}]}
         lines, runs = [], []
         job.update(expected=len(devices))
@@ -264,7 +265,8 @@ def start_run_set(ctx, _p, _q, body):
                 break
             label = _label(d)
             l, stopped = actions.run_set(store, steps, device=d, dry_run=dry, wait_secs=wait, on_step=on_step(job, label),
-                                         progress=ticker(job, lambda n, label=label: f"{label}: {'answered' if n else 'waiting'}"))
+                                         progress=ticker(job, lambda n, label=label: f"{label}: {'answered' if n else 'waiting'}"),
+                                         script=ctx.script)
             lines += [f"== {label}"] + l
             runs.append({"target": d["node"], "stopped_at": stopped})
             line = (f"stopped at step {stopped + 1}: {steps[stopped]}" if stopped is not None
@@ -296,7 +298,8 @@ def start_discover(ctx, _p, _q, body):
                 break
             job.update(step=i)
             part = actions.discover(store, region, wait_secs=wait,
-                                    progress=ticker(job, lambda n, region=region: f"{region}: {n} answered ({i + 1} of {len(regions)} regions)"))
+                                    progress=ticker(job, lambda n, region=region: f"{region}: {n} answered ({i + 1} of {len(regions)} regions)"),
+                                    script=ctx.script)
             for e in part:
                 e = {"node": e["node"], "region": e["region"], "code": e["code"], "reply": e["reply"] or "",
                      "key": e.get("key"), "verified": e.get("verified"), "known_as": e.get("known_as"),
@@ -329,7 +332,8 @@ def start_refresh_names(ctx, _p, _q, body):
                 break
             label = _label(d)
             n, v, l = actions.refresh_names(store, [d], wait_secs=wait,
-                                            progress=ticker(job, lambda _n, label=label, i=i: f"get name and ver to {label} ({i + 1} of {len(devices)})"))
+                                            progress=ticker(job, lambda _n, label=label, i=i: f"get name and ver to {label} ({i + 1} of {len(devices)})"),
+                                            script=ctx.script)
             named, versioned, asked = named + n, versioned + v, asked + 1
             lines += l
             job.land({"node": d["node"], "name": label, "command": "get name, ver", "ok": v > 0, "code": None,
@@ -378,7 +382,8 @@ def start_statistics(ctx, _p, _q, body):
 
     def work(job):
         lines = actions.statistics(store, d, range_, interval, live=live,
-                                   progress=ticker(job, lambda n: "answered" if n else "waiting for the live sample"))
+                                   progress=ticker(job, lambda n: "answered" if n else "waiting for the live sample"),
+                                   script=ctx.script)
         if not lines[0].startswith("live"):             # a live answer is kept by send() itself
             summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
             store.remember_read(d["node"], "stats (Beacon)", summary[:60])
