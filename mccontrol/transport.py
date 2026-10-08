@@ -63,18 +63,18 @@ def _connect(client, config, timeout=10.0, seed_hex=None):
 
 
 FAKE_WAIT_SECS = float(os.environ.get("MCCONTROL_FAKE_WAIT", "0.6"))   # a faked send still waits a little, so a bar can be seen to move
-FAKE_SCRIPT = None      # the same object as MCCONTROL_FAKE_RESULTS, set by `api.serve(transport=...)` in tests
 
 
-def _fake(topic, command, counter, nodes):
+def _fake(topic, command, counter, nodes, script=None):
     """For the interface's pseudo-terminal tests only: MCCONTROL_FAKE_RESULTS holds a JSON
-    object `{node: [code, reply]}` and no broker is touched. Unset in normal use."""
+    object `{node: [code, reply]}` and no broker is touched. Unset in normal use. `script`
+    is the same object passed in directly, so one API server's script is its own."""
     import json
     import os
     spec = os.environ.get("MCCONTROL_FAKE_RESULTS")
-    if spec is None and FAKE_SCRIPT is None:
+    if spec is None and script is None:
         return None
-    scripted = FAKE_SCRIPT if FAKE_SCRIPT is not None else json.loads(spec)
+    scripted = script if script is not None else json.loads(spec)
     answers = {}
     nodes = list(nodes) or [k.split("|")[0] for k in scripted]      # a broadcast: everyone scripted
     for node in nodes:
@@ -103,7 +103,7 @@ def _wait(total, done, answered, progress):
 
 
 def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl_secs=None,
-         counter=None, progress=None, keys=None):
+         counter=None, progress=None, keys=None, script=None):
     """Sign `command` for `topic`, publish it, and collect results from `nodes_to_hear`.
 
     Returns `(payload, {node: Result})`. A node missing from the dict did not answer within
@@ -113,7 +113,7 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
     counter = int(time.time()) if counter is None else counter
     payload = envelope.build(seed_hex, topic, counter, command,
                              ttl_secs=ttl_secs or config.get("ttl_secs", envelope.DEFAULT_TTL_SECS))
-    faked = _fake(topic, command, counter, nodes_to_hear)
+    faked = _fake(topic, command, counter, nodes_to_hear, script)
     if faked is not None:
         _wait(FAKE_WAIT_SECS, lambda: False, lambda: list(faked), progress)
         return payload, faked
@@ -158,7 +158,7 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
 DISCOVERY_COMMAND = "get autoreply"
 
 
-def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, counter=None, progress=None):
+def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, counter=None, progress=None, script=None):
     """The nodes in `region` that accept your signing key: `[{node, region, code, reply}]`.
 
     One signed broadcast of a read to `meshcore/{IATA}/all/cmd` on the control broker, then
@@ -170,7 +170,7 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
     topic = envelope.command_topic(region)
     payload = envelope.build(seed_hex, topic, counter, DISCOVERY_COMMAND,
                              ttl_secs=config.get("ttl_secs", envelope.DEFAULT_TTL_SECS))
-    faked = _fake(topic, DISCOVERY_COMMAND, counter, ())
+    faked = _fake(topic, DISCOVERY_COMMAND, counter, (), script)
     if faked is not None:
         _wait(FAKE_WAIT_SECS, lambda: False, lambda: list(faked), progress)
         return [{"node": n[:envelope.NODE_HEX_LEN], "region": region.upper(), "code": r.code, "reply": r.reply,
