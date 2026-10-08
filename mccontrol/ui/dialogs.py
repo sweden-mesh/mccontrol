@@ -164,8 +164,27 @@ def confirm(screen, title, body, caution, yes="Send anyway", no="Cancel", redraw
     return bool(d.run(screen, redraw_under))
 
 
+def wrap_lines(lines, width):
+    """Each line wrapped at `width`, words whole; an empty line stays an empty line. A word
+    longer than the width is broken, so nothing is ever lost."""
+    import textwrap
+    out = []
+    for line in lines:
+        if not line.strip():
+            out.append("")
+            continue
+        out += textwrap.wrap(line, width=width, break_long_words=True, break_on_hyphens=False) or [""]
+    return out
+
+
 def notice(screen, title, lines, redraw_under=None):
-    d = Dialog(title, body=lines, buttons=[Button("OK", True, default=True)], width=max(40, min(76, max((len(l) for l in lines), default=20) + 6)))
+    """Free text in a window: a reply, a history line, a help note. Lines longer than the
+    window wrap rather than clip, and the window takes the screen's height when it must."""
+    _w, h = screen.size
+    width = max(40, min(76, max((len(l) for l in lines), default=20) + 6))
+    body = wrap_lines(lines, width - 6)
+    body = body[: max(1, h - 8)]                      # the frame, the button row and a margin
+    d = Dialog(title, body=body, buttons=[Button("OK", True, default=True)], width=width)
     d.focus = 0
     return d.run(screen, redraw_under)
 

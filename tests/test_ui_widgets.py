@@ -340,3 +340,12 @@ def test_the_choice_box_previews_and_the_multi_box_joins():
     assert many.preview() == "x a c"                     # in the choices' order, not the picking order
     none = ChoiceBox("trigger test", ["", "F", "P"])
     assert none.preview() == "trigger test"
+
+
+def test_notice_wraps_at_the_width_with_words_whole():
+    from mccontrol.ui.dialogs import wrap_lines
+    long = "Far          refused: not-allowed [the table says ar-11 admits this: the table or the version is wrong] -- The command is not on the node's allowlist."
+    out = wrap_lines([long, "", "short"], 70)
+    assert all(len(l) <= 70 for l in out) and out[-1] == "short" and "" in out
+    assert " ".join(l for l in out[:-2] if l) == long         # nothing lost, nothing cut inside a word
+    assert wrap_lines(["x" * 100], 40) == ["x" * 40, "x" * 40, "x" * 20]

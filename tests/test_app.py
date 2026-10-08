@@ -457,4 +457,11 @@ def test_a_refusal_the_table_did_not_expect_is_a_finding(tmp_path):
     # the result line is clipped by the panel; Tab to it and Enter opens the whole line
     text, _ = walk(tmp_path, [(b"\x1b2", 1.5), (b"\t", 0.3), (b"\r", 0.6)], env={"MCCONTROL_FAKE_RESULTS": fake},
                    prepare=_far_on("ar-11"), cols=120, seconds=4.0)
-    assert "the table says ar-11 admits this" in text
+    assert "the table says ar-11 admits this" in text and "version is wrong" in text
+
+
+def test_a_long_result_line_wraps_in_the_reply_window(tmp_path):
+    fake = json.dumps({"FD700369|ver": [14, ""]})
+    text, _ = walk(tmp_path, [(b"\x1b2", 1.5), (b"\t", 0.3), (b"\r", 0.6)], env={"MCCONTROL_FAKE_RESULTS": fake},
+                   prepare=_far_on("ar-11"), seconds=4.0)
+    assert "the table or the version is wrong" in text           # the tail, on a second line of the window
