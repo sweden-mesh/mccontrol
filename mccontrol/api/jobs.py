@@ -443,7 +443,10 @@ def get_job(ctx, params, _q, _b):
 
 def cancel_job(ctx, params, _q, _b):
     job = ctx.jobs.get(params["id"])
-    job.cancel.set()
+    with job.lock:
+        if job.status != "running":
+            raise ApiError(409, "finished", f"job {job.id} is already {job.status}")
+        job.cancel.set()
     return 202, job.snapshot()
 
 

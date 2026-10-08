@@ -1019,7 +1019,7 @@
    },
    "delete": {
     "operationId": "cancel_job",
-    "summary": "Cancel a job: the wait stops, what landed is kept",
+    "summary": "Cancel a running job: the wait stops, what landed is kept; a finished job is a 409 (finished)",
     "responses": {
      "202": {
       "description": "Accepted",
@@ -1036,6 +1036,9 @@
      },
      "404": {
       "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
      }
     },
     "parameters": [
@@ -1368,7 +1371,8 @@
          "internal",
          "cancelled",
          "forbidden",
-         "unsupported_media_type"
+         "unsupported_media_type",
+         "finished"
         ]
        },
        "message": {
@@ -3251,7 +3255,7 @@
     }
    },
    "Conflict": {
-    "description": "The state forbids it: a key exists, or a command that takes something away was not confirmed (confirm_required)",
+    "description": "The state forbids it: a key or a name exists (conflict), a command that takes something away was not confirmed (confirm_required), or the job has already finished (finished)",
     "content": {
      "application/json": {
       "schema": {
