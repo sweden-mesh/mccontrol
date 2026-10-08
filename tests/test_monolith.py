@@ -575,3 +575,10 @@ def test_moving_the_cursor_asks_only_for_the_new_devices_reads_and_history():
         assert board.step(curses.KEY_DOWN) == "nav"
     assert board.client.calls == [("reads", NODES[1][1]), ("history", NODES[1][1]),
                                   ("reads", NODES[2][1]), ("history", NODES[2][1])]   # the third move hits the end
+
+
+def test_without_a_utf8_locale_the_board_draws_in_ascii(tmp_path):
+    walk(tmp_path, [(DOWN, 0.3)], env={"LANG": "C", "LC_ALL": "C"})
+    screen = walk.screen
+    assert "+--" in screen and "| " in screen and "DEVICES" in screen and "Gisebo" in screen
+    assert not set(screen) & set("╭╮╰╯│─▁▂▃▄▅▆▇█◆◉●↵␣")

@@ -23,6 +23,19 @@ ENTERS = (curses.KEY_ENTER, 10, 13)
 TILES = ("devices", "device", "feed")   # what Tab cycles
 
 
+PLAIN = str.maketrans({"↵": "Enter", "␣": "Space", "…": "~", "▞": "/", "▚": "\\", "⌫": "BS", "↑": "^", "↓": "v"})
+
+
+def codeset():
+    """The encoding the terminal's locale names. Python's own UTF-8 mode reports utf-8
+    even under LANG=C, so the locale is asked; one that cannot be set is ASCII."""
+    try:
+        locale.setlocale(locale.LC_ALL, "")
+        return locale.nl_langinfo(locale.CODESET)
+    except (locale.Error, AttributeError):
+        return "ascii"
+
+
 class Cancel(Exception):
     """An overlay was left with Esc."""
 
@@ -34,7 +47,7 @@ class Quit(Exception):
 class Board:
     def __init__(self, win, client):
         self.win, self.client = win, client
-        self.g = art.glyphs(locale.getpreferredencoding(False))
+        self.g = art.glyphs(codeset())
         self.palette = "amber"
         self.colors = self._colors()
         self.started = time.time()
@@ -185,6 +198,8 @@ class Board:
 
     def put(self, y, x, text, role="base", attr=0):
         w, h = self.size
+        if self.g is art.ASCII:                 # a terminal that cannot carry the rest
+            text = text.translate(PLAIN).encode("ascii", "replace").decode("ascii")
         if not (0 <= y < h) or x >= w or x < 0:
             return
         try:
