@@ -82,4 +82,24 @@ def test_wait_job_cancels_when_on_progress_says_so(api, monkeypatch):
     with pytest.raises(apiclient.ApiError) as exc:
         c.wait_job(job["id"], poll=0.05, timeout=0.1)
     assert exc.value.code == "timeout"
-    assert c.cancel_job(job["id"])["cancel_requested"] is True
+    assert c.job(job["id"])["cancel_requested"] is True
+    assert c.wait_job(job["id"], poll=0.05, timeout=3)["status"] == "cancelled"
+    with pytest.raises(apiclient.ApiError) as exc:
+        c.cancel_job(job["id"])
+    assert (exc.value.code, exc.value.status) == ("finished", 409)
+
+
+def test_two_servers_keep_their_own_scripted_broker(api, tmp_path):
+    from mccontrol import store as _store
+    from mccontrol.api import serve, stop
+    _server, url, _s = api
+    other = _store.Store(tmp_path / "other")
+    other.create_key()
+    other.add_device("Gisebo", "4AC61A7F", "JKG")
+    server2, url2 = serve(other, transport={"4AC61A7F": [0, "> from two"]})
+    first, second = apiclient.Client(url), apiclient.Client(url2)
+    try:
+        assert second.wait_job(second.start_send("region", devices=["gisebo"])["id"])["outcomes"][0]["reply"] == "> from two"
+    finally:
+        stop(server2)
+    assert first.wait_job(first.start_send("region", devices=["gisebo"])["id"])["outcomes"][0]["reply"] == "> * F"

@@ -267,11 +267,11 @@ class Board:
         self.put(y, x, info[:w], "bright")
         row = y + 1
         pts = self.points(d["node"])
-        for label, field in (("BATT", "battery_mv"), ("NOISE", "noise_floor"), ("RXERR", "receive_errors"),
-                             ("TX AIR", "tx_air_secs")):
+        for label, field in (("BATT", "batteryMv"), ("NOISE", "noiseFloorDb"), ("RXERR", "receiveErrors"),
+                             ("TX AIR", "airtimeTxSecs")):
             if not pts or row >= y + h - 2:
                 break
-            values = [p[field] for p in pts]
+            values = [p.get(field) for p in pts]
             last = next((v for v in reversed(values) if v is not None), None)
             tail = f" {last:.0f}" if last is not None else ""
             self.put(row, x, f"{label:6}", "dim")
@@ -333,7 +333,8 @@ class Board:
             ("REG", f"{reg['at'][:10]}" if reg else "no  :register", "base" if reg else "accent"),
             ("LINK", ("ok " if (test["result"] or {}).get("ok") else "FAIL ") + test["started"][11:16] if test else "untested  :test",
              "base" if test and (test["result"] or {}).get("ok") else "accent"),
-            ("SIGN-IN", cfg.get("username") or "by key", "base"),
+            ("SIGN-IN", (f"{cfg['username']}, password {'set' if cfg.get('password_set') else 'not set'}"
+                         if cfg.get("username") else "by key"), "base"),
             ("JOBS", f"{sum(j['status'] == 'running' for j in self.jobs)} running, {len(self.jobs)} kept", "base"),
         ]
         for i, (label, value, role) in enumerate(lines[:h]):
@@ -998,17 +999,21 @@ class Board:
     def v_setup(self, _arg):
         c = self.client.config()
         fields = [["broker", c["broker"], False], ["port", str(c["port"]), False], ["username", c["username"], False],
-                  ["password", c["password"], True], ["wait seconds", str(c["wait_secs"]), False],
+                  ["password", "", True], ["wait seconds", str(c["wait_secs"]), False],
                   ["statistics URL", c["beacon_url"], False]]
-        values = self.form("Control broker", fields, body=["The broker a node's mqtt.cmd.slot points at, and its credentials. "
+        values = self.form("Control broker", fields, body=["The broker a node's mqtt.cmd.slot points at, and its credentials "
+                                                           f"(the password is {'set; empty keeps it' if c['password_set'] else 'not set'}). "
                                                            "Statistics come from a Beacon server, read-only."])
         try:
             port, wait = int(values[1]), float(values[4])
         except ValueError:
             self.toast("port and wait seconds are numbers", "alert")
             return
-        self.client.set_config(broker=values[0].strip(), port=port, username=values[2].strip(), password=values[3],
-                               wait_secs=wait, beacon_url=values[5].strip())
+        change = dict(broker=values[0].strip(), port=port, username=values[2].strip(), wait_secs=wait,
+                      beacon_url=values[5].strip())
+        if values[3]:                                      # the password travels only when typed
+            change["password"] = values[3]
+        self.client.set_config(**change)
         self.toast("broker saved: : test the broker")
 
     def v_test(self, _arg):

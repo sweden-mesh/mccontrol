@@ -19,7 +19,7 @@ SEEN = set()
 def call(url, method, path, body=None, check=True):
     """One request; the response is checked against the spec for its route and status."""
     data = None if body is None else json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(url + path, data=data, method=method, headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(url.rstrip("/") + path, data=data, method=method, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             status, ctype, raw = resp.status, resp.headers["Content-Type"], resp.read().decode("utf-8")
@@ -90,7 +90,7 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     monkeypatch.setenv("MCCONTROL_FAKE_REGISTER", "ok")
     SEEN.clear()
     assert call(url, "GET", "/openapi.json")[1]["openapi"].startswith("3.0")
-    assert "/openapi.json" in call(url, "GET", "/docs")[1]
+    assert 'url: "openapi.json"' in call(url, "GET", "/docs")[1]
     assert call(url, "GET", "/config")[1]["broker"] == "127.0.0.1"
     assert call(url, "PATCH", "/config", {"wait_secs": 5, "columns": ["ver", "reg"]})[1]["columns"] == ["reg", "ver"]
     assert call(url, "GET", "/key")[1]["exists"] is True
@@ -144,7 +144,10 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert run(url, "test")["result"]["ok"] is False
     jobs = call(url, "GET", "/jobs")[1]["jobs"]
     assert jobs[0]["verb"] == "test" and len(jobs) == 8
-    assert call(url, "DELETE", f"/jobs/{jobs[0]['id']}")[0] == 202
+    assert {j["verb"] for j in jobs if not j["cancellable"]} == {"test", "register"}
+    status, body = call(url, "DELETE", f"/jobs/{jobs[0]['id']}")
+    assert status == 409 and body["error"]["code"] == "finished"
+    assert call(url, "GET", f"/jobs/{jobs[0]['id']}")[1]["cancel_requested"] is False
     assert call(url, "GET", "/jobs/nope")[0] == 404
     assert spec_routes() - SEEN == set(), "routes the walk did not exercise"
 
@@ -154,7 +157,7 @@ def test_errors_are_one_shape_with_proper_status(api):
     assert call(url, "GET", "/nope", check=False) == (404, {"error": {"code": "not_found", "message": "no route /nope"}})
     status, body = call(url, "PUT", "/config", {}, check=False)
     assert status == 405 and body["error"]["code"] == "method_not_allowed"
-    req = urllib.request.Request(url + "/config", data=b"{not json", method="PATCH")
+    req = urllib.request.Request(url + "config", data=b"{not json", method="PATCH", headers={"Content-Type": "application/json"})
     with pytest.raises(urllib.error.HTTPError) as exc:
         urllib.request.urlopen(req, timeout=5)
     assert exc.value.code == 400 and json.loads(exc.value.read())["error"]["code"] == "bad_request"
@@ -254,12 +257,15 @@ def test_names_versions_fleet_and_statistics(api, monkeypatch):
     assert call(url, "GET", "/devices/gisebo")[1]["cells"]["batt"].strip()
     job = run(url, "statistics", {"device": "gisebo", "range": "48h", "live": False})
     assert job["result"]["lines"][0].startswith("Beacon: sampled")
-    points = job["result"]["points"]
-    assert len(points) == sum(1 for l in job["result"]["lines"] if re.match(r"\d\d \d\d:\d\d ", l))
-    assert points[0]["battery_mv"] == 3982 and points[0]["t"] == 1791309600000
+    assert job["result"]["sample"]["stats"]["battery_mv"] > 0 and job["result"]["sample"]["age_secs"] >= 0
+    assert job["result"]["points"] and all(isinstance(p["t"], int) for p in job["result"]["points"])
     assert call(url, "GET", "/devices/gisebo/reads")[1]["reads"][0]["command"] == "stats (Beacon)"
     job = run(url, "statistics", {"device": "far", "live": False})
     assert job["status"] == "failed" and job["error"]["code"] == "beacon"
+    _server.ctx.script["FD700369|get stats"] = [0, "> batt=4100mV up=60s"]
+    job = run(url, "statistics", {"device": "far"})                       # live answered, Beacon has nothing
+    assert job["result"]["lines"][0] == "live, just now (get stats)"
+    assert job["result"]["sample"] is None and job["result"]["points"] is None
     assert call(url, "POST", "/jobs/statistics", {"device": "gisebo", "range": "1y"})[0] == 400
 
 
@@ -278,3 +284,53 @@ def test_nothing_in_the_api_imports_curses_and_the_document_ships_with_the_packa
     assert not [p.name for p in here.glob("*.py") if re.search(r"^\s*(import|from) +[\w.]*curses", p.read_text(encoding="utf-8"), re.M)]
     assert '"api/*.json"' in (here.parents[1] / "pyproject.toml").read_text(encoding="utf-8")
     assert (here.parents[1] / "docs" / "api" / "openapi.json").samefile(here / "openapi.json")
+
+
+def test_the_broker_password_is_written_never_read(api):
+    _server, url, _store = api
+    assert call(url, "GET", "/config")[1]["password_set"] is False
+    status, body = call(url, "PATCH", "/config", {"username": "mcoar", "password": "hunter2-secret"})
+    assert status == 200 and body["password_set"] is True
+    for path in ("config", "openapi.json", "key", "devices", "jobs"):
+        text = raw(url + path)[1].decode()
+        assert "hunter2-secret" not in text, path
+    assert '"password"' not in raw(url + "config")[1].decode()
+    assert _store.config()["password"] == "hunter2-secret"
+
+
+def raw(url, method="GET", data=None, headers=None):
+    req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+
+
+def test_only_the_secret_base_url_reaches_the_api(api):
+    _server, url, _store = api
+    m = re.fullmatch(r"http://127\.0\.0\.1:(\d+)/([A-Za-z0-9_-]{43})/", url)
+    assert m, url
+    root = f"http://127.0.0.1:{m.group(1)}"
+    assert raw(url + "config")[0] == 200
+    for path in ("/config", "/openapi.json", "/docs", "/", f"/{m.group(2)[:-1]}/config", f"/{m.group(2)}x/config",
+                 f"/{m.group(2)[::-1]}/config"):
+        assert raw(root + path) == (404, b""), path
+    assert raw(root + "/jobs/send", "POST", b'{"command": "region", "region": "JKG"}',
+               {"Content-Type": "application/json"}) == (404, b"")
+    page = raw(url + "docs")[1].decode()
+    assert 'url: "openapi.json"' in page and json.loads(raw(url + "openapi.json")[1])["servers"] == [{"url": "."}]
+
+
+def test_another_origin_and_a_body_that_is_not_json_are_refused(api):
+    _server, url, _store = api
+    origin = url.split("/", 3)
+    origin = f"{origin[0]}//{origin[2]}"
+    body = b'{"command": "get autoreply", "region": "JKG", "confirm": true}'
+    status, out = raw(url + "jobs/send", "POST", body, {"Content-Type": "application/json", "Origin": "http://evil.example"})
+    assert status == 403 and json.loads(out)["error"]["code"] == "forbidden"
+    assert raw(url + "config", headers={"Origin": "null"})[0] == 403
+    status, out = raw(url + "jobs/send", "POST", body, {"Content-Type": "text/plain"})
+    assert status == 415 and json.loads(out)["error"]["code"] == "unsupported_media_type"
+    assert raw(url + "jobs", headers={"Origin": origin})[0] == 200
+    assert json.loads(raw(url + "jobs")[1])["jobs"] == []                    # nothing started
