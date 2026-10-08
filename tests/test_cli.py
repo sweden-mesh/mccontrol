@@ -199,6 +199,17 @@ def test_ctrl_c_cancels_the_job_before_exiting(api, monkeypatch, capsys):
     assert wait_job(apiclient.Client(url), job["id"], timeout=5)["status"] == "cancelled"
 
 
+def test_ctrl_c_as_the_job_finishes_still_exits_cancelled(api, monkeypatch, capsys):
+    _server, url, _store = api
+    wait_job = apiclient.Client.wait_job
+
+    def finished_then_interrupted(self, job_id, on_progress=None, **_k):
+        wait_job(self, job_id, timeout=5)
+        raise KeyboardInterrupt
+    monkeypatch.setattr(apiclient.Client, "wait_job", finished_then_interrupted)
+    assert cli.main(["--api", url, "send", "gisebo", "ver"]) == 130
+    assert capsys.readouterr().err.endswith("cancelled\n")
+
 def test_ctrl_c_outside_a_job_exits_130_and_stops_the_server(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
     stopped = []

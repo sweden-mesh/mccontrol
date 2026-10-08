@@ -143,7 +143,11 @@ def _job(api, started):
     try:
         job = api.wait_job(started["id"], on_progress=show)
     except KeyboardInterrupt:
-        api.cancel_job(started["id"])
+        try:
+            api.cancel_job(started["id"])
+        except ApiError as exc:
+            if exc.status != 409:               # it finished meanwhile: nothing left to cancel
+                raise
         print("cancelled", file=sys.stderr)
         return None
     if job["status"] == "failed":
