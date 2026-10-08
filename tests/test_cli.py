@@ -1,6 +1,10 @@
+import ast
+import pathlib
+
 import pytest
 
-from mccontrol import cli, transport
+from conftest import closed_port
+from mccontrol import apiclient, cli, transport
 
 NODE = "CCCCCCCC"
 
@@ -154,3 +158,59 @@ def test_register_from_the_command_line(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("MCCONTROL_FAKE_REGISTER", "refused locked out")
     assert cli.main(["register"]) == 1 and "not registered: refused locked out" in capsys.readouterr().out
 
+
+def test_api_uses_a_running_server_and_starts_none(api, monkeypatch, capsys):
+    _server, url, store = api
+    monkeypatch.setattr(cli, "serve", lambda *a, **k: pytest.fail("--api must not start a server"))
+    assert cli.main(["--api", url, "devices"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("Gisebo") < out.index("65C1D12C") < out.index("Far")         # the order they were added
+    assert cli.main(["--api", url, "send", "gisebo", "region"]) == 0
+    assert "Gisebo       > * F" in capsys.readouterr().out
+    assert store.history("4AC61A7F")[-1]["command"] == "region"
+    assert cli.main(["--api", f"http://127.0.0.1:{closed_port()}", "devices"]) == 1
+    assert "cannot be reached" in capsys.readouterr().err
+
+
+def test_ctrl_c_cancels_the_job_before_exiting(api, monkeypatch, capsys):
+    server, url, _store = api
+    monkeypatch.setattr(transport, "FAKE_WAIT_SECS", 5)
+
+    wait_job = apiclient.Client.wait_job
+
+    def interrupted(self, job_id, on_progress=None, **_k):
+        """Ctrl+C once the job is waiting on the broker."""
+        def tick(job):
+            on_progress(job)
+            if "waiting" in job["progress"]["text"]:
+                raise KeyboardInterrupt
+        return wait_job(self, job_id, on_progress=tick, timeout=5)
+    monkeypatch.setattr(apiclient.Client, "wait_job", interrupted)
+    assert cli.main(["--api", url, "send", "gisebo", "ver"]) == 130
+    err = capsys.readouterr().err
+    assert "cancelled" in err and "waiting for Gisebo" in err
+    job = apiclient.Client(url).jobs()["jobs"][0]
+    assert job["verb"] == "send" and job["cancel_requested"]
+    assert wait_job(apiclient.Client(url), job["id"], timeout=5)["status"] == "cancelled"
+
+
+def test_the_command_line_imports_only_the_client_the_server_and_the_stdlib():
+    """Every import in cli.py is the stdlib, the API client or the server that starts the
+    backend; the one exception is the door to the screens, which hands them a store."""
+    import sys
+    tree = ast.parse(pathlib.Path(cli.__file__).read_text(encoding="utf-8"))
+    screens = next(n for n in ast.walk(tree) if isinstance(n, ast.If) and ast.unparse(n.test) == "args.command is None")
+    exempt = {id(n) for n in ast.walk(screens)}
+    found = set()
+    for n in ast.walk(tree):
+        if id(n) in exempt:
+            continue
+        if isinstance(n, ast.Import):
+            found |= {a.name for a in n.names}
+        elif isinstance(n, ast.ImportFrom):
+            base = "." * n.level + (n.module or "")
+            found |= {base} if n.module else {base + a.name for a in n.names}
+    package = {m for m in found if m.startswith(".")}
+    assert package == {".apiclient", ".api.server"}, package
+    assert not {m for m in found - package if m.split(".")[0] not in sys.stdlib_module_names}
+    assert {(a.name) for n in ast.walk(screens) if isinstance(n, ast.ImportFrom) for a in n.names} == {"app", "store"}
