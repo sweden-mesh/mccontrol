@@ -226,6 +226,47 @@ def check(public_hex, topic, payload, last_counter, now):
     return 0
 
 
+# Registering the signing key with the broker (operator ruling 2026-10-08): the owner's
+# public key is published once to the broker's registration topic, as a line signed by that
+# very key, so the broker knows the publisher holds it. The broker's hook then verifies every
+# command against the registered keys before it fans out, and counts a bad one toward the
+# 5-a-day / 48-hour lockout. A replay of the line registers nothing new (same key).
+#
+#     topic    mccontrol/register                        the tool publishes here
+#     payload  reg1|<64 hex public key>|<unix secs>|<128 hex Ed25519 sig>
+#     signed   "mccontrol/register\n" + "reg1|<key>|<secs>"
+#     answer   mccontrol/register/<64 hex key>/ack       ok | refused <reason>
+REGISTER_TOPIC = "mccontrol/register"
+REGISTER_VERSION = "reg1"
+
+
+def register_payload(seed_hex, now=None):
+    now = int(time.time() if now is None else now)
+    public = public_key_hex(seed_hex)
+    part = f"{REGISTER_VERSION}{FIELD_SEP}{public}{FIELD_SEP}{now}"
+    signature = eddsa.new(key_from_seed(seed_hex), "rfc8032").sign(signed_message(REGISTER_TOPIC, part))
+    return f"{part}{FIELD_SEP}{signature.hex().upper()}"
+
+
+def register_ack_topic(public_hex):
+    return f"{REGISTER_TOPIC}/{public_hex.upper()}/ack"
+
+
+def verify_registration(payload):
+    """What the broker's hook does with a registration line: `(public_hex, secs)` when the
+    signature is by the key the line names, else None."""
+    try:
+        version, public, secs, sig_hex = payload.split(FIELD_SEP)
+        if version != REGISTER_VERSION or len(public) != 64 or len(sig_hex) != SIG_HEX_LEN:
+            return None
+        part = f"{version}{FIELD_SEP}{public}{FIELD_SEP}{secs}"
+        key = eddsa.import_public_key(bytes.fromhex(public))
+        eddsa.new(key, "rfc8032").verify(signed_message(REGISTER_TOPIC, part), bytes.fromhex(sig_hex))
+        return public.upper(), int(secs)
+    except (ValueError, TypeError):
+        return None
+
+
 class Result:
     """One line a node published to its /res topic. Silence is its absence, never an instance."""
 

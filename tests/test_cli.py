@@ -134,3 +134,14 @@ def test_commands_marks_what_a_devices_firmware_lacks(tmp_path, monkeypatch, cap
     out = capsys.readouterr().out
     assert "old: firmware ar-10 (version unknown" in out
     assert "  ver   (kept)   -- needs ar-11" in out and "  get autoreply   (kept)\n" in out
+
+
+def test_register_from_the_command_line(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    monkeypatch.setenv("MCCONTROL_FAKE_REGISTER", "ok")
+    assert cli.main(["keygen"]) == 0
+    capsys.readouterr()
+    assert cli.main(["register"]) == 0 and "registered: ok" in capsys.readouterr().out
+    assert cli.main(["key"]) == 0 and "registered with mqtt.louie.se on" in capsys.readouterr().out
+    monkeypatch.setenv("MCCONTROL_FAKE_REGISTER", "refused locked out")
+    assert cli.main(["register"]) == 1 and "not registered: refused locked out" in capsys.readouterr().out

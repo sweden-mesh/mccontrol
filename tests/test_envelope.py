@@ -147,3 +147,18 @@ def test_a_result_topic_yields_the_leaf_as_published_and_nothing_else():
     assert envelope.node_from_result_topic("meshcore/JKG/4AC6/res") is None
     assert envelope.node_from_result_topic("meshcore/JKG/all/cmd") is None
     assert envelope.node_from_result_topic("meshcore/JKG/zz-not-hex/res") is None
+
+
+# ---- registering the key with the broker --------------------------------------------
+
+def test_a_registration_line_is_signed_by_the_key_it_names_and_a_broker_can_check_it():
+    line = envelope.register_payload(SEED, now=1700000000)
+    public = envelope.public_key_hex(SEED)
+    assert line.startswith(f"reg1|{public}|1700000000|") and len(line.rsplit("|", 1)[1]) == 128
+    assert envelope.verify_registration(line) == (public, 1700000000)
+    assert envelope.register_ack_topic(public) == f"mccontrol/register/{public}/ack"
+    # a line naming another key cannot carry this signature; a changed time fails too
+    other = envelope.public_key_hex("22" * 32)
+    assert envelope.verify_registration(line.replace(public, other)) is None
+    assert envelope.verify_registration(line.replace("1700000000", "1700000001")) is None
+    assert envelope.verify_registration("reg1|short|1|sig") is None

@@ -80,6 +80,7 @@ def build_parser():
     sc = sub.add_parser("shortcuts", help="list the Alt+1..9 shortcuts, or set one")
     sc.add_argument("--set", nargs=2, metavar=("N", "COMMAND"), help="put COMMAND on Alt+N ('' frees it)")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
+    sub.add_parser("register", help="register your signing key with the broker, once; the broker then checks commands against it")
     d = sub.add_parser("discover", help="find the nodes in a region that accept your key")
     d.add_argument("region", help="the IATA code, e.g. JKG; several with commas, or '*' for every region you have")
     d.add_argument("--add", action="store_true", help="remember every node not yet in your list")
@@ -116,7 +117,16 @@ def _keygen(store, args):
 
 def _key(store, _args):
     print(store.public_key())
+    reg = store.registration()
+    if reg:
+        print(f"registered with {reg['broker']} on {reg['at'][:10]}")
     return 0
+
+
+def _register(store, _args):
+    ok, detail = actions.register(store)
+    print(f"{'registered' if ok else 'not registered'}: {detail}")
+    return 0 if ok else 1
 
 
 def _config(store, args):
@@ -308,6 +318,9 @@ def _test(store, _args):
         print(f"{'ok  ' if ok else 'FAIL'} {step:28} {detail}")
     if store.has_key():
         print(f"ok   signing key                  public {store.public_key()[:16]}...")
+        reg = store.registration()
+        print(f"{'ok  ' if reg else 'note'} registered with broker       "
+              + (f"{reg['broker']} on {reg['at'][:10]}" if reg else "not yet: run 'mccontrol register'"))
     else:
         print("FAIL signing key                  none: run 'mccontrol keygen'")
     return 0 if all(ok for _s, ok, _d in steps) else 1
@@ -347,7 +360,7 @@ def _history(store, args):
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
             "remove": _remove, "send": _send, "regions": _regions, "history": _history,
             "discover": _discover, "test": _test, "help": _help, "alt": _alt, "shortcuts": _shortcuts,
-            "run": _run, "sets": _sets, "stats": _stats, "fleet": _fleet, "refresh": _refresh, "commands": _commands, "reads": _reads}
+            "run": _run, "sets": _sets, "stats": _stats, "register": _register, "fleet": _fleet, "refresh": _refresh, "commands": _commands, "reads": _reads}
 
 if __name__ == "__main__":
     sys.exit(main())

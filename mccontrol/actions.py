@@ -231,6 +231,16 @@ def refresh_names(store, devices, wait_secs=None, progress=None):
     return named, versioned, lines
 
 
+def register(store):
+    """Register the signing key with the control broker, once: `(ok, detail)`; remembered
+    on success so the Keys dialog and the connection test can say so."""
+    config = store.config()
+    ok, detail = transport.register(config, store.seed(), wait_secs=min(10, config.get("wait_secs", 20)))
+    if ok:
+        store.remember_registration(config["broker"])
+    return ok, detail
+
+
 def regions_asked(text, store):
     """`JKG`, `JKG, GOT` or `*` (every region the directory spans) as a list of IATA codes."""
     text = (text or "").strip()

@@ -154,6 +154,13 @@ class Store:
         sets[name] = []                   # an empty list is a removed set, the shipped one included
         self.save_config(sets=sets)
 
+    def registration(self):
+        """`{broker, at}` when this key was registered with a broker, else None."""
+        return self.config().get("registered") or None
+
+    def remember_registration(self, broker):
+        self.save_config(registered={"broker": broker, "at": _now()})
+
     def shortcuts(self):
         """Nine slots, Alt+1 first; an empty string is an unused slot."""
         slots = list(self.config().get("shortcuts", DEFAULT_SHORTCUTS))

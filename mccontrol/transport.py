@@ -203,6 +203,40 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
     return sorted(found.values(), key=lambda d: d["node"])
 
 
+def register(config, seed_hex, wait_secs=10.0, client_factory=None, now=None):
+    """Publish the signed registration line and wait for the broker's acknowledgement:
+    `(ok, detail)`. `ok` only on an explicit `ok`; silence is "no acknowledgement", which
+    may mean a broker without the hook (a region's own) -- said, never assumed."""
+    public = envelope.public_key_hex(seed_hex)
+    payload = envelope.register_payload(seed_hex, now=now)
+    fake = os.environ.get("MCCONTROL_FAKE_REGISTER")
+    if fake is not None:
+        return fake == "ok", fake
+    got = threading.Event()
+    answer = {}
+
+    def on_message(_c, _u, msg):
+        if msg.topic == envelope.register_ack_topic(public):
+            answer["text"] = msg.payload.decode("utf-8", "replace").strip()
+            got.set()
+
+    client = (client_factory or _client)(config, seed_hex)
+    client.on_message = on_message
+    _connect(client, config, seed_hex=seed_hex)
+    try:
+        client.subscribe(envelope.register_ack_topic(public), qos=1)
+        info = client.publish(envelope.REGISTER_TOPIC, payload, qos=1)
+        info.wait_for_publish(timeout=10)
+        got.wait(wait_secs)
+    finally:
+        client.loop_stop()
+        client.disconnect()
+    text = answer.get("text")
+    if text is None:
+        return False, "no acknowledgement: the broker may not register keys (a region's own without the hook)"
+    return text == "ok", text
+
+
 def test_connection(config, client_factory=None, timeout=10.0, seed_hex=None):
     """Can we reach the control broker, sign in, subscribe to a result topic and publish?
 

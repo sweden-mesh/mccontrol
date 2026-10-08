@@ -381,12 +381,28 @@ class App:
             except _store.StoreError as exc:
                 notice(self.screen, "Signing key", [str(exc)], self.draw)
                 return
+            reg = self.store.registration()
             body = ["Provision each repeater over its serial console with:", "",
                     f"  set mqtt.cmd.pubkey {public}", "  set mqtt.cmd on", "",
-                    f"The private seed is in {self.store.key_path}", "and never leaves this machine inside anything but a signature."]
+                    f"The private seed is in {self.store.key_path}", "and never leaves this machine inside anything but a signature.", "",
+                    (f"Registered with {reg['broker']} on {reg['at'][:10]}." if reg else
+                     "Not registered with the broker yet: it cannot check your commands before they fan out.")]
             d = Dialog("Signing key", body=body, width=min(92, self.screen.size[0] - 4),
-                       buttons=[Button("OK", None, default=True), Button("Replace key", "replace")])
-            if d.run(self.screen, self.draw) == "replace":
+                       buttons=[Button("OK", None, default=True), Button("Register", "register"), Button("Replace key", "replace")])
+            choice = d.run(self.screen, self.draw)
+            if choice == "register":
+                progress, box = self.waiting("Registering", f"Publishing your public key to {self.store.config()['broker']}",
+                                             lambda nodes: "waiting for the broker's acknowledgement")
+                box.tick("waiting for the broker's acknowledgement", 0.0)
+                try:
+                    ok, detail = actions.register(self.store)
+                except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
+                    ok, detail = False, str(exc)
+                finally:
+                    box.close()
+                self.message.say(("Registered: " if ok else "Not registered: ") + detail, error=not ok)
+                return
+            if choice == "replace":
                 if confirm(self.screen, "Replace key", ["Every repeater provisioned with the current key will stop accepting commands."],
                            "silences every node until each is re-provisioned over serial.", yes="Replace", redraw_under=self.draw):
                     self.store.create_key(overwrite=True)
@@ -434,6 +450,9 @@ class App:
         steps = transport.test_connection(cfg, seed_hex=self.store.seed() if self.store.has_key() else None)
         lines = [f"{'ok  ' if ok else 'FAIL'}  {step:28} {detail}" for step, ok, detail in steps]
         lines.append(f"{'ok  ' if self.store.has_key() else 'FAIL'}  {'signing key':28} {'present' if self.store.has_key() else 'none: see Keys'}")
+        reg = self.store.registration()
+        lines.append(f"{'ok  ' if reg else 'note'}  {'registered with broker':28} "
+                     + (f"{reg['broker']} on {reg['at'][:10]}" if reg else "not yet: Keys > Register"))
         notice(self.screen, "Broker test", lines, self.draw)
         self.message.say("Broker test passed." if all(ok for _s, ok, _d in steps) else "Broker test failed.", error=not all(ok for _s, ok, _d in steps))
 

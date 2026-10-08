@@ -404,3 +404,31 @@ def test_a_send_to_the_default_broker_signs_in_with_the_tools_own_key(store, mon
     store.save_config(username="mcoar", password="pw")              # a region's own broker
     actions.send(store, "ver", device=store.device("loutest"))
     assert _FakeClient.logins[-1] == ("mcoar", "pw")
+
+
+def test_registering_publishes_the_signed_key_once_and_remembers_the_brokers_ok(store, monkeypatch):
+    from mccontrol import envelope, transport
+    store.create_key()
+    public = store.public_key()
+    seen = {}
+
+    class _Broker(_FakeClient):
+        """A broker with the registration hook: verifies the line and acknowledges."""
+        def publish(self, topic, payload, qos=0):
+            import types
+            seen["topic"], seen["payload"] = topic, payload
+            verdict = "ok" if envelope.verify_registration(payload) else "refused bad signature"
+            self.on_message(self, None, types.SimpleNamespace(topic=envelope.register_ack_topic(public), payload=verdict.encode()))
+            return types.SimpleNamespace(wait_for_publish=lambda timeout=0: None)
+    monkeypatch.setattr(transport, "_client", _Broker)
+    ok, detail = actions.register(store)
+    assert ok and detail == "ok" and seen["topic"] == "mccontrol/register"
+    assert envelope.verify_registration(seen["payload"])[0] == public
+    assert store.registration()["broker"] == "mqtt.louie.se"
+
+    class _Silent(_FakeClient):
+        def publish(self, topic, payload, qos=0):
+            import types
+            return types.SimpleNamespace(wait_for_publish=lambda timeout=0: None)
+    ok, detail = transport.register(store.config(), store.seed(), wait_secs=0, client_factory=_Silent)
+    assert not ok and "no acknowledgement" in detail

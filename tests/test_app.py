@@ -465,3 +465,12 @@ def test_a_long_result_line_wraps_in_the_reply_window(tmp_path):
     text, _ = walk(tmp_path, [(b"\x1b2", 1.5), (b"\t", 0.3), (b"\r", 0.6)], env={"MCCONTROL_FAKE_RESULTS": fake},
                    prepare=_far_on("ar-11"), seconds=4.0)
     assert "the table or the version is wrong" in text           # the tail, on a second line of the window
+
+
+def test_keys_register_publishes_and_the_dialog_says_so(tmp_path):
+    # Alt+K opens Keys; Enter runs "Show public key"; Tab to Register; Enter; then Keys again
+    text, home = walk(tmp_path, [(b"\x1bk", 0.6), (b"\r", 0.8), (b"\t", 0.2), (b"\r", 1.5), (b"\x1bk", 0.6), (b"\r", 0.8)],
+                      env={"MCCONTROL_FAKE_REGISTER": "ok"}, cols=100, seconds=6.0)
+    assert "Registered: ok" in text
+    assert re.search(r"Registered with mqtt\.louie\.se on 20\d\d-\d\d-\d\d", text)
+    assert json.loads((home / "config.json").read_text())["registered"]["broker"] == "mqtt.louie.se"
