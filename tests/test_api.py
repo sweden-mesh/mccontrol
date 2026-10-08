@@ -1,6 +1,7 @@
 """The API against its own document: every route in the spec has a handler and every handler
 a route; every response validates against its schema; the jobs run over the scripted broker."""
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -266,3 +267,11 @@ def test_a_job_without_a_key_is_refused_at_once(api):
     assert status == 400 and body["error"]["code"] == "store" and "no signing key" in body["error"]["message"]
     assert call(url, "GET", "/key")[1] == {"exists": False, "public": None, "path": str(store.key_path),
                                           "registered": None, "provision": []}
+
+
+def test_nothing_in_the_api_imports_curses_and_the_document_ships_with_the_package():
+    import pathlib
+    here = pathlib.Path(api_server.__file__).parent
+    assert not [p.name for p in here.glob("*.py") if re.search(r"^\s*(import|from) +[\w.]*curses", p.read_text(encoding="utf-8"), re.M)]
+    assert '"api/*.json"' in (here.parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    assert (here.parents[1] / "docs" / "api" / "openapi.json").samefile(here / "openapi.json")
