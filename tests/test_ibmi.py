@@ -23,7 +23,7 @@ DOWN, UP, TAB = b"\x1bOB", b"\x1bOA", b"\t"
 pytestmark = pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
 
 
-def walk(api, keys, seconds=2.0, cols=80, rows=24, start=1.0):
+def walk(api, keys, seconds=1.0, cols=80, rows=24, start=1.0, raw=False):
     """Start IBMi in a pty on a client of the fixture's server, send `keys` as (bytes,
     delay) pairs, and return the screen text with the escape sequences stripped."""
     import fcntl, signal, struct, termios
@@ -58,6 +58,8 @@ def walk(api, keys, seconds=2.0, cols=80, rows=24, start=1.0):
     except ProcessLookupError:
         pass
     os.waitpid(pid, 0)
+    if raw:
+        return out.decode("utf-8", "replace")
     return re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][0-9A-B]|\x1b[=>]", b" ", out).decode("utf-8", "replace")
 
 
@@ -181,3 +183,97 @@ def test_a_broker_test_lists_its_steps_then_the_key_and_registration():
     lines = fmt.test_lines({"steps": [{"step": "connect", "ok": True, "detail": "fine"}], "key": "AB",
                             "registered": {"broker": "mqtt.louie.se", "at": "2026-10-08 10:00:00"}})
     assert lines[0].startswith("ok    connect") and "present" in lines[1] and "mqtt.louie.se on 2026-10-08" in lines[2]
+
+
+# -- the walks: a screen each ---------------------------------------------------------------
+
+def sent(store, node):
+    return [l["command"] for l in store.history(node)]
+
+
+def test_the_main_menu_numbers_its_selections_and_takes_a_command(api):
+    text = walk(api, [(b"42\r", 0.6)])
+    assert "MCCONTROL Main Menu" in text and "Select one of the following:" in text
+    assert "1. Work with devices" in text and "90. Sign off" in text and "===>" in text
+    assert "Signing key  present" in text and "3 devices" in text
+    assert "Command 42 is not valid here." in text
+    assert "F3=Exit" in text and "F12=Cancel" in text
+
+
+def test_work_with_devices_shows_the_directory_and_1_tags_rows(api):
+    server, _url, _store = api
+    text = walk(api, [(b"1\r", 0.8), (DOWN, 0.2), (b"1", 0.1), (DOWN, 0.2), (b"1\r", 0.8)])
+    assert "Work with Devices" in text and "Type options, press Enter." in text
+    assert "1=Tag/untag" in text and "7=Commands" in text and "11=Name and version" in text
+    assert re.search(r"Opt\s+Name\s+Node\s+Reg\s+Sent", text)
+    assert "Gisebo" in text and "(unnamed)" in text and "FD700369" in text and "GOT" in text
+    assert "2 of 3 tagged, by name" in text
+    assert server.ctx.tags == {"4AC61A7F", "65C1D12C"}
+    assert "F6=Discover" in text and "F11=Sort" in text
+
+
+def test_f11_sorts_and_the_command_line_tags_inverts_and_sorts(api):
+    server, _url, _store = api
+    text = walk(api, [(b"1\r", 0.8), (F[11], 0.6), (b"tag GOT\r", 0.6), (b"invert\r", 0.6), (b"sort version\r", 0.6),
+                      (b"frobnicate\r", 0.6)])
+    assert "Sorted by region." in text and "by version" in text
+    assert server.ctx.tags == {"4AC61A7F", "65C1D12C"}           # GOT tagged, then inverted
+    assert "Command frobnicate is not valid here." in text
+
+
+def test_9_sends_to_the_rows_and_the_results_show_each_answer_with_its_signature(api):
+    _server, _url, store = api
+    text = walk(api, [(b"1\r", 0.8), (DOWN, 0.2), (b"9", 0.1), (DOWN, 0.2), (b"9\r", 0.8), (DOWN, 0.2),
+                      (b"region\r", 1.2), (b"5\r", 0.6)])
+    assert "Send a Command" in text and "Gisebo, 65C1D12C" in text
+    assert "Command Results" in text and "2 tagged devices in JKG" in text and "2 of 2 answered." in text
+    assert re.search(r"Gisebo\s+unverified result\s+> \* F", text)
+    assert "refused: not-allowed" in text
+    assert "Display Result" in text and "Reply:" in text
+    assert sent(store, "4AC61A7F") == ["region"] and sent(store, "65C1D12C") == ["region"]
+
+
+def test_a_signed_answer_is_verified_and_a_forged_one_is_said_to_be(api, monkeypatch):
+    real = transport._fake
+
+    def signed(*a):
+        answers = real(*a)
+        for node, r in (answers or {}).items():
+            r.verified = node == "4AC61A7F"
+        return answers
+    monkeypatch.setattr(transport, "_fake", signed)
+    text = walk(api, [(b"send Gisebo region\r", 1.2), (F[3], 0.4), (b"send 65C1D12C ver\r", 1.2)])
+    assert re.search(r"Gisebo\s+verified\s+> \* F \[signed\]", text)
+    assert re.search(r"65C1D12C\s+BAD SIGNATURE\s+BAD SIGNATURE", text)
+
+
+def test_a_command_that_takes_something_away_asks_first_and_f12_sends_nothing(api):
+    _server, _url, store = api
+    text = walk(api, [(b"send Gisebo region denyf *\r", 0.8), (F[12], 0.6), (b"send Gisebo region denyf *\r", 0.8),
+                      (b"\r", 1.0)])
+    assert "Confirm Command" in text and "stops this repeater forwarding every message" in text
+    assert "To:  Gisebo  (4AC61A7F, JKG)" in text
+    assert "Nothing was sent." in text
+    assert sent(store, "4AC61A7F") == ["region denyf *"]          # once: after the second confirm
+
+
+def test_a_command_the_node_would_refuse_is_not_sent_and_the_reason_is_said(api):
+    _server, _url, store = api
+    text = walk(api, [(b"send Far set repeat off\r", 0.8)])
+    assert "Not sent: the node would refuse 'set repeat off': denied" in text
+    assert sent(store, "FD700369") == []
+
+
+def test_tags_across_two_regions_are_refused(api):
+    text = walk(api, [(b"1\r", 0.8), (b"1", 0.1), (DOWN, 0.2), (b"1\r", 0.6), (F[9], 0.6), (DOWN, 0.2), (b"ver\r", 0.6)])
+    assert "span more than one region" in text
+
+
+def test_3_sends_to_every_node_in_a_region_and_12_shows_the_broadcast(api):
+    _server, _url, store = api
+    text = walk(api, [(b"3\r", 0.6), (b"\t", 0.2), (b"region put se-jkp *\r", 1.2), (F[3], 0.4), (b"12\r", 0.6)])
+    assert "Send a Command to Every Node in a Region" in text
+    assert "EVERY node in JKG" in text and "2 of 2 answered." in text
+    assert "Display Broadcast History" in text and "region put se-jkp *" in text
+    assert [l["command"] for l in store.history(None)] == ["region put se-jkp *"]
+    assert sent(store, "FD700369") == []                          # Far is in GOT
