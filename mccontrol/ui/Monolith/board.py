@@ -41,6 +41,7 @@ class Board:
         self.feed, self.feed_cursor = [], 0
         self.jobs, self.cfg, self.key_info = [], {}, {}
         self.reads, self.history, self.shown_node = [], [], None
+        self.read_cursor = 0
         self.toasts = []
         self.running = None                 # (title, job) while a job is waited on
         self.hits = []                      # (y, x0, x1, key) of the hint bar, for clicks
@@ -103,6 +104,8 @@ class Board:
         node = d["node"] if d else None
         if node == self.shown_node and not force:
             return
+        if node != self.shown_node:
+            self.read_cursor = 0
         self.shown_node = node
         self.reads = self.client.reads(node)["reads"] if node else []
         self.history = self.client.history(node, limit=50)["history"] if node else []
@@ -281,10 +284,12 @@ class Board:
         if row < y + h:
             self.put(row, x, self.g["scan"] * w, "dim")
             row += 1
-        for r in self.reads:
+        for i, r in enumerate(self.reads):
             if row >= y + h:
                 break
-            self.put(row, x, f"{r['age']:>5} {r['command'][:14]:14} {r['reply']}"[:w])
+            line = f"{r['age']:>5} {r['command'][:14]:14} {r['reply']}"[:w]
+            here = self.focus == "device" and i == self.read_cursor
+            self.put(row, x, line.ljust(w) if here else line, "cursor" if here else "base")
             row += 1
         for line in reversed(self.history):
             if row >= y + h:
@@ -428,7 +433,7 @@ class Board:
         elif key < 0 and chr(-key) in "123456789":
             self.do("alt", int(chr(-key)))
         elif key in ENTERS:
-            self.do("commands" if self.focus != "feed" else "open")
+            self.do({"devices": "commands", "device": "reread", "feed": "open"}[self.focus])
         elif key in (curses.KEY_UP, curses.KEY_DOWN, curses.KEY_PPAGE, curses.KEY_NPAGE, curses.KEY_HOME, curses.KEY_END):
             self.move(key)
         elif key in (ord(" "), curses.KEY_IC):
@@ -450,6 +455,8 @@ class Board:
                 curses.KEY_NPAGE: 10, curses.KEY_HOME: -10 ** 6, curses.KEY_END: 10 ** 6}[key]
         if self.focus == "feed":
             self.feed_cursor = max(0, min(len(self.feed) - 1, self.feed_cursor + step))
+        elif self.focus == "device":
+            self.read_cursor = max(0, min(len(self.reads) - 1, self.read_cursor + step))
         else:
             self.cursor = max(0, min(len(self.devices) - 1, self.cursor + step))
             self.follow()
@@ -721,6 +728,7 @@ class Board:
                ("clear tags", ("untagall", None)), ("help", ("help", None)), ("phosphor: amber / green", ("phosphor", None)),
                ("quit", ("quit", None))]
         out += [(f"sort by {s}", ("sort", s)) for s in self.dir.get("sorts", ())]
+        out += [(f"Alt+{n} {c}", ("alt", n)) for n, c in enumerate(self.client.shortcuts()["shortcuts"], 1) if c]
         return out
 
     def command_entries(self):
@@ -913,6 +921,19 @@ class Board:
                  for line in reversed(self.client.history(d["node"])["history"])]
         self.sheet(f"History {d['name'] or d['node']}", lines or ["Nothing sent yet."])
 
+    def v_reread(self, _arg):
+        """Enter on a read in the device tile: ask the device again."""
+        if not self.reads:
+            raise Cancel
+        command = self.reads[min(self.read_cursor, len(self.reads) - 1)]["command"]
+        if command.startswith("stats"):
+            return self.v_stats(None)
+        target = {"devices": [self.device["node"]]}
+        job = self.start(f"{command[:30]} {self.g['run']} {self.device['name'] or self.device['node']}",
+                         self.client.start_send, command=command, **target)
+        if job["status"] == "done":
+            self.toast(f"{command[:24]}: {job['result']['answered']} of {job['result']['asked']} answered")
+
     def v_open(self, _arg):
         if self.feed:
             self.sheet("Result", self.feed[self.feed_cursor][2])
@@ -1059,7 +1080,7 @@ KEYS = {"c": "send", "a": "region", "s": "stats", "n": "names", "r": "fleet", "d
 KEYCARD = [
     ":  Ctrl+P   the palette: every verb and every command, type to filter",
     "↵           on a device: its command list, greyed where its firmware lacks one",
-    "↵           on the results: the whole result",
+    "↵           on a read in the device tile: ask it again;  on the results: the whole result",
     "␣  Ins      tag the device;  *  invert;  +  -  tag or untag a region",
     "c           send a command to the tagged devices, or the cursor device",
     "a           send a command to every node in a region",

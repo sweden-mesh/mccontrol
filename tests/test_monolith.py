@@ -527,3 +527,13 @@ def test_a_click_moves_the_cursor_and_presses_a_hint(tmp_path):
 def test_q_quits(tmp_path):
     walk(tmp_path, [(b"q", 1.0)])
     assert EXITED == [True]
+
+
+def test_tab_to_the_device_tile_and_enter_reads_a_read_again(tmp_path):
+    def prepare(home):
+        devs = json.loads((home / "devices.json").read_text())
+        next(d for d in devs if d["node"] == "4AC61A7F")["reads"] = {"get autoreply": {"reply": "> on", "at": "2026-10-07 11:00:00", "seq": 1}}
+        (home / "devices.json").write_text(json.dumps(devs))
+    text, home = walk(tmp_path, [(DOWN, 0.3), (TAB, 0.4), (b"\r", 1.5)], prepare=prepare)
+    assert "get autoreply" in text and "1 of 1 answered" in text
+    assert _history(home, "4AC61A7F")[-1]["command"] == "get autoreply"
