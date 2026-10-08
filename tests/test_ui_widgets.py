@@ -327,3 +327,16 @@ def test_the_list_box_filters_and_the_cursor_skips_headers():
     assert [r[1] for r in box.rows] == ["node", "reboot"]       # only reboot matches; its header stays
     box.filter = "zzz"; box._rebuild()
     assert box.rows == []
+
+
+def test_the_choice_box_previews_and_the_multi_box_joins():
+    from mccontrol.ui.dialogs import ChoiceBox
+    one = ChoiceBox("set autoreply", ["on", "off"])
+    assert one.preview() == "set autoreply on"
+    one.cursor = 1
+    assert one.preview() == "set autoreply off"
+    many = ChoiceBox("x", ["a", "b", "c"], multi=True)
+    many.chosen = {"c", "a"}
+    assert many.preview() == "x a c"                     # in the choices' order, not the picking order
+    none = ChoiceBox("trigger test", ["", "F", "P"])
+    assert none.preview() == "trigger test"

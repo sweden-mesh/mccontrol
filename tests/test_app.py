@@ -330,3 +330,32 @@ def test_enter_on_a_device_opens_the_command_list_and_runs_a_bare_command(tmp_pa
 def test_f3_still_opens_history(tmp_path):
     text, _ = walk(tmp_path, [(F[3], 0.6)])
     assert "History: Far" in text and "Nothing sent yet." in text
+
+
+def test_a_choice_command_offers_radio_buttons_and_previews_what_it_sends(tmp_path):
+    fake = json.dumps({"FD700369|set autoreply off": [0, "OK"]})
+    # Enter; filter "set autoreply" (first match is the bare family); Enter; Down to "off"; Enter runs
+    # ... then the caution's Confirm, where Left moves to "Send anyway" and Enter sends
+    text, home = walk(tmp_path, [(b"\r", 0.6), (b"set autoreply", 0.4), (b"\r", 0.6), (DOWN, 0.3), (b"\r", 0.6),
+                                 (b"\x1bOD", 0.3), (b"\r", 2.0), (b"\r", 0.4)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=7.0)
+    assert "(*) on" in text and "(*) off" in text
+    assert "Sends: set autoreply off" in text
+    assert "stops this repeater answering test requests" in text
+    assert "Reply: set autoreply off" in text
+    assert '"command": "set autoreply off"' in (home / "history" / "FD700369.jsonl").read_text()
+
+
+def test_a_text_command_shows_examples_and_sends_what_was_typed(tmp_path):
+    fake = json.dumps({"FD700369|region put se-jkp *": [0, "OK"]})
+    text, home = walk(tmp_path, [(b"\r", 0.6), (b"region put", 0.4), (b"\r", 0.6), (b"se-jkp *", 0.3), (b"\r", 2.0), (b"\r", 0.4)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=6.0)
+    assert "Examples: se-jkp *   se-jkp-mul se-jkp" in text
+    assert "Reply: region put se-jkp *" in text
+    assert '"command": "region put se-jkp *"' in (home / "history" / "FD700369.jsonl").read_text()
+
+
+def test_backing_out_of_a_parameter_sends_nothing(tmp_path):
+    text, home = walk(tmp_path, [(b"\r", 0.6), (b"region put", 0.4), (b"\r", 0.6), (b"\x1b", 0.5)])
+    assert "Examples:" in text
+    assert not (home / "history" / "FD700369.jsonl").exists()
