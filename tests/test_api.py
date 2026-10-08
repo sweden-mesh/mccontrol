@@ -123,6 +123,10 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     check = call(url, "GET", "/commands/check?command=set+prv.key+00&device=gisebo")[1]
     assert check["refusal"].startswith("denied") and check["admitted"] is False
     assert call(url, "GET", "/commands/check")[0] == 400
+    assert call(url, "POST", "/commands/build", {"command": "region put", "values": ["se-jkp *"]})[1] == {"command": "region put se-jkp *"}
+    assert call(url, "POST", "/commands/build", {"command": "set autoreply", "values": ["", "off"]})[1]["command"] == "set autoreply off"
+    assert call(url, "POST", "/commands/build", {"command": "nothing", "values": []})[0] == 404
+    assert call(url, "POST", "/commands/build", {"command": "ver"})[0] == 400
     assert call(url, "POST", "/tags", {"region": "JKG"})[1]["footer"] == "3 of 4 tagged"
     assert call(url, "DELETE", "/tags?devices=gisebo")[1]["tagged"] == ["65C1D12C", "AB6B9285"]
     assert call(url, "POST", "/tags/invert", {})[1]["tagged"] == ["4AC61A7F", "FD700369"]

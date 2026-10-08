@@ -32,6 +32,7 @@ def test_the_client_round_trips_against_the_live_server(api):
     assert c.reads("gisebo")["reads"] == []
     assert c.device_commands("gisebo")["groups"] and c.commands()["groups"]
     assert c.check_command("region denyf *")["caution"]
+    assert c.build_command("ver", [])["command"] == "ver"
     assert c.tag(region="JKG")["footer"] == "4 of 5 tagged"
     assert c.untag(devices=["gisebo", "A1A1A1A1"])["tagged"] == ["65C1D12C", "B2B2B2B2"]
     assert len(c.invert_tags()["tagged"]) == 3 and c.set_tags(["far"])["tagged"] == ["FD700369"]

@@ -113,6 +113,9 @@ class Client:
     def check_command(self, command, device=None):
         return self.call("GET", "/commands/check", {"command": command, "device": device})
 
+    def build_command(self, command, values):
+        return self.call("POST", "/commands/build", body={"command": command, "values": list(values)})
+
     # -- tags and regions ----------------------------------------------------------------
 
     def tags(self):

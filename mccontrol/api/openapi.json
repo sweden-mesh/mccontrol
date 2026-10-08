@@ -591,6 +591,40 @@
     ]
    }
   },
+  "/commands/build": {
+   "post": {
+    "operationId": "build_command",
+    "summary": "The command text for a table entry with its chosen values: what the command list sends",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Built"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Build"
+       }
+      }
+     }
+    }
+   }
+  },
   "/tags": {
    "get": {
     "operationId": "tags",
@@ -3251,6 +3285,46 @@
      "ok",
      "detail",
      "broker"
+    ]
+   },
+   "Build": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string",
+      "description": "a table entry text, as GET /commands lists it"
+     },
+     "values": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "the chosen choice, choices or typed value; empty ones are dropped"
+     }
+    },
+    "example": {
+     "command": "region put",
+     "values": [
+      "se-jkp *"
+     ]
+    },
+    "required": [
+     "command",
+     "values"
+    ]
+   },
+   "Built": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     }
+    },
+    "example": {
+     "command": "region put se-jkp *"
+    },
+    "required": [
+     "command"
     ]
    }
   },

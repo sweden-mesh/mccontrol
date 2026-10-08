@@ -268,6 +268,16 @@ def check_command(ctx, _p, query, _b):
                  "admitted": firmware.admits(d.get("ver"), command) if d else None}
 
 
+def build_command(_ctx, _p, _q, body):
+    text, values = _str(body, "command"), body.get("values")
+    if not text or not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+        raise bad("a build needs command, a table entry, and values, a list of strings")
+    entry = next((c for c in commands.TABLE if c.text == " ".join(text.split())), None)
+    if entry is None:
+        raise not_found(f"no table entry {text!r}; GET /commands lists them")
+    return 200, {"command": commands.build(entry, values)}
+
+
 # -- tags, regions -----------------------------------------------------------------------
 
 def _tag_targets(ctx, refs, region):
@@ -382,6 +392,7 @@ TABLE = [
     ("GET", "/history", broadcast_history),
     ("GET", "/commands", table),
     ("GET", "/commands/check", check_command),
+    ("POST", "/commands/build", build_command),
     ("GET", "/tags", get_tags),
     ("PUT", "/tags", set_tags),
     ("POST", "/tags", tag),
