@@ -103,3 +103,10 @@ def test_refresh_reads_name_and_version_over_the_control_plane(tmp_path, monkeyp
     assert "get name: Gisebo" in out and "1 of 1 gave a version; 1 named" in out
     assert cli.main(["devices"]) == 0
     assert "Gisebo" in capsys.readouterr().out
+
+
+def test_commands_lists_the_table(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    assert cli.main(["commands"]) == 0
+    out = capsys.readouterr().out
+    assert "reads:\n  ver   (kept)" in out and "set autoreply <on|off>" in out and "region put <se-jkp *>" in out
