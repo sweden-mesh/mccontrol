@@ -525,3 +525,18 @@ def test_2_sends_to_a_named_device_f4_prompts_the_command_and_up_recalls_it(api)
     assert "Nothing is tagged" in text                            # *TAGGED, with nothing tagged
     assert "Select Command" in text and "F4=Prompt" in text
     assert sent(store, "4AC61A7F") == ["get autoreply", "get autoreply"]
+
+
+def test_f5_on_the_command_list_asks_again_what_the_firmware_admits(api):
+    _server, _url, store = api
+    _far_on(store, "ar-9")
+    s = Session(api)
+    try:
+        text = s.drive([(b"1\r", 0.8), (b"7\r", 0.8)])
+        assert re.search(r"\d+ greyed: need a newer build; this device reports ar-9", text)
+        _far_on(store, "ar-11")                                   # behind the screen
+        mark = len(s.text())
+        text = s.drive([(F[5], 0.8)])[mark:]
+        assert "Select Command" in text and "greyed" not in text and "reports ar-9" not in text
+    finally:
+        s.close()

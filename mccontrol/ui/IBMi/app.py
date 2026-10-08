@@ -428,19 +428,19 @@ class App:
         if why:
             self.t.message = why
             return None
-        lists = []
-        for d in targets:
-            got = self.call(self.c.device_commands, d["node"])
-            if got is None:
-                return None
-            lists.append(got)
-        merged = fmt.merge_commands(lists)
-        note = fmt.firmware_note(merged["greyed"], merged["versions"])
         lst = OptList(self.t, "Select Command", LIST_KEYS, legend=["1=Select  5=Display"], prompt="Filter",
-                      head=[f"To . . . . :  {to}", note],
                       header=f"{'Command':44} Admitted", context="commands")
-        filt = ""
+        filt, merged = "", None
         while True:
+            if merged is None:          # first, and on F5: what the firmware admits may have changed
+                lists = []
+                for d in targets:
+                    got = self.call(self.c.device_commands, d["node"])
+                    if got is None:
+                        return None
+                    lists.append(got)
+                merged = fmt.merge_commands(lists)
+                lst.head = [f"To . . . . :  {to}", fmt.firmware_note(merged["greyed"], merged["versions"])]
             rows = []
             for g in merged["groups"]:
                 cs = [c for c in g["commands"] if filt.lower() in c["text"].lower()]
@@ -451,7 +451,7 @@ class App:
             lst.set_rows(rows)
             key, picks, typed = lst.run()
             if key == fkey(5):
-                filt = ""
+                filt, merged = "", None
                 continue
             if key not in ENTER:
                 return None
