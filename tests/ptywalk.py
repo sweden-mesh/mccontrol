@@ -1,31 +1,58 @@
 """Waiting on a curses program in a pty for as long as a key takes, not for a fixed time.
 
-A program that has dealt with a key goes back to reading its terminal. Linux shows that in
-/proc: the main thread blocked in read() on fd 0, and its count of voluntary context switches
-moved on since the key went in (so a read the key has already woken is not mistaken for the
-next one). Where /proc cannot say -- another kernel or architecture -- `settle` waits its
-whole limit, which is the fixed delay a walk used before.
+A program that has dealt with a key goes back to waiting for the next. Linux shows that in
+/proc: the main thread blocked in read() on fd 0, or in poll() on fd 0 alone (curses waiting
+with a timeout, unless it is one of curses' own short waits for the rest of an Esc sequence
+or a mouse click), and its count of voluntary context switches moved on since the key went in
+(so a wait the key has already woken is not mistaken for the next one). Where /proc cannot
+say -- another kernel or architecture -- `settle` waits its whole limit, which is the fixed
+delay a walk used before.
 """
 import os
 import platform
 import select
+import sys
 import time
 
-READ = {"x86_64": "0", "aarch64": "63", "riscv64": "63"}.get(platform.machine())
+# (read, poll, ppoll) by architecture; aarch64 and riscv64 have no poll
+CALLS = {"x86_64": ("0", "7", "271"), "aarch64": ("63", None, "73"), "riscv64": ("63", None, "73")}.get(platform.machine())
 TICK = 0.05
+SHORT = 0.25          # seconds: curses waits less than this for the rest of a key (ESCDELAY, mouseinterval)
+
+
+def peek(pid, address, size):
+    """`size` bytes at `address` in `pid` as a signed integer, or None."""
+    try:
+        with open(f"/proc/{pid}/mem", "rb") as mem:
+            mem.seek(address)
+            return int.from_bytes(mem.read(size), sys.byteorder, signed=True)
+    except (OSError, ValueError, OverflowError):
+        return None
 
 
 def reading_the_terminal(pid):
-    """True when the main thread of `pid` is blocked in read() on fd 0; None where /proc
-    does not say."""
+    """True when the main thread of `pid` is blocked waiting on fd 0 and nothing else;
+    None where /proc does not say."""
     try:
         with open(f"/proc/{pid}/syscall") as f:
             fields = f.read().split()
     except OSError:
         return None
-    if READ is None or len(fields) < 2:
+    if CALLS is None or len(fields) < 3:
         return None
-    return fields[0] == READ and int(fields[1], 16) == 0
+    read, poll, ppoll = CALLS
+    if fields[0] == read:
+        return int(fields[1], 16) == 0
+    if fields[0] not in (poll, ppoll) or len(fields) < 4:
+        return False
+    if int(fields[2], 16) != 1 or peek(pid, int(fields[1], 16), 4) != 0:     # one pollfd, on fd 0
+        return False
+    if fields[0] == poll:                                                     # timeout in ms, -1 none
+        timeout = int.from_bytes(int(fields[3], 16).to_bytes(8, "little")[:4], "little", signed=True) / 1000
+    else:                                                                     # a struct timespec, NULL none
+        at = int(fields[3], 16)
+        timeout = -1 if at == 0 else (peek(pid, at, 8) or 0) + (peek(pid, at + 8, 8) or 0) / 1e9
+    return timeout < 0 or timeout >= SHORT
 
 
 def switches(pid):

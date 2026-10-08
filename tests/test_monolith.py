@@ -6,10 +6,10 @@ import json
 import os
 import pty
 import re
-import select
 import sys
 import time
 
+import ptywalk
 from conftest import BEACON_FAKE, NODES, SCRIPT, closed_port
 from mccontrol.ui.Monolith import art
 
@@ -246,32 +246,30 @@ def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, 
         os.execvp(sys.executable, [sys.executable, "-c", code])
     term, decode, screens = Terminal(cols, rows), codecs.getincrementaldecoder("utf-8")("replace"), []
 
-    def drain(secs):
-        nonlocal term
-        end = time.time() + secs
-        while time.time() < end:
-            r, _, _ = select.select([fd], [], [], 0.05)
-            if r:
-                try:
-                    term.feed(decode.decode(os.read(fd, 65536)))
-                except OSError:
-                    return
-                if not screens or screens[-1] != term.text():
-                    screens.append(term.text())
+    def sink(data):
+        term.feed(decode.decode(data))
+        if not screens or screens[-1] != term.text():
+            screens.append(term.text())
 
-    drain(settle)
+    # each wait ends when the board is waiting for a key again (tests/ptywalk.py); the
+    # delays are only the upper bound
+    open_ = ptywalk.settle(fd, pid, settle, sink)
     for k, delay in keys:
         if isinstance(k, tuple):
             cols, rows = k
+            since = ptywalk.switches(pid)
             fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
             term = Terminal(cols, rows)
             os.kill(pid, signal.SIGWINCH)
+            open_ = ptywalk.settle(fd, pid, delay, sink, since)
         else:
-            os.write(fd, k)
-        drain(delay)
-    os.write(fd, b"\x0c")                   # Ctrl+L: the whole last frame is drawn again
-    drain(1.0)
-    EXITED[:] = [os.waitpid(pid, os.WNOHANG)[0] == pid]
+            open_ = ptywalk.key(fd, pid, k, delay, sink)
+    # Ctrl+L: the whole last frame is drawn again
+    open_ = ptywalk.key(fd, pid, b"\x0c", 1.0, sink) if open_ else False
+    end = time.time() + (1.0 if not open_ else 0)        # the pty closed: give the exit its time
+    while not (exited := os.waitpid(pid, os.WNOHANG)[0] == pid) and time.time() < end:
+        time.sleep(0.01)
+    EXITED[:] = [exited]
     if not EXITED[0]:
         try:
             os.kill(pid, signal.SIGKILL)
