@@ -340,7 +340,7 @@ def test_the_board_at_80x24_shows_the_directory_status_device_results_and_the_hi
     assert "Gisebo" in text and "(unnamed)" in text and "FD700369" in text and "3 devices" in text
     assert "BROKER" in text and "127.0.0.1" in text and "REG" in text and "no  :register" in text
     assert "DEVICE GISEBO" in text and "region" in text and "> * F" in text      # its history follows the cursor
-    assert re.search(r":\s+palette", text) and re.search(r"q\s+quit", text)
+    assert re.search(r":\s+menu", text) and re.search(r"Del\s+forget", text) and re.search(r"q\s+quit", text)
     assert "CLOCK" not in text                                                     # no room at 80x24
 
 

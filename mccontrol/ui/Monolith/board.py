@@ -17,8 +17,8 @@ from . import art
 
 TICK_SECS = 2.0                         # how often the tiles ask the API again
 TOAST_SECS = 4.0
-HINTS = [(":", "palette"), ("↵", "cmds"), ("␣", "tag"), ("c", "send"), ("a", "all"), ("s", "stats"), ("d", "disco"),
-         ("k", "keys"), ("?", "help"), ("q", "quit"), ("n", "names"), ("r", "fleet"), ("h", "history"), ("e", "edit"),
+HINTS = [(":", "menu"), ("↵", "cmds"), ("␣", "tag"), ("c", "send"), ("a", "all"), ("s", "stat"), ("d", "find"),
+         ("k", "keys"), ("Del", "forget"), ("?", "help"), ("q", "quit"), ("n", "names"), ("r", "fleet"), ("h", "history"), ("e", "edit"),
          ("o", "sort"), ("p", "phosphor")]
 CTRL_P, CTRL_L, TAB, ESC, BACKSPACES = 16, 12, 9, 27, (curses.KEY_BACKSPACE, 127, 8)
 ENTERS = (curses.KEY_ENTER, 10, 13)
@@ -521,7 +521,7 @@ class Board:
             return "nav"
         for y, x0, x1, key in self.hits:
             if my == y and x0 <= mx <= x1:
-                return self.handle({"↵": 10, "␣": 32}.get(key) or ord(key))
+                return self.handle({"↵": 10, "␣": 32, "Del": curses.KEY_DC}.get(key) or ord(key))
         for name in TILES:
             y, x, w, h = tiles.get(name, (0, 0, 0, 0))
             if y <= my < y + h and x <= mx < x + w:
