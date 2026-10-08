@@ -383,9 +383,25 @@ def start_statistics(ctx, _p, _q, body):
             summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
             store.remember_read(d["node"], "stats (Beacon)", summary[:60])
         job.update(text="done")
-        return {"node": d["node"], "lines": lines}
+        return {"node": d["node"], "lines": lines, "points": points(store, d, range_, interval, lines)}
 
     return 202, ctx.jobs.start("statistics", work).snapshot()
+
+
+POINT_FIELDS = (("battery_mv", "batteryMv"), ("noise_floor", "noiseFloorDb"), ("tx_air_secs", "airtimeTxSecs"),
+                ("rx_air_secs", "airtimeRxSecs"), ("receive_errors", "receiveErrors"))
+
+
+def points(store, d, range_, interval, lines):
+    """The telemetry buckets the lines were drawn from, as numbers for a chart; none when
+    the lines say Beacon had no telemetry."""
+    if f"last {range_} at {interval}:" not in lines:
+        return []
+    try:
+        raw = beacon.telemetry(store, store.device(d["node"]) or d, range_, interval)
+    except beacon.BeaconError:
+        return []
+    return [dict({"t": int(p.get("t", 0))}, **{k: p.get(b) for k, b in POINT_FIELDS}) for p in raw]
 
 
 def start_test(ctx, _p, _q, _b):

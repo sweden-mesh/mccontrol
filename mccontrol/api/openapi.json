@@ -3048,11 +3048,53 @@
       "items": {
        "type": "string"
       }
+     },
+     "points": {
+      "type": "array",
+      "description": "Beacon's telemetry buckets, oldest first, for a chart; empty when Beacon has none",
+      "items": {
+       "type": "object",
+       "properties": {
+        "t": {
+         "type": "integer",
+         "description": "the bucket's start, epoch milliseconds"
+        },
+        "battery_mv": {
+         "type": "number",
+         "nullable": true
+        },
+        "noise_floor": {
+         "type": "number",
+         "nullable": true
+        },
+        "tx_air_secs": {
+         "type": "number",
+         "nullable": true
+        },
+        "rx_air_secs": {
+         "type": "number",
+         "nullable": true
+        },
+        "receive_errors": {
+         "type": "number",
+         "nullable": true
+        }
+       },
+       "required": [
+        "t",
+        "battery_mv",
+        "noise_floor",
+        "tx_air_secs",
+        "rx_air_secs",
+        "receive_errors"
+       ]
+      }
      }
     },
     "required": [
      "node",
-     "lines"
+     "lines",
+     "points"
     ]
    },
    "TestResult": {

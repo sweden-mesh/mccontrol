@@ -254,6 +254,9 @@ def test_names_versions_fleet_and_statistics(api, monkeypatch):
     assert call(url, "GET", "/devices/gisebo")[1]["cells"]["batt"].strip()
     job = run(url, "statistics", {"device": "gisebo", "range": "48h", "live": False})
     assert job["result"]["lines"][0].startswith("Beacon: sampled")
+    points = job["result"]["points"]
+    assert len(points) == sum(1 for l in job["result"]["lines"] if re.match(r"\d\d \d\d:\d\d ", l))
+    assert points[0]["battery_mv"] == 3982 and points[0]["t"] == 1791309600000
     assert call(url, "GET", "/devices/gisebo/reads")[1]["reads"][0]["command"] == "stats (Beacon)"
     job = run(url, "statistics", {"device": "far", "live": False})
     assert job["status"] == "failed" and job["error"]["code"] == "beacon"
