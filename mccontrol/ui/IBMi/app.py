@@ -446,7 +446,7 @@ class App:
                         return None
                     lists.append(got)
                 merged = fmt.merge_commands(lists)
-                lst.head = [f"To . . . . :  {to}", fmt.firmware_note(merged["greyed"], merged["versions"])]
+                lst.head = [f"To . . . . :  {to}", fmt.firmware_note(merged["greyed"], merged["revisions"])]
             rows = []
             for g in merged["groups"]:
                 cs = [c for c in g["commands"] if filt.lower() in c["text"].lower()]

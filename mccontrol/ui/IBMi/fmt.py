@@ -64,25 +64,13 @@ def command_note(c):
     return ""
 
 
-def firmware_note(greyed, versions):
-    """The line over the command list when entries are greyed: what the devices report."""
+def firmware_note(greyed, revisions):
+    """The line over the command list when entries are greyed: the `ar-N` the devices
+    report (the API's `revision`), or unknown."""
     if not greyed:
         return ""
-    reported = ", ".join(_revision(v) or "unknown" for v in versions[:3])
+    reported = ", ".join("unknown" if r is None else f"ar-{r}" for r in revisions[:3])
     return f"{greyed} greyed: need a newer build; this device reports {reported}"
-
-
-def _revision(version):          # until GET /devices/{ref}/commands carries `revision` (T-02)
-    text = (version or "").lower()
-    at = text.find("-ar-")
-    if at < 0:
-        return None
-    digits = ""
-    for ch in text[at + 4:]:
-        if not ch.isdigit():
-            break
-        digits += ch
-    return f"ar-{digits}" if digits else None
 
 
 def merge_commands(lists):
@@ -100,7 +88,7 @@ def merge_commands(lists):
             rows.append(c)
         groups.append({"group": group["group"], "commands": rows})
     greyed = sum(1 for g in groups for c in g["commands"] if c.get("admitted") is False)
-    return {"groups": groups, "greyed": greyed, "versions": [l.get("version") for l in lists]}
+    return {"groups": groups, "greyed": greyed, "revisions": [l.get("revision") for l in lists]}
 
 
 def opt_typed(current, ch):

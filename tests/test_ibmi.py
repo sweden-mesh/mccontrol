@@ -180,16 +180,16 @@ def test_a_greyed_entry_says_why():
     assert fmt.command_label({"text": "set autoreply", "kind": "choice", "choices": ["on", "off"]}) == "set autoreply  <on|off>"
     assert fmt.firmware_note(0, [None]) == ""
     assert fmt.firmware_note(3, [None]) == "3 greyed: need a newer build; this device reports unknown"
-    assert fmt.firmware_note(3, ["esp32s3-v1.17.1-ar-10-observer-42f48ce9"]).endswith("reports ar-10")
+    assert fmt.firmware_note(3, [10]).endswith("reports ar-10")
 
 
 def test_several_devices_admit_only_what_every_one_admits():
-    def listing(admitted, version):
-        return {"version": version, "groups": [{"group": "reads", "commands": [{"text": "ver", "admitted": admitted}]}]}
-    merged = fmt.merge_commands([listing(True, "ar-11"), listing(False, None)])
+    def listing(admitted, revision):
+        return {"revision": revision, "groups": [{"group": "reads", "commands": [{"text": "ver", "admitted": admitted}]}]}
+    merged = fmt.merge_commands([listing(True, 11), listing(False, None)])
     assert merged["groups"][0]["commands"][0]["admitted"] is False and merged["greyed"] == 1
-    assert merged["versions"] == ["ar-11", None]
-    assert fmt.merge_commands([listing(True, "x"), listing(True, "y")])["greyed"] == 0
+    assert merged["revisions"] == [11, None]
+    assert fmt.merge_commands([listing(True, 10), listing(True, 11)])["greyed"] == 0
 
 
 def test_the_small_pieces():
