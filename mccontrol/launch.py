@@ -1,4 +1,5 @@
-"""`mccontrol --ui <name>`: start the API in-process, run an interface on it, stop the API.
+"""`mccontrol --ui <name>`: start the API in-process, run an interface on it, stop the API;
+with `--api <url>`, run it on that running API instead and start none.
 
 An interface is a package under `mccontrol/ui/` with `run(client)` and a one-line
 `DESCRIPTION`. The name used is kept in the configuration and is the default next time; with
@@ -29,10 +30,10 @@ def listing(found):
     return "\n".join(["interfaces (mccontrol --ui <name>):"] + [f"  {n:{width}}  {d}" for n, d in found.items()])
 
 
-def run(store, name=None):
-    """Run the interface `name`, or the last one used, over `store` (None: the default);
-    the exit code."""
-    server, url = serve(store)
+def run(store, name=None, api=None):
+    """Run the interface `name`, or the last one used, over `store` (None: the default), or
+    over the API already running at the base URL `api`, starting none; the exit code."""
+    server, url = (None, api) if api else serve(store)
     try:
         client = apiclient.Client(url)
         found = interfaces()
@@ -46,4 +47,5 @@ def run(store, name=None):
             client.set_config(ui=name)
         return importlib.import_module(f"mccontrol.ui.{chosen}").run(client)
     finally:
-        stop(server)
+        if server is not None:
+            stop(server)

@@ -4,6 +4,7 @@ import pytest
 
 from conftest import closed_port
 from mccontrol import apiclient, cli, transport
+from mccontrol import store as _store
 from mccontrol.api.server import stop
 
 NODE = "CCCCCCCC"
@@ -23,9 +24,14 @@ def test_the_command_line_round_trip(tmp_path, monkeypatch, capsys):
     assert cli.main(["config", "--username", "mcoar"]) == 0
     out = capsys.readouterr().out
     assert "username     mcoar\npassword     (not set)\n" in out and "password_set" not in out
+    assert "ui_settings" not in out and "ui." not in out             # nothing kept: no line
     assert cli.main(["config", "--password", "hunter2"]) == 0
     out = capsys.readouterr().out
     assert "password     (set)\n" in out and "hunter2" not in out
+    _store.Store(tmp_path).save_config(ui_settings={"Monolith": {"palette": "green"}, "IBMi": {"rows": [1, 2]}})
+    assert cli.main(["config"]) == 0
+    out = capsys.readouterr().out
+    assert "ui.Monolith.palette = green\n" in out and "ui.IBMi.rows = [1, 2]\n" in out and "ui_settings" not in out
     assert cli.main(["add", "LOUTEST", NODE, "jkg", "bench"]) == 0
     assert cli.main(["devices"]) == 0
     out = capsys.readouterr().out
@@ -172,8 +178,9 @@ def test_api_uses_a_running_server_and_starts_none(api, monkeypatch, capsys):
     assert cli.main(["--api", url, "send", "gisebo", "region"]) == 0
     assert "Gisebo       > * F" in capsys.readouterr().out
     assert store.history("4AC61A7F")[-1]["command"] == "region"
-    assert cli.main(["--api", f"http://127.0.0.1:{closed_port()}", "devices"]) == 1
-    assert "cannot be reached" in capsys.readouterr().err
+    port = closed_port()
+    assert cli.main(["--api", f"http://127.0.0.1:{port}/the-secret/", "devices"]) == 1
+    assert capsys.readouterr().err == f"mccontrol: the mccontrol API at 127.0.0.1:{port} cannot be reached: Connection refused\n"
 
 
 def test_a_job_shows_its_progress_on_stderr_and_a_dry_run_shows_none(api, monkeypatch, capsys):

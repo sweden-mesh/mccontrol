@@ -76,3 +76,34 @@ def test_discovery_says_why_when_the_regions_cannot_be_resolved():
     app.refuse = lambda why, title="Not done": refused.append(why)
     app.discover()
     assert refused == ["the mccontrol API cannot be reached"]
+
+
+@pytest.fixture
+def running(home):
+    """An API another mccontrol started: its base URL; stopped after the test."""
+    from mccontrol.api.server import serve, stop
+    server, url = serve()
+    yield url
+    stop(server)
+
+
+def test_with_api_the_interface_runs_on_that_server_and_none_is_started(running, ran, monkeypatch):
+    def serve(*a, **k):
+        raise AssertionError("no server may be started")
+    monkeypatch.setattr(launch, "serve", serve)
+    assert cli.main(["--ui", "MeshcoreCommander", "--api", running]) == 0
+    assert [c.base_url for c in ran] == [running.rstrip("/")]
+    assert apiclient.Client(running).config()["ui"] == "MeshcoreCommander"   # kept by that server
+    assert cli.main(["--api", running]) == 0                                 # and the default there
+    assert len(ran) == 2
+    assert ran[0].config()["ui"] == "MeshcoreCommander"                      # still up: not ours to stop
+
+
+def test_an_unreachable_api_is_the_cli_message_and_exits_1(home, ran, monkeypatch, capsys):
+    def serve(*a, **k):
+        raise AssertionError("no server may be started")
+    monkeypatch.setattr(launch, "serve", serve)
+    url = "http://127.0.0.1:9/nothing/"
+    assert cli.main(["--ui", "MeshcoreCommander", "--api", url]) == 1
+    assert capsys.readouterr().err == "mccontrol: the mccontrol API at 127.0.0.1:9 cannot be reached: Connection refused\n"
+    assert ran == []

@@ -17,6 +17,7 @@ from . import art
 
 TICK_SECS = 2.0                         # how often the tiles ask the API again
 TOAST_SECS = 4.0
+UI = "Monolith"                         # the name its preferences are kept under in ui_settings
 HINTS = [(":", "menu"), ("↵", "cmds"), ("␣", "tag"), ("c", "send"), ("a", "all"), ("s", "stat"), ("d", "find"),
          ("k", "keys"), ("Del", "forget"), ("?", "help"), ("q", "quit"), ("n", "names"), ("r", "fleet"), ("h", "history"), ("e", "edit"),
          ("o", "sort"), ("p", "phosphor")]
@@ -54,7 +55,7 @@ class Board:
     def __init__(self, win, client):
         self.win, self.client = win, client
         self.g = art.glyphs(codeset())
-        self.palette = "amber"
+        self.palette = self._kept_palette()
         self.colors = self._colors()
         self.started = time.time()
         self.focus = "devices"
@@ -93,8 +94,25 @@ class Board:
             pass
         return art.roles(None)
 
+    def _kept_palette(self):
+        """The palette the board was left in (`ui_settings.Monolith.palette`); amber when
+        none is kept, it is not one of ours, or the API cannot say."""
+        try:
+            name = self.client.config().get("ui_settings", {}).get(UI, {}).get("palette")
+        except ApiError:
+            return "amber"
+        return name if isinstance(name, str) and name in art.PALETTES else "amber"
+
     def swap_palette(self):
-        self.palette = "green" if self.palette == "amber" else "amber"
+        """The other palette, kept first: when the API cannot keep it the board stays as it
+        is, so the next start is not a surprise."""
+        other = "green" if self.palette == "amber" else "amber"
+        try:
+            self.client.set_config(ui_settings={UI: {"palette": other}})
+        except ApiError as exc:
+            self.toast(exc.message, "alert")
+            return
+        self.palette = other
         self.colors = self._colors()
         self.toast(f"{self.palette} phosphor")
 

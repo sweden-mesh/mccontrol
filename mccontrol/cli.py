@@ -20,6 +20,7 @@ command unless --api names one already running.
 
 import argparse
 import contextlib
+import json
 import sys
 
 from .apiclient import ApiError, Client
@@ -106,7 +107,7 @@ def main(argv=None):
         args = build_parser().parse_args(argv)
         if args.command is None:
             from . import launch
-            return launch.run(None, args.ui)
+            return launch.run(None, args.ui, args.api)
         with _client(args) as api:
             return COMMANDS[args.command](api, args)
     except ApiError as exc:
@@ -195,6 +196,11 @@ def _config(api, args):
     for key, value in config.items():
         if key == "password_set":
             continue                              # shown after the username, as the password
+        if key == "ui_settings":                  # each interface's own, one line a key
+            for name, keys in value.items():
+                for k, v in keys.items():
+                    print(f"ui.{name}.{k} = {v if isinstance(v, str) else json.dumps(v)}")
+            continue
         if key == "columns":
             value = ",".join(value)
         print(f"{key:12} {value}")

@@ -48,7 +48,10 @@ class Client:
             except (ValueError, KeyError, TypeError):
                 raise ApiError("http", f"{method} {path} answered {exc.code}", exc.code) from None
         except (urllib.error.URLError, OSError) as exc:
-            raise ApiError("unreachable", f"the mccontrol API at {self.base_url} cannot be reached: {exc}", 0) from None
+            why = getattr(exc, "reason", exc)          # host:port and the reason; never the secret path
+            why = getattr(why, "strerror", None) or why
+            where = urllib.parse.urlsplit(self.base_url).netloc
+            raise ApiError("unreachable", f"the mccontrol API at {where} cannot be reached: {why}", 0) from None
         return text if raw else json.loads(text)
 
     # -- meta ----------------------------------------------------------------------------

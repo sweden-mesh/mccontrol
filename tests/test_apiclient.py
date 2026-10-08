@@ -22,6 +22,8 @@ def test_the_client_round_trips_against_the_live_server(api):
     assert c.openapi()["info"]["title"] == "mccontrol"
     assert "swagger-ui-dist" in c.docs_page()
     assert c.set_config(wait_secs=7)["wait_secs"] == 7 and c.config()["wait_secs"] == 7
+    assert c.set_config(ui_settings={"Monolith": {"palette": "green"}})["ui_settings"] == {"Monolith": {"palette": "green"}}
+    assert c.config()["ui_settings"] == {"Monolith": {"palette": "green"}}
     assert c.key()["exists"] and len(c.create_key(overwrite=True)["public"]) == 64
     assert c.add_device("A1A1A1A1", "jkg", name="Spare åäö")["name"] == "Spare åäö"
     assert c.device("Spare åäö")["node"] == "A1A1A1A1"
