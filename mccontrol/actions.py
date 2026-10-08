@@ -161,27 +161,34 @@ def live_statistics(store, device, progress=None, script=None):
     return lines, ""
 
 
-def statistics(store, device, range_="24h", interval="6h", live=False, progress=None, script=None):
+def statistics(store, device, range_="24h", interval="6h", live=False, progress=None, script=None, details=False):
     """The lines to show for a device's statistics: the live sample first when asked for
     and answered, then Beacon's sample with its age and the telemetry buckets. Raises
-    `beacon.BeaconError` with the reason when Beacon has none and there is no live one."""
+    `beacon.BeaconError` with the reason when Beacon has none and there is no live one.
+    With `details`, `(lines, sample, points)`: what Beacon gave, each None where it gave
+    nothing, so a dashboard has the numbers without asking Beacon twice."""
     head = []
     if live:
         live_lines, note = live_statistics(store, device, progress=progress, script=script)
         head = live_lines + [""] if live_lines else [note, ""]
+    sample = points = None
     try:
         sample = beacon.stats(store, device)
     except beacon.BeaconError as exc:
         if head and head[0].startswith("live, just now"):
-            return head + [f"Beacon: {exc}"]
+            lines = head + [f"Beacon: {exc}"]
+            return (lines, None, None) if details else lines
         raise
     lines = beacon.stat_lines(sample)
     lines[0] = "Beacon: " + lines[0]
+    device = store.device(device["node"]) or device       # with the observer id the read above found
     try:
         points = beacon.telemetry(store, device, range_, interval)
     except beacon.BeaconError as exc:
-        return head + lines + ["", f"no telemetry: {exc}"]
-    return head + lines + ["", f"last {range_} at {interval}:"] + beacon.telemetry_lines(points)
+        lines = head + lines + ["", f"no telemetry: {exc}"]
+    else:
+        lines = head + lines + ["", f"last {range_} at {interval}:"] + beacon.telemetry_lines(points)
+    return (lines, sample, points) if details else lines
 
 
 def refresh_fleet(store, devices, now=None):

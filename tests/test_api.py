@@ -226,6 +226,21 @@ def test_a_job_is_cancelled_and_keeps_what_landed(api, monkeypatch):
     assert [o["node"] for o in job["outcomes"]] == ["4AC61A7F"]
 
 
+def test_a_job_that_ran_to_the_end_is_done_however_late_the_cancel(api, monkeypatch):
+    _server, url, _store = api
+    import threading
+    release = threading.Event()
+    monkeypatch.setattr(transport, "test_connection",
+                        lambda *a, **k: release.wait(5) and [("connect and sign in", True, "faked")])
+    _s, job = call(url, "POST", "/jobs/test", {})
+    assert job["cancellable"] is False
+    time.sleep(0.3)
+    assert call(url, "DELETE", f"/jobs/{job['id']}")[1]["cancel_requested"] is True
+    release.set()
+    job = finish(url, job)
+    assert job["status"] == "done" and job["result"]["ok"] is True and job["cancel_requested"] is True
+
+
 def test_a_command_set_stops_at_the_first_refusal(api):
     _server, url, store = api
     call(url, "PUT", "/sets/two", {"steps": ["region", "get autoreply"]})
@@ -255,7 +270,13 @@ def test_names_versions_fleet_and_statistics(api, monkeypatch):
     job = run(url, "refresh-fleet", {})
     assert job["result"] == {"updated": 1, "failed": 2, "asked": 3}
     assert call(url, "GET", "/devices/gisebo")[1]["cells"]["batt"].strip()
+    from mccontrol import beacon
+    store.update_device("4AC61A7F", observer_id=None)                      # cold: the id is looked up once
+    asked, real = [], beacon._get
+    monkeypatch.setattr(beacon, "_get", lambda config, path, params=None: asked.append(path) or real(config, path, params))
     job = run(url, "statistics", {"device": "gisebo", "range": "48h", "live": False})
+    assert sorted(asked) == ["/nodes", "/observers/867a1b43-3f2e-48c4-9ef5-3008a905cfdc",
+                             "/observers/867a1b43-3f2e-48c4-9ef5-3008a905cfdc/telemetry"]
     assert job["result"]["lines"][0].startswith("Beacon: sampled")
     assert job["result"]["sample"]["stats"]["battery_mv"] > 0 and job["result"]["sample"]["age_secs"] >= 0
     assert job["result"]["points"] and all(isinstance(p["t"], int) for p in job["result"]["points"])
@@ -333,4 +354,9 @@ def test_another_origin_and_a_body_that_is_not_json_are_refused(api):
     status, out = raw(url + "jobs/send", "POST", body, {"Content-Type": "text/plain"})
     assert status == 415 and json.loads(out)["error"]["code"] == "unsupported_media_type"
     assert raw(url + "jobs", headers={"Origin": origin})[0] == 200
+    port = int(origin.rsplit(":", 1)[1])
+    assert raw(url + "jobs", headers={"Origin": f"http://localhost:{port}"})[0] == 200
+    for other in (f"http://localhost:{port + 1}", f"https://localhost:{port}", f"http://localhost:{port}.evil.example",
+                  f"http://127.0.0.1:{port + 1}", "http://localhost"):
+        assert raw(url + "jobs", headers={"Origin": other})[0] == 403, other
     assert json.loads(raw(url + "jobs")[1])["jobs"] == []                    # nothing started
