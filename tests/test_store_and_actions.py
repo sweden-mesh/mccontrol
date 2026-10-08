@@ -326,3 +326,23 @@ def test_a_result_of_any_kind_counts_as_heard_and_silence_does_not(store):
     assert store.device("loutest").get("last_heard") is None
     store.record(NODE, "region", "t", envelope.parse_result("r1|1|17||", NODE))      # a refusal
     assert store.device("loutest")["last_heard"] == store.device("loutest")["last_sent"]
+
+
+def test_a_good_answer_to_a_read_is_kept_and_a_refusal_keeps_the_last_good_one(store, monkeypatch):
+    store.create_key()
+    store.add_device("LOUTEST", NODE, "JKG")
+    answers = {}
+    monkeypatch.setattr(actions.transport, "send", lambda cfg, seed, topic, cmd, nodes_to_hear=(), **k: ("p", dict(answers)))
+    answers[NODE] = envelope.parse_result("r1|1|0|ver|> v1.17.1-ar-10", NODE)
+    actions.send(store, "ver", device=store.device("loutest"))
+    answers[NODE] = envelope.parse_result("r1|1|0|set autoreply on|OK", NODE)
+    actions.send(store, "set autoreply on", device=store.device("loutest"))       # a write: not kept
+    assert [(c, r) for c, r, _at in store.reads("loutest")] == [("ver", "> v1.17.1-ar-10")]
+    answers[NODE] = envelope.parse_result("r1|1|14|ver|", NODE)
+    actions.send(store, "ver", device=store.device("loutest"))                    # refused: the old stays
+    answers.clear()
+    actions.send(store, "ver", device=store.device("loutest"))                    # silence: the old stays
+    assert store.reads("loutest")[0][1] == "> v1.17.1-ar-10"
+    answers[NODE] = envelope.parse_result("r1|1|0|get name|> Gisebo", NODE)
+    actions.send(store, "get  name", device=store.device("loutest"))
+    assert [c for c, _r, _at in store.reads("loutest")][0] == "get name"           # normalised, newest first

@@ -110,3 +110,17 @@ def test_commands_lists_the_table(tmp_path, monkeypatch, capsys):
     assert cli.main(["commands"]) == 0
     out = capsys.readouterr().out
     assert "reads:\n  ver   (kept)" in out and "set autoreply <on|off>" in out and "region put <se-jkp *>" in out
+
+
+def test_reads_prints_what_the_device_last_answered(tmp_path, monkeypatch, capsys):
+    import json
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    monkeypatch.setenv("MCCONTROL_FAKE_RESULTS", json.dumps({f"{NODE}|ver": [0, "> v1.17.1-ar-10"]}))
+    assert cli.main(["keygen"]) == 0
+    assert cli.main(["add", "LOUTEST", NODE, "jkg", ""]) == 0
+    capsys.readouterr()
+    assert cli.main(["reads", "loutest"]) == 0 and "nothing read yet" in capsys.readouterr().out
+    assert cli.main(["send", "loutest", "ver"]) == 0
+    capsys.readouterr()
+    assert cli.main(["reads", "loutest"]) == 0
+    assert "ver                          > v1.17.1-ar-10" in capsys.readouterr().out

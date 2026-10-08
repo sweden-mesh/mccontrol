@@ -2,7 +2,7 @@
 
 import datetime
 
-from . import beacon, denylist, envelope, store as _store, transport
+from . import beacon, commands, denylist, envelope, store as _store, transport
 from .store import _now as _store_now
 
 # Commands that take something away from a repeater. Each is sent only after the person has
@@ -86,6 +86,8 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     for node in hear:
         result = answers.get(node)
         store.record(node, command, topic, result, note="broadcast" if broadcast else "")
+        if result is not None and result.ok and commands.is_read(command) and node in names:
+            store.remember_read(node, command, result.reply or "OK")
         lines.append(f"{names.get(node, node[:8])[:12]:12} {outcome_line(result)}")
     if broadcast:
         store.record(None, command, topic, None,

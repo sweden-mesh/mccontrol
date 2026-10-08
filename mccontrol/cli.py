@@ -72,6 +72,8 @@ def build_parser():
     rf = sub.add_parser("refresh", help="read name and version from devices over the control plane")
     rf.add_argument("device", nargs="*", help="devices (default: all)")
     sub.add_parser("commands", help="the commands the tool offers, by group, with their parameter kind")
+    rd = sub.add_parser("reads", help="what a device last answered to each read, newest first")
+    rd.add_argument("device")
     sc = sub.add_parser("shortcuts", help="list the Alt+1..9 shortcuts, or set one")
     sc.add_argument("--set", nargs=2, metavar=("N", "COMMAND"), help="put COMMAND on Alt+N ('' frees it)")
     sub.add_parser("test", help="test the control broker: connect, sign in, subscribe, publish")
@@ -245,6 +247,18 @@ def _refresh(store, args):
     return 0 if versioned == len(devices) else 1
 
 
+def _reads(store, args):
+    from . import directory
+    device = _device(store, args.device)
+    rows = store.reads(device)
+    if not rows:
+        print("nothing read yet")
+        return 0
+    for command, reply, at in rows:
+        print(f"{directory.relative(at):>5}  {command:28} {reply}")
+    return 0
+
+
 def _commands(_store_, _args):
     from . import commands
     for group, items in commands.grouped():
@@ -318,7 +332,7 @@ def _history(store, args):
 COMMANDS = {"keygen": _keygen, "key": _key, "config": _config, "add": _add, "devices": _devices,
             "remove": _remove, "send": _send, "regions": _regions, "history": _history,
             "discover": _discover, "test": _test, "help": _help, "alt": _alt, "shortcuts": _shortcuts,
-            "run": _run, "sets": _sets, "stats": _stats, "fleet": _fleet, "refresh": _refresh, "commands": _commands}
+            "run": _run, "sets": _sets, "stats": _stats, "fleet": _fleet, "refresh": _refresh, "commands": _commands, "reads": _reads}
 
 if __name__ == "__main__":
     sys.exit(main())

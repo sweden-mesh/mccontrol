@@ -226,6 +226,29 @@ class Store:
 
     # -- history -----------------------------------------------------------------------
 
+    def remember_read(self, node, command, reply):
+        """Keep what a node answered to a read, keyed by the command text, with the time.
+        A refusal or silence is never stored and clears nothing: the last good answer
+        stays, with its age showing how old it is."""
+        key = " ".join(command.split())
+        devices = self.devices()
+        for entry in devices:
+            if entry["node"] == node:
+                reads = dict(entry.get("reads") or {})
+                seq = 1 + max((v.get("seq", 0) for v in reads.values()), default=0)
+                reads[key] = {"reply": reply, "at": _now(), "seq": seq}     # seq orders same-second reads
+                entry["reads"] = reads
+                self._write_json(self.root / "devices.json", devices)
+                return reads[key]
+        raise StoreError("no such device")
+
+    def reads(self, node):
+        """`[(command, reply, at), ...]` newest first, for the reads pane."""
+        d = self.device(node) if not isinstance(node, dict) else node
+        reads = (d or {}).get("reads") or {}
+        return [(k, v["reply"], v["at"]) for k, v in
+                sorted(reads.items(), key=lambda kv: (kv[1]["at"], kv[1].get("seq", 0)), reverse=True)]
+
     def record(self, node, command, topic, result, note=""):
         """One line per command sent: what, where, and what came back (or nothing)."""
         line = {"at": _now(), "command": command, "topic": topic,
