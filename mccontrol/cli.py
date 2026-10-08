@@ -101,16 +101,19 @@ def build_parser():
 
 
 def main(argv=None):
-    args = build_parser().parse_args(argv)
-    if args.command is None:
-        from . import app, store as _store
-        return app.run(_store.Store())
     try:
+        args = build_parser().parse_args(argv)
+        if args.command is None:
+            from . import app, store as _store
+            return app.run(_store.Store())
         with _client(args) as api:
             return COMMANDS[args.command](api, args)
     except ApiError as exc:
         print(f"mccontrol: {exc.message}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:                   # the server, if one was started, is stopped by now
+        print("interrupted", file=sys.stderr)
+        return 130
 
 
 @contextlib.contextmanager

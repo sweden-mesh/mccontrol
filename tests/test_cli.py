@@ -5,6 +5,7 @@ import pytest
 
 from conftest import closed_port
 from mccontrol import apiclient, cli, transport
+from mccontrol.api.server import stop
 
 NODE = "CCCCCCCC"
 
@@ -197,6 +198,20 @@ def test_ctrl_c_cancels_the_job_before_exiting(api, monkeypatch, capsys):
     assert job["verb"] == "send" and job["cancel_requested"]
     assert wait_job(apiclient.Client(url), job["id"], timeout=5)["status"] == "cancelled"
 
+
+def test_ctrl_c_outside_a_job_exits_130_and_stops_the_server(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    stopped = []
+    monkeypatch.setattr(cli, "stop", lambda server: (stopped.append(server), stop(server)))
+    call = apiclient.Client.call
+
+    def interrupted(self, method, path, *a, **k):
+        if path == "/devices":
+            raise KeyboardInterrupt
+        return call(self, method, path, *a, **k)
+    monkeypatch.setattr(apiclient.Client, "call", interrupted)
+    assert cli.main(["devices"]) == 130
+    assert capsys.readouterr().err == "interrupted\n" and len(stopped) == 1
 
 def test_the_command_line_imports_only_the_client_the_server_and_the_stdlib():
     """Every import in cli.py is the stdlib, the API client or the server that starts the
