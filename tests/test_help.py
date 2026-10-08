@@ -83,6 +83,7 @@ def test_the_context_is_per_interface():
 KEY = re.compile(r"\b(?:(?:Shift|Alt|Ctrl)\+)?(?:F\d{1,2}(?:-F\d{1,2})?|Enter|Esc|Tab|Ins|Del|Space|Backspace|PgUp|PgDn"
                  r"|Up|Down|Left|Right|Home|End)\b|\b(?:Shift|Alt|Ctrl)\+(?:\d(?:\.\.\d)?|[A-Z])\b|\"([a-z?:])\"")
 WIDGET = re.compile(r"\bthe (?:screen|dialog|panel|menu|palette|tile)\b", re.I)    # one interface's furniture
+OPT = re.compile(r"\b\d{1,2}=[A-Za-z][\w/]*")                     # an IBMi option: 7=Commands
 MENU = re.compile(r"\b(?:Devices|Send|View|Keys|Options|Help)\s+>\s")
 
 
@@ -111,12 +112,18 @@ def _key_names():
     return {"MeshcoreCommander": commander.KEY_NAMES, "IBMi": ibmi.KEY_NAMES, "Monolith": board.KEY_NAMES}
 
 
+def _options():
+    from mccontrol.ui.IBMi import app as ibmi
+    return {"IBMi": ibmi.OPTIONS}
+
+
 # The topics that are how an interface works; every interface has its own text for each.
 MECHANICS = {"index", "keys", "screen", "dialogs", "commandlist", "devices", "send"}
 EXTRA = {}          # an interface's own text for a topic outside MECHANICS, by interface, when one is earned
 
 
 def test_every_key_an_interfaces_help_names_is_a_key_it_has():
+    OPTIONS = _options()
     for ui, names in _key_names().items():
         paths = sorted((helptext.HERE / ui).glob("*.txt"))
         assert {p.stem for p in paths} == MECHANICS | EXTRA.get(ui, set()), ui
@@ -125,13 +132,15 @@ def test_every_key_an_interfaces_help_names_is_a_key_it_has():
             unknown = [k for k in named_keys(text) if not _has(k, names)]
             assert not unknown, (ui, path.name, unknown)
             assert ui == "MeshcoreCommander" or not MENU.search(text), (ui, path.name, MENU.findall(text))
+            labels = {o.split(" ")[0] for o in OPTIONS.get(ui, ())}       # "11=Name and version" -> "11=Name"
+            assert set(OPT.findall(text)) <= labels, (ui, path.name, set(OPT.findall(text)) - labels)
 
 
 def test_the_shared_texts_name_no_interfaces_keys_or_menus():
     for path in sorted(helptext.HERE.glob("*.txt")):
         text = path.read_text(encoding="utf-8")
         assert named_keys(text) == [] and not MENU.search(text), (path.name, named_keys(text), MENU.findall(text))
-        assert not WIDGET.search(text), (path.name, WIDGET.findall(text))
+        assert not WIDGET.search(text) and not OPT.search(text), (path.name, WIDGET.findall(text), OPT.findall(text))
 
 
 def test_the_key_names_are_found_where_they_are_written():

@@ -14,6 +14,11 @@ UI = "IBMi"                              # the name the API's help is asked for
 # checks this interface's help against it. Shift+F1-F9 arrive as F13-F21, as on a 5250.
 KEY_NAMES = ("F1", "F3", "F4", "F5", "F6", "F7", "F9", "F10", "F11", "F12", "F13-F21", "Shift+F1-F9", "Alt+1..9",
              "Enter", "Esc", "Tab", "Shift+Tab", "Up", "Down", "PgUp", "PgDn", "Backspace", "Del", "Space", "Ctrl+L")
+# Every option a list offers, as its legend shows it; tests/test_help.py checks the n=Label
+# the help names against them.
+OPTIONS = ("1=Tag/untag", "2=Change", "4=Forget", "5=Display", "6=Statistics", "7=Commands", "8=Last answers",
+           "9=Send", "10=Regions", "11=Name and version", "1=Read again", "5=Display entry", "1=Select", "1=Add",
+           "4=Remove", "9=Run", "1=Show")
 MENU = [("1", "Work with devices"), ("2", "Send a command"), ("3", "Send a command to every node in a region"),
         ("4", "Run a command set"), ("5", "Discover devices"), ("6", "Work with command sets"),
         ("7", "Work with shortcuts"), ("8", "Work with signing key"), ("9", "Change configuration"),
