@@ -413,18 +413,27 @@ class Board:
             if key == -1:
                 self.tick()
                 continue
-            try:
-                if self.handle(key) == "quit":
-                    return 0
-            except Quit:
+            if self.step(key) == "quit":
                 return 0
-            except Cancel:
-                pass
-            except ApiError as exc:
-                self.toast(exc.message, "alert")
+
+    def step(self, key):
+        """One key: its verb, then the tiles asked again -- unless it only moved around,
+        which changes nothing on the server and is drawn from what the board holds."""
+        try:
+            done = self.handle(key)
+        except Quit:
+            return "quit"
+        except Cancel:
+            done = None
+        except ApiError as exc:
+            self.toast(exc.message, "alert")
+            done = None
+        if done not in ("quit", "nav"):
             self.tick(force=True)
+        return done
 
     def handle(self, key):
+        """Do what `key` means: "quit", "nav" for a key that only moved around, else None."""
         if key in (ord("q"), curses.KEY_F10):
             return "quit"
         if key == curses.KEY_RESIZE:
@@ -433,16 +442,19 @@ class Board:
             return self.palette_run()
         elif key == TAB:
             self.focus = TILES[(TILES.index(self.focus) + 1) % len(TILES)]
+            return "nav"
         elif key == curses.KEY_BTAB:
             self.focus = TILES[(TILES.index(self.focus) - 1) % len(TILES)]
+            return "nav"
         elif key == curses.KEY_MOUSE:
-            self.click()
+            return self.click()
         elif key < 0 and chr(-key) in "123456789":
             self.do("alt", int(chr(-key)))
         elif key in ENTERS:
             self.do({"devices": "commands", "device": "reread", "feed": "open"}[self.focus])
         elif key in (curses.KEY_UP, curses.KEY_DOWN, curses.KEY_PPAGE, curses.KEY_NPAGE, curses.KEY_HOME, curses.KEY_END):
             self.move(key)
+            return "nav"
         elif key in (ord(" "), curses.KEY_IC):
             d = self.device
             if d:
@@ -472,9 +484,11 @@ class Board:
         my, mx, state = self.mouse
         tiles = art.layout(*self.size)
         if state & getattr(curses, "BUTTON4_PRESSED", 0):
-            return self.move(curses.KEY_UP)
+            self.move(curses.KEY_UP)
+            return "nav"
         if state & getattr(curses, "BUTTON5_PRESSED", 0):
-            return self.move(curses.KEY_DOWN)
+            self.move(curses.KEY_DOWN)
+            return "nav"
         for y, x0, x1, key in self.hits:
             if my == y and x0 <= mx <= x1:
                 return self.handle({"↵": 10, "␣": 32}.get(key) or ord(key))
@@ -487,6 +501,7 @@ class Board:
                     self.follow()
                 elif name == "feed" and my - y - 1 >= 0:
                     self.feed_cursor = max(0, min(len(self.feed) - 1, my - y - 1))
+        return "nav"
 
     # -- overlays ----------------------------------------------------------------------
 

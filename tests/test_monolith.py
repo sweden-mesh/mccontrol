@@ -542,3 +542,36 @@ def test_tab_to_the_device_tile_and_enter_reads_a_read_again(tmp_path):
 def test_q_while_a_job_runs_cancels_it_and_quits(tmp_path):
     text, home = walk(tmp_path, [(b"c", 0.5), (b"ver", 0.3), (b"\r", 1.2), (b"q", 2.0)], wait=6)
     assert "Esc cancels" in text and EXITED == [True]
+
+
+class Counting:
+    """A client stand-in that answers the reads a cursor move makes and counts every call."""
+
+    def __init__(self):
+        self.calls = []
+
+    def reads(self, node):
+        self.calls.append(("reads", node))
+        return {"node": node, "reads": []}
+
+    def history(self, node, limit=None):
+        self.calls.append(("history", node))
+        return {"node": node, "history": []}
+
+    def __getattr__(self, name):
+        def call(*a, **k):
+            self.calls.append((name, a))
+            raise AssertionError(f"a cursor move called {name}")
+        return call
+
+
+def test_moving_the_cursor_asks_only_for_the_new_devices_reads_and_history():
+    from mccontrol.ui.Monolith.board import Board
+    board = Board.__new__(Board)
+    board.client = Counting()
+    board.devices = [{"node": n, "tagged": False} for _name, n, _r in NODES]
+    board.cursor, board.focus, board.shown_node, board.read_cursor = 0, "devices", NODES[0][1], 0
+    for _ in range(3):
+        assert board.step(curses.KEY_DOWN) == "nav"
+    assert board.client.calls == [("reads", NODES[1][1]), ("history", NODES[1][1]),
+                                  ("reads", NODES[2][1]), ("history", NODES[2][1])]   # the third move hits the end
