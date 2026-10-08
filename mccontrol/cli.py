@@ -129,14 +129,14 @@ def _client(args):
         stop(server)
 
 
-def _job(api, started):
-    """Wait for a job, its progress on stderr; Ctrl+C cancels it. The finished record, or
-    None when cancelled; a failed job is its error."""
+def _job(api, started, quiet=False):
+    """Wait for a job, its progress on stderr (none when `quiet`); Ctrl+C cancels it. The
+    finished record, or None when cancelled; a failed job is its error."""
     shown = [None]
 
     def show(job):
         text = job["progress"]["text"]
-        if text != shown[0]:
+        if text != shown[0] and not quiet:
             print(text, file=sys.stderr, flush=True)
             shown[0] = text
 
@@ -247,7 +247,7 @@ def _send(api, args, command=None):
             print("not sent")
             return 2
     job = _job(api, api.start_send(command, devices=None if args.all else [device["node"]], region=region,
-                                   dry_run=args.dry_run, confirm=True))
+                                   dry_run=args.dry_run, confirm=True), quiet=args.dry_run)
     if job is None:
         return 130
     print("\n".join(job["result"]["lines"]))
@@ -278,7 +278,7 @@ def _run(api, args):
                 print("not sent")
                 return 2
     job = _job(api, api.start_run_set(args.set.lower(), arg=args.arg, devices=None if args.all else [device["node"]],
-                                      region=region, dry_run=args.dry_run, confirm=True))
+                                      region=region, dry_run=args.dry_run, confirm=True), quiet=args.dry_run)
     if job is None:
         return 130
     lines = job["result"]["lines"]

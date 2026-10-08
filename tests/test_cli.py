@@ -177,6 +177,17 @@ def test_api_uses_a_running_server_and_starts_none(api, monkeypatch, capsys):
     assert "cannot be reached" in capsys.readouterr().err
 
 
+def test_a_job_shows_its_progress_on_stderr_and_a_dry_run_shows_none(api, monkeypatch, capsys):
+    _server, url, _store = api
+    monkeypatch.setattr(transport, "FAKE_WAIT_SECS", 0.6)
+    assert cli.main(["--api", url, "send", "gisebo", "ver"]) == 0
+    out, err = capsys.readouterr()
+    assert "waiting for Gisebo (1 of 1)" in err and "waiting" not in out
+    assert cli.main(["--api", url, "send", "gisebo", "ver", "--dry-run"]) == 0
+    assert capsys.readouterr().err == ""
+    assert cli.main(["--api", url, "run", "add-scope", "gisebo", "se-jkp", "--dry-run"]) == 0
+    assert capsys.readouterr().err == ""
+
 def test_ctrl_c_cancels_the_job_before_exiting(api, monkeypatch, capsys):
     server, url, _store = api
     monkeypatch.setattr(transport, "FAKE_WAIT_SECS", 5)
