@@ -17,6 +17,11 @@ from .errors import ApiError, bad, classify, not_found
 from .routes import device_of, devices_of
 
 KEEP = 200                              # finished jobs remembered for GET /jobs
+# What a cancel can interrupt: the waits that take a progress callback. The connection test
+# and the registration wait on paho with none, so a cancel there is noted and nothing more;
+# discovery stops its listening and the regions left, but not the name read after it.
+CANCELLABLE = {"send": True, "run-set": True, "discover": True, "refresh-names": True, "refresh-fleet": True,
+               "statistics": True, "test": False, "register": False}
 _order = itertools.count()
 
 
@@ -24,6 +29,7 @@ class Job:
     def __init__(self, verb):
         self.id = uuid.uuid4().hex[:12]
         self.verb = verb
+        self.cancellable = CANCELLABLE[verb]
         self.order = next(_order)
         self.status = "running"
         self.cancel = threading.Event()
@@ -33,7 +39,15 @@ class Job:
         self.outcomes = {}              # key -> outcome, in landing order
         self.result = None
         self.error = None
+        self.stopped = False            # the work gave up something because of a cancel
         self.lock = threading.Lock()
+
+    def stopping(self):
+        """Asked where the work can stop early: True, and remembered, once cancelled. A job
+        whose work never asks ran to the end, and is done however late the cancel came."""
+        if self.cancel.is_set():
+            self.stopped = True
+        return self.stopped
 
     def update(self, **progress):
         with self.lock:
@@ -50,7 +64,7 @@ class Job:
     def snapshot(self):
         with self.lock:
             return {"id": self.id, "verb": self.verb, "status": self.status, "cancel_requested": self.cancel.is_set(),
-                    "started": self.started, "finished": self.finished, "progress": dict(self.progress),
+                    "cancellable": self.cancellable, "started": self.started, "finished": self.finished, "progress": dict(self.progress),
                     "outcomes": list(self.outcomes.values()), "result": self.result, "error": self.error}
 
 
@@ -77,7 +91,7 @@ class Registry:
                 error = {"code": code, "message": message}
             with job.lock:
                 job.result, job.error = result, error
-                job.status = "failed" if error else ("cancelled" if job.cancel.is_set() else "done")
+                job.status = "failed" if error else ("cancelled" if job.stopped else "done")
                 job.finished = _store._now()
 
         threading.Thread(target=run, name=f"mccontrol-job-{job.id}", daemon=True).start()
@@ -125,7 +139,7 @@ def ticker(job, text, names=None, command=""):
                 if not job.landed(node):
                     job.land({"node": node, "name": names.get(node) or node, "command": command, "ok": None,
                               "code": None, "code_name": None, "reply": None, "verified": None, "line": "answered"})
-        return job.cancel.is_set()
+        return job.stopping()
     return tick
 
 
@@ -207,7 +221,7 @@ def start_send(ctx, _p, _q, body):
             job.update(expected=len(names), text=f"0 of {len(names)} known answered")
             topic, _pl, answers, lines = actions.send(
                 store, command, region=region, dry_run=dry, wait_secs=wait,
-                progress=ticker(job, lambda n: f"{n} of {len(names)} known answered", names, command))
+                progress=ticker(job, lambda n: f"{n} of {len(names)} known answered", names, command), script=ctx.script)
             for node, name in names.items():
                 job.land(outcome(node, name, command, answers.get(node), line="not sent (dry run)" if dry else None))
             job.update(answered=len(answers), text=f"{len(answers)} of {len(names)} known answered")
@@ -216,12 +230,12 @@ def start_send(ctx, _p, _q, body):
         answered, asked, lines, topics = 0, 0, [], []
         job.update(expected=len(devices))
         for i, d in enumerate(devices):         # one signed publish per device, to its own topic
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             label = _label(d)
             text = lambda _n, a=answered, label=label, i=i: f"{a} of {len(devices)} answered; waiting for {label} ({i + 1} of {len(devices)})"
             topic, _pl, answers, l = actions.send(store, command, device=d, dry_run=dry, wait_secs=wait,
-                                                  progress=ticker(job, text))
+                                                  progress=ticker(job, text), script=ctx.script)
             r = answers.get(d["node"])
             answered += r is not None
             asked += 1
@@ -255,16 +269,18 @@ def start_run_set(ctx, _p, _q, body):
             names = _in_region(ctx, region)
             job.update(expected=len(names))
             lines, stopped = actions.run_set(store, steps, region=region, dry_run=dry, wait_secs=wait,
-                                             on_step=on_step(job, region), progress=ticker(job, lambda n: f"{n} of {len(names)} known answered"))
+                                             on_step=on_step(job, region), progress=ticker(job, lambda n: f"{n} of {len(names)} known answered"),
+                                             script=ctx.script)
             return {"steps": steps, "lines": lines, "runs": [{"target": region, "stopped_at": stopped}]}
         lines, runs = [], []
         job.update(expected=len(devices))
         for d in devices:
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             label = _label(d)
             l, stopped = actions.run_set(store, steps, device=d, dry_run=dry, wait_secs=wait, on_step=on_step(job, label),
-                                         progress=ticker(job, lambda n, label=label: f"{label}: {'answered' if n else 'waiting'}"))
+                                         progress=ticker(job, lambda n, label=label: f"{label}: {'answered' if n else 'waiting'}"),
+                                         script=ctx.script)
             lines += [f"== {label}"] + l
             runs.append({"target": d["node"], "stopped_at": stopped})
             line = (f"stopped at step {stopped + 1}: {steps[stopped]}" if stopped is not None
@@ -292,11 +308,12 @@ def start_discover(ctx, _p, _q, body):
         found = []
         job.update(steps=len(regions))
         for i, region in enumerate(regions):
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             job.update(step=i)
             part = actions.discover(store, region, wait_secs=wait,
-                                    progress=ticker(job, lambda n, region=region: f"{region}: {n} answered ({i + 1} of {len(regions)} regions)"))
+                                    progress=ticker(job, lambda n, region=region: f"{region}: {n} answered ({i + 1} of {len(regions)} regions)"),
+                                    script=ctx.script)
             for e in part:
                 e = {"node": e["node"], "region": e["region"], "code": e["code"], "reply": e["reply"] or "",
                      "key": e.get("key"), "verified": e.get("verified"), "known_as": e.get("known_as"),
@@ -325,11 +342,12 @@ def start_refresh_names(ctx, _p, _q, body):
         lines = []
         job.update(expected=len(devices))
         for i, d in enumerate(devices):
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             label = _label(d)
             n, v, l = actions.refresh_names(store, [d], wait_secs=wait,
-                                            progress=ticker(job, lambda _n, label=label, i=i: f"get name and ver to {label} ({i + 1} of {len(devices)})"))
+                                            progress=ticker(job, lambda _n, label=label, i=i: f"get name and ver to {label} ({i + 1} of {len(devices)})"),
+                                            script=ctx.script)
             named, versioned, asked = named + n, versioned + v, asked + 1
             lines += l
             job.land({"node": d["node"], "name": label, "command": "get name, ver", "ok": v > 0, "code": None,
@@ -350,7 +368,7 @@ def start_refresh_fleet(ctx, _p, _q, body):
         updated = failed = 0
         job.update(expected=len(devices))
         for i, d in enumerate(devices):
-            if job.cancel.is_set():
+            if job.stopping():
                 break
             job.update(text=f"Beacon: {i} of {len(devices)} asked")
             u, f = actions.refresh_fleet(store, [d])
@@ -377,13 +395,14 @@ def start_statistics(ctx, _p, _q, body):
     store = ctx.store
 
     def work(job):
-        lines = actions.statistics(store, d, range_, interval, live=live,
-                                   progress=ticker(job, lambda n: "answered" if n else "waiting for the live sample"))
+        lines, sample, points = actions.statistics(store, d, range_, interval, live=live, details=True,
+                                   progress=ticker(job, lambda n: "answered" if n else "waiting for the live sample"),
+                                   script=ctx.script)
         if not lines[0].startswith("live"):             # a live answer is kept by send() itself
             summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
             store.remember_read(d["node"], "stats (Beacon)", summary[:60])
         job.update(text="done")
-        return {"node": d["node"], "lines": lines}
+        return {"node": d["node"], "lines": lines, "sample": sample, "points": points}
 
     return 202, ctx.jobs.start("statistics", work).snapshot()
 
@@ -423,7 +442,10 @@ def get_job(ctx, params, _q, _b):
 
 def cancel_job(ctx, params, _q, _b):
     job = ctx.jobs.get(params["id"])
-    job.cancel.set()
+    with job.lock:
+        if job.status != "running":
+            raise ApiError(409, "finished", f"job {job.id} is already {job.status}")
+        job.cancel.set()
     return 202, job.snapshot()
 
 

@@ -60,8 +60,9 @@ def outcome_line(result, version=None):
     return line + (f" -- {result.help}" if result.help else "")
 
 
-def send(store, command, device=None, region=None, dry_run=False, wait_secs=None, progress=None):
+def send(store, command, device=None, region=None, dry_run=False, wait_secs=None, progress=None, script=None):
     """Sign and send `command` to one device, or with `region` to every node in that region.
+    `script`, here and below, stands in for the broker in tests (`transport._fake`).
 
     Returns `(topic, payload, {node: Result}, lines)`, where `lines` is what to show.
     Raises `envelope.EnvelopeError`, `transport.BrokerError` or `store.StoreError`.
@@ -90,7 +91,7 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     payload, answers = transport.send(dict(config, region=region), store.seed(), topic, command,
                                       nodes_to_hear=hear, keys=keys,
                                       wait_secs=wait_secs or config.get("wait_secs", 20),
-                                      progress=progress)
+                                      progress=progress, script=script)
     lines = []
     names = {d["node"]: (d["name"] or d["node"]) for d in store.devices()}
     versions = {d["node"]: d.get("ver") for d in store.devices()}
@@ -113,7 +114,8 @@ def fill(steps, arg):
     return [s.replace("{arg}", (arg or "").strip()) for s in steps]
 
 
-def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=None, on_step=None, progress=None):
+def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=None, on_step=None, progress=None,
+            script=None):
     """Send `steps` in order to one device (or every node in `region`), stopping at the first
     refusal or silence. Returns `(lines, stopped_at)`: what to show, and the index of the
     step that stopped it, or None when every step was answered ok."""
@@ -122,7 +124,7 @@ def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=Non
         if on_step:
             on_step(i, command)
         _t, _p, answers, step_lines = send(store, command, device=device, region=region,
-                                           dry_run=dry_run, wait_secs=wait_secs, progress=progress)
+                                           dry_run=dry_run, wait_secs=wait_secs, progress=progress, script=script)
         lines.append(f"-- {i + 1}/{len(steps)}: {command}")
         lines += step_lines
         if dry_run:
@@ -137,12 +139,12 @@ def run_set(store, steps, device=None, region=None, dry_run=False, wait_secs=Non
     return lines, stopped
 
 
-def live_statistics(store, device, progress=None):
+def live_statistics(store, device, progress=None, script=None):
     """One signed `get stats` to the device: `(lines, note)`. `lines` is the sample as
     `beacon.stat_lines` lays it out, headed "live, just now"; empty when the node did not
     answer or refused, with `note` saying which (older firmware answers not-allowed)."""
     try:
-        _t, _p, answers, _l = send(store, "get stats", device=device, progress=progress)
+        _t, _p, answers, _l = send(store, "get stats", device=device, progress=progress, script=script)
     except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
         return [], f"live: {exc}"
     r = answers.get(device["node"])
@@ -159,27 +161,34 @@ def live_statistics(store, device, progress=None):
     return lines, ""
 
 
-def statistics(store, device, range_="24h", interval="6h", live=False, progress=None):
+def statistics(store, device, range_="24h", interval="6h", live=False, progress=None, script=None, details=False):
     """The lines to show for a device's statistics: the live sample first when asked for
     and answered, then Beacon's sample with its age and the telemetry buckets. Raises
-    `beacon.BeaconError` with the reason when Beacon has none and there is no live one."""
+    `beacon.BeaconError` with the reason when Beacon has none and there is no live one.
+    With `details`, `(lines, sample, points)`: what Beacon gave, each None where it gave
+    nothing, so a dashboard has the numbers without asking Beacon twice."""
     head = []
     if live:
-        live_lines, note = live_statistics(store, device, progress=progress)
+        live_lines, note = live_statistics(store, device, progress=progress, script=script)
         head = live_lines + [""] if live_lines else [note, ""]
+    sample = points = None
     try:
         sample = beacon.stats(store, device)
     except beacon.BeaconError as exc:
         if head and head[0].startswith("live, just now"):
-            return head + [f"Beacon: {exc}"]
+            lines = head + [f"Beacon: {exc}"]
+            return (lines, None, None) if details else lines
         raise
     lines = beacon.stat_lines(sample)
     lines[0] = "Beacon: " + lines[0]
+    device = store.device(device["node"]) or device       # with the observer id the read above found
     try:
         points = beacon.telemetry(store, device, range_, interval)
     except beacon.BeaconError as exc:
-        return head + lines + ["", f"no telemetry: {exc}"]
-    return head + lines + ["", f"last {range_} at {interval}:"] + beacon.telemetry_lines(points)
+        lines = head + lines + ["", f"no telemetry: {exc}"]
+    else:
+        lines = head + lines + ["", f"last {range_} at {interval}:"] + beacon.telemetry_lines(points)
+    return (lines, sample, points) if details else lines
 
 
 def refresh_fleet(store, devices, now=None):
@@ -202,7 +211,7 @@ def refresh_fleet(store, devices, now=None):
     return updated, failed
 
 
-def refresh_names(store, devices, wait_secs=None, progress=None):
+def refresh_names(store, devices, wait_secs=None, progress=None, script=None):
     """`get name` and `ver` to each device, one signed read each: an unnamed device takes the
     fleet's name, every device stores `ver`. Returns `(named, versioned, lines)`. A node whose
     firmware admits neither answers not-allowed and keeps what it had."""
@@ -213,7 +222,8 @@ def refresh_names(store, devices, wait_secs=None, progress=None):
         changes = {}
         for command in ("get name", "ver"):
             try:
-                _t, _p, answers, _l = send(store, command, device=d, wait_secs=wait_secs, progress=progress)
+                _t, _p, answers, _l = send(store, command, device=d, wait_secs=wait_secs, progress=progress,
+                                           script=script)
             except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
                 lines.append(f"{label[:12]:12} {command}: {exc}")
                 continue
@@ -257,7 +267,7 @@ def regions_asked(text, store):
     return seen
 
 
-def discover(store, region, wait_secs=None, progress=None):
+def discover(store, region, wait_secs=None, progress=None, script=None):
     """The nodes in `region` that answer a command signed with your key, marked if known.
     `region` may name several (`JKG, GOT`) or `*`; one signed read per region, one list."""
     regions = regions_asked(region, store)
@@ -267,13 +277,13 @@ def discover(store, region, wait_secs=None, progress=None):
     if len(regions) > 1:
         found = []
         for one in regions:
-            found += discover(store, one, wait_secs, progress)
+            found += discover(store, one, wait_secs, progress, script)
         return found
     region = regions[0]
     config = store.config()
     known = {d["node"]: d["name"] for d in store.devices()}
     found = transport.discover(config, store.seed(), region,
-                               wait_secs=wait_secs or config.get("wait_secs", 20), progress=progress)
+                               wait_secs=wait_secs or config.get("wait_secs", 20), progress=progress, script=script)
     for entry in found:
         entry["known_as"] = known.get(entry["node"])
         # a node answering on a whole-key topic (ar-11) tells us its key: keep it on a
@@ -293,7 +303,7 @@ def discover(store, region, wait_secs=None, progress=None):
                                        envelope.command_topic(region), "get name",
                                        nodes_to_hear=[e["node"] for e in found],
                                        keys={e["node"]: e["key"] for e in found if e.get("key")},
-                                       wait_secs=min(10, wait_secs or config.get("wait_secs", 20)))
+                                       wait_secs=min(10, wait_secs or config.get("wait_secs", 20)), script=script)
         except transport.BrokerError:
             names = {}
         for entry in found:

@@ -92,7 +92,12 @@ def command_list(d):
 
 
 def public_config(store):
-    return {k: v for k, v in store.config().items() if k not in ("sets", "shortcuts")}
+    """The configuration without the broker's password -- only whether one is set -- and
+    without the sets and shortcuts, which have their own routes."""
+    config = store.config()
+    out = {k: v for k, v in config.items() if k not in ("sets", "shortcuts", "password")}
+    out["password_set"] = bool(config.get("password"))
+    return out
 
 
 # -- meta --------------------------------------------------------------------------------
@@ -106,9 +111,9 @@ def docs_page(_ctx, _p, _q, _b):
     return 200, Html(f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>mccontrol API</title>
 <link rel="stylesheet" href="{SWAGGER}/swagger-ui.css"></head>
-<body><div id="ui">The API viewer loads from {SWAGGER}; offline, read /openapi.json.</div>
+<body><div id="ui">The API viewer loads from {SWAGGER}; offline, read openapi.json beside this page.</div>
 <script src="{SWAGGER}/swagger-ui-bundle.js"></script>
-<script>SwaggerUIBundle({{url: "/openapi.json", dom_id: "#ui"}});</script>
+<script>SwaggerUIBundle({{url: "openapi.json", dom_id: "#ui"}});</script>
 </body></html>
 """)
 

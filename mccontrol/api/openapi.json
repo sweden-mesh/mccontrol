@@ -3,11 +3,11 @@
  "info": {
   "title": "mccontrol",
   "version": "1",
-  "description": "The backend of mccontrol on 127.0.0.1: configuration, keys, the device directory, command sets, history, the command table and help, and the long-running verbs as jobs. JSON in and out, UTF-8. A job is started by POST /jobs/<verb> (202 with the job), followed by GET /jobs/<id> until its status is no longer running, and cancelled by DELETE /jobs/<id>. Every error is {\"error\": {\"code\", \"message\"}}; inside a job it is the job's error, with the same codes (broker and beacon for the network)."
+  "description": "The backend of mccontrol on 127.0.0.1: configuration, keys, the device directory, command sets, history, the command table and help, and the long-running verbs as jobs. JSON in and out, UTF-8. A job is started by POST /jobs/<verb> (202 with the job), followed by GET /jobs/<id> until its status is no longer running, and cancelled by DELETE /jobs/<id>. Every error is {\"error\": {\"code\", \"message\"}}; inside a job it is the job's error, with the same codes (broker and beacon for the network). Every route lives under the base URL serve() returns, http://127.0.0.1:<port>/<secret>/, which is why the server entry is relative: a request outside it is a 404 with an empty body. Any route also answers 403 (forbidden) to a request whose Origin header is not the server's own, 415 (unsupported_media_type) to a body that is not application/json, 405 (method_not_allowed) to a method the path does not take, and 500 (internal) to a fault."
  },
  "servers": [
   {
-   "url": "/"
+   "url": "."
   }
  ],
  "paths": {
@@ -1020,7 +1020,7 @@
    },
    "delete": {
     "operationId": "cancel_job",
-    "summary": "Cancel a job: the wait stops, what landed is kept",
+    "summary": "Cancel a running job: the wait stops, what landed is kept; a finished job is a 409 (finished)",
     "responses": {
      "202": {
       "description": "Accepted",
@@ -1037,6 +1037,9 @@
      },
      "404": {
       "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
      }
     },
     "parameters": [
@@ -1367,7 +1370,10 @@
          "broker",
          "beacon",
          "internal",
-         "cancelled"
+         "cancelled",
+         "forbidden",
+         "unsupported_media_type",
+         "finished"
         ]
        },
        "message": {
@@ -1417,8 +1423,9 @@
      "username": {
       "type": "string"
      },
-     "password": {
-      "type": "string"
+     "password_set": {
+      "type": "boolean",
+      "description": "whether a broker password is set; the password itself is never returned"
      },
      "tls": {
       "type": "boolean"
@@ -1460,7 +1467,7 @@
      "broker": "mqtt.louie.se",
      "port": 1883,
      "username": "",
-     "password": "",
+     "password_set": false,
      "ttl_secs": 300,
      "wait_secs": 20,
      "beacon_url": "https://beacon.meshat.se/api/v1",
@@ -1478,7 +1485,7 @@
      "broker",
      "port",
      "username",
-     "password",
+     "password_set",
      "ttl_secs",
      "wait_secs",
      "beacon_url",
@@ -1498,7 +1505,9 @@
       "type": "string"
      },
      "password": {
-      "type": "string"
+      "type": "string",
+      "writeOnly": true,
+      "description": "set here, never returned: GET /config says password_set"
      },
      "tls": {
       "type": "boolean"
@@ -2592,6 +2601,10 @@
      "cancel_requested": {
       "type": "boolean"
      },
+     "cancellable": {
+      "type": "boolean",
+      "description": "whether a cancel can interrupt this verb's waits: false for test and register, whose broker waits take no callback; discover stops listening and the regions left, but not the name read after a region"
+     },
      "started": {
       "type": "string"
      },
@@ -2627,6 +2640,7 @@
      "verb": "send",
      "status": "running",
      "cancel_requested": false,
+     "cancellable": true,
      "started": "2026-10-08 12:00:00",
      "finished": null,
      "progress": {
@@ -2659,6 +2673,7 @@
      "verb",
      "status",
      "cancel_requested",
+     "cancellable",
      "started",
      "finished",
      "progress",
@@ -3038,6 +3053,82 @@
      "asked"
     ]
    },
+   "Sample": {
+    "type": "object",
+    "properties": {
+     "stats": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "number"
+      },
+      "description": "Beacon's status block: battery_mv, uptime_secs, noise_floor, tx_air_secs, rx_air_secs, packets_sent, packets_received, errors, recv_errors, queue_len, internal_heap"
+     },
+     "sampled_at": {
+      "type": "number",
+      "description": "epoch seconds"
+     },
+     "age_secs": {
+      "type": "integer"
+     },
+     "firmware": {
+      "type": "string"
+     },
+     "model": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "stats",
+     "sampled_at",
+     "age_secs",
+     "firmware",
+     "model",
+     "name"
+    ]
+   },
+   "Point": {
+    "type": "object",
+    "properties": {
+     "t": {
+      "type": "integer",
+      "description": "epoch milliseconds, the bucket's start"
+     },
+     "batteryMv": {
+      "type": "number",
+      "nullable": true
+     },
+     "airtimeTxSecs": {
+      "type": "number",
+      "nullable": true
+     },
+     "airtimeRxSecs": {
+      "type": "number",
+      "nullable": true
+     },
+     "noiseFloorDb": {
+      "type": "number",
+      "nullable": true
+     },
+     "uptimeSeconds": {
+      "type": "number",
+      "nullable": true
+     },
+     "queueLength": {
+      "type": "number",
+      "nullable": true
+     },
+     "receiveErrors": {
+      "type": "number",
+      "nullable": true
+     }
+    },
+    "required": [
+     "t"
+    ]
+   },
    "StatisticsResult": {
     "type": "object",
     "properties": {
@@ -3049,11 +3140,30 @@
       "items": {
        "type": "string"
       }
+     },
+     "sample": {
+      "nullable": true,
+      "allOf": [
+       {
+        "$ref": "#/components/schemas/Sample"
+       }
+      ],
+      "description": "the latest Beacon status, null when Beacon has none"
+     },
+     "points": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Point"
+      },
+      "description": "the telemetry buckets, oldest first; null when Beacon has none",
+      "nullable": true
      }
     },
     "required": [
      "node",
-     "lines"
+     "lines",
+     "sample",
+     "points"
     ]
    },
    "TestResult": {
@@ -3146,7 +3256,7 @@
     }
    },
    "Conflict": {
-    "description": "The state forbids it: a key exists, or a command that takes something away was not confirmed (confirm_required)",
+    "description": "The state forbids it: a key or a name exists (conflict), a command that takes something away was not confirmed (confirm_required), or the job has already finished (finished)",
     "content": {
      "application/json": {
       "schema": {
