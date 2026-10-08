@@ -171,6 +171,23 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert spec_routes() - SEEN == set(), "routes the walk did not exercise"
 
 
+def test_ui_settings_merge_interface_by_interface_and_key_by_key(api):
+    _server, url, store = api
+    assert call(url, "GET", "/config")[1]["ui_settings"] == {}              # none stored: an empty object
+    assert "ui_settings" not in store.config()
+    got = call(url, "PATCH", "/config", {"ui_settings": {"Monolith": {"palette": "green", "n": 2}}})[1]
+    assert got["ui_settings"] == {"Monolith": {"palette": "green", "n": 2}}
+    got = call(url, "PATCH", "/config", {"ui_settings": {"IBMi": {"rows": [1, 2]}, "Monolith": {"palette": "amber"}}})[1]
+    assert got["ui_settings"] == {"IBMi": {"rows": [1, 2]}, "Monolith": {"palette": "amber", "n": 2}}
+    got = call(url, "PATCH", "/config", {"ui_settings": {"Monolith": {"n": None}, "IBMi": {"rows": None, "gone": None}}})[1]
+    assert got["ui_settings"] == {"Monolith": {"palette": "amber"}}         # null deletes; an empty interface goes
+    assert store.config()["ui_settings"] == {"Monolith": {"palette": "amber"}}
+    assert call(url, "PATCH", "/config", {"wait_secs": 3})[1]["ui_settings"] == {"Monolith": {"palette": "amber"}}
+    for wrong in ("green", ["Monolith"], {"Monolith": "green"}, {"Monolith": None}, {"Monolith": {"palette": "green"}, "IBMi": 1}):
+        assert call(url, "PATCH", "/config", {"ui_settings": wrong})[0] == 400, wrong
+    assert store.config()["ui_settings"] == {"Monolith": {"palette": "amber"}}  # a refused change changes nothing
+
+
 def test_errors_are_one_shape_with_proper_status(api):
     _server, url, _store = api
     assert call(url, "GET", "/nope", check=False) == (404, {"error": {"code": "not_found", "message": "no route /nope"}})
