@@ -104,10 +104,17 @@ class Board:
         return name if isinstance(name, str) and name in art.PALETTES else "amber"
 
     def swap_palette(self):
-        self.palette = "green" if self.palette == "amber" else "amber"
+        """The other palette, kept first: when the API cannot keep it the board stays as it
+        is, so the next start is not a surprise."""
+        other = "green" if self.palette == "amber" else "amber"
+        try:
+            self.client.set_config(ui_settings={UI: {"palette": other}})
+        except ApiError as exc:
+            self.toast(exc.message, "alert")
+            return
+        self.palette = other
         self.colors = self._colors()
         self.toast(f"{self.palette} phosphor")
-        self.client.set_config(ui_settings={UI: {"palette": self.palette}})
 
     # -- data --------------------------------------------------------------------------
 
