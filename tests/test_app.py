@@ -4,9 +4,9 @@ import os
 import pathlib
 import pty
 import re
-import select
 import sys
-import time
+
+import ptywalk
 
 NODES = [("Gisebo", "4AC61A7F", "JKG"), ("", "65C1D12C", "JKG"), ("Far", "FD700369", "GOT")]
 
@@ -44,21 +44,15 @@ def walk(tmp_path, keys, seconds=3.0, env=None, cols=80, rows=24, prepare=None):
         os.environ.update(env or {})
         sys.path.insert(0, os.getcwd())
         os.execvp(sys.executable, [sys.executable, "-c", "import sys; sys.path.insert(0, %r); from mccontrol import cli; sys.exit(cli.main([\"--ui\", \"MeshcoreCommander\"]))" % os.getcwd()])
-    time.sleep(0.8)
+    out = bytearray()
+    # each wait ends when the app is reading its terminal again (tests/ptywalk.py); the
+    # delays are only the upper bound
+    ptywalk.settle(fd, pid, 0.8, out.extend)
     for k, delay in keys:
-        os.write(fd, k)
-        time.sleep(delay)
-    os.write(fd, b"\x0c")            # Ctrl+L: a full repaint, so the capture holds the whole last frame
-    time.sleep(0.8)
-    out = b""
-    end = time.time() + seconds
-    while time.time() < end:
-        r, _, _ = select.select([fd], [], [], 0.1)
-        if r:
-            try:
-                out += os.read(fd, 65536)
-            except OSError:
-                break
+        ptywalk.key(fd, pid, k, delay, out.extend)
+    # Ctrl+L: a full repaint, so the capture holds the whole last frame
+    ptywalk.key(fd, pid, b"\x0c", 0.8 + seconds, out.extend)
+    out = bytes(out)
     try:
         os.kill(pid, signal.SIGKILL)
     except ProcessLookupError:
@@ -440,22 +434,13 @@ def test_a_wait_writes_the_box_once(tmp_path):
                            "MCCONTROL_FAKE_RESULTS": fake, "MCCONTROL_FAKE_WAIT": "2"})
         os.execvp(sys.executable, [sys.executable, "-c",
                   "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([\"--ui\", \"MeshcoreCommander\"])" % os.getcwd()])
-    out = b""
-
-    def pump(secs):
-        nonlocal out
-        end = time.time() + secs
-        while time.time() < end:
-            r, _, _ = select.select([fd], [], [], 0.1)
-            if r:
-                try:
-                    out += os.read(fd, 65536)
-                except OSError:
-                    return
-    pump(0.8); os.write(fd, DOWN); pump(0.3); os.write(fd, F[5]); pump(0.5); os.write(fd, b"\r"); pump(3.0)
+    out = bytearray()
+    ptywalk.settle(fd, pid, 0.8, out.extend)
+    for k, delay in ((DOWN, 0.3), (F[5], 0.5), (b"\r", 3.0)):
+        ptywalk.key(fd, pid, k, delay, out.extend)
     os.kill(pid, signal.SIGKILL)
     os.waitpid(pid, 0)
-    raw = out.decode("utf-8", "replace")
+    raw = bytes(out).decode("utf-8", "replace")
     assert raw.count("Discovering") == 1, raw.count("Discovering")
     assert raw.count("Esc stops waiting") == 1
     assert raw.count("Found 0 new, 1 old") >= 1            # the count line did change, and was written
@@ -508,22 +493,12 @@ def test_a_greyed_entry_is_drawn_in_the_disabled_colour_and_names_the_build(tmp_
         os.environ.update({"TERM": "xterm", "COLUMNS": "80", "LINES": "24", "MCCONTROL_HOME": str(home)})
         os.execvp(sys.executable, [sys.executable, "-c",
                   "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([\"--ui\", \"MeshcoreCommander\"])" % os.getcwd()])
-    out = b""
-
-    def pump(secs):
-        nonlocal out
-        end = time.time() + secs
-        while time.time() < end:
-            r, _, _ = select.select([fd], [], [], 0.1)
-            if r:
-                try:
-                    out += os.read(fd, 65536)
-                except OSError:
-                    return
-    pump(0.8); os.write(fd, b"\r"); pump(1.0)                      # the list, unfiltered: get af admitted, get stats greyed on ar-10
+    out = bytearray()
+    ptywalk.settle(fd, pid, 0.8, out.extend)
+    ptywalk.key(fd, pid, b"\r", 1.0, out.extend)                   # the list, unfiltered: get af admitted, get stats greyed on ar-10
     os.kill(pid, signal.SIGKILL)
     os.waitpid(pid, 0)
-    raw = out.decode("utf-8", "replace")
+    raw = bytes(out).decode("utf-8", "replace")
     text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][0-9A-B]", " ", raw)
     assert "(needs ar-11)" in text                                   # a greyed entry names its build
     # the attributes in force before an admitted row's text differ from a greyed row's:
