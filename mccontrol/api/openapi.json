@@ -1,0 +1,3140 @@
+{
+ "openapi": "3.0.3",
+ "info": {
+  "title": "mccontrol",
+  "version": "1",
+  "description": "The backend of mccontrol on 127.0.0.1: configuration, keys, the device directory, command sets, history, the command table and help, and the long-running verbs as jobs. JSON in and out, UTF-8. A job is started by POST /jobs/<verb> (202 with the job), followed by GET /jobs/<id> until its status is no longer running, and cancelled by DELETE /jobs/<id>. Every error is {\"error\": {\"code\", \"message\"}}; inside a job it is the job's error, with the same codes (broker and beacon for the network)."
+ },
+ "servers": [
+  {
+   "url": "/"
+  }
+ ],
+ "paths": {
+  "/openapi.json": {
+   "get": {
+    "operationId": "openapi",
+    "summary": "This document",
+    "responses": {
+     "200": {
+      "description": "The OpenAPI document",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   }
+  },
+  "/docs": {
+   "get": {
+    "operationId": "docs_page",
+    "summary": "A Swagger UI page over /openapi.json; the viewer loads from a CDN",
+    "responses": {
+     "200": {
+      "description": "HTML",
+      "content": {
+       "text/html": {
+        "schema": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   }
+  },
+  "/config": {
+   "get": {
+    "operationId": "config",
+    "summary": "The control broker's configuration",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Config"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   },
+   "patch": {
+    "operationId": "set_config",
+    "summary": "Change the configuration (setup)",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Config"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ConfigChange"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/key": {
+   "get": {
+    "operationId": "key",
+    "summary": "The public key, whether one exists, and the registration",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Key"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   },
+   "post": {
+    "operationId": "create_key",
+    "summary": "Generate a signing key, or import a seed",
+    "responses": {
+     "201": {
+      "description": "Created",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Key"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/KeyCreate"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/devices": {
+   "get": {
+    "operationId": "devices",
+    "summary": "The directory: every device with its row, the columns and the tags",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DeviceList"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "parameters": [
+     {
+      "name": "sort",
+      "in": "query",
+      "required": false,
+      "description": "name, region, last sent or version",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "name",
+        "region",
+        "last sent",
+        "version"
+       ]
+      }
+     },
+     {
+      "name": "width",
+      "in": "query",
+      "required": false,
+      "description": "the row width (default 100)",
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ]
+   },
+   "post": {
+    "operationId": "add_device",
+    "summary": "Remember a device",
+    "responses": {
+     "201": {
+      "description": "Created",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Device"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DeviceCreate"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/devices/adopt": {
+   "post": {
+    "operationId": "adopt",
+    "summary": "Remember a node a discovery found",
+    "responses": {
+     "201": {
+      "description": "Created",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Device"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Adopt"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/devices/{ref}": {
+   "get": {
+    "operationId": "device",
+    "summary": "One device",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Device"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "ref",
+      "in": "path",
+      "required": true,
+      "description": "a device's name, node id, whole key, or a unique prefix of either",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "patch": {
+    "operationId": "edit_device",
+    "summary": "Change a device's name, region or notes",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Device"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DeviceChange"
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "ref",
+      "in": "path",
+      "required": true,
+      "description": "a device's name, node id, whole key, or a unique prefix of either",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "operationId": "forget",
+    "summary": "Forget a device",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Forgot"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "ref",
+      "in": "path",
+      "required": true,
+      "description": "a device's name, node id, whole key, or a unique prefix of either",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/devices/{ref}/history": {
+   "get": {
+    "operationId": "history",
+    "summary": "What was sent to the device and what came back, oldest first",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/History"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "ref",
+      "in": "path",
+      "required": true,
+      "description": "a device's name, node id, whole key, or a unique prefix of either",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "description": "at most this many lines (default 200)",
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ]
+   }
+  },
+  "/history": {
+   "get": {
+    "operationId": "broadcast_history",
+    "summary": "What was broadcast to whole regions, oldest first",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/History"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "description": "at most this many lines (default 200)",
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ]
+   }
+  },
+  "/devices/{ref}/reads": {
+   "get": {
+    "operationId": "reads",
+    "summary": "What the device last answered to each read, newest first",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Reads"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "ref",
+      "in": "path",
+      "required": true,
+      "description": "a device's name, node id, whole key, or a unique prefix of either",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/devices/{ref}/commands": {
+   "get": {
+    "operationId": "device_commands",
+    "summary": "The command list with the device firmware's admission",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CommandList"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "ref",
+      "in": "path",
+      "required": true,
+      "description": "a device's name, node id, whole key, or a unique prefix of either",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/commands": {
+   "get": {
+    "operationId": "commands",
+    "summary": "The command table, by group, with the build each needs",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CommandList"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   }
+  },
+  "/commands/check": {
+   "get": {
+    "operationId": "check_command",
+    "summary": "Would the node refuse it, does it take something away, does it transmit",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CommandCheck"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "command",
+      "in": "query",
+      "required": true,
+      "description": "the command text",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "device",
+      "in": "query",
+      "required": false,
+      "description": "judge admission against this device's firmware",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/tags": {
+   "get": {
+    "operationId": "tags",
+    "summary": "The tagged devices",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Tags"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   },
+   "put": {
+    "operationId": "set_tags",
+    "summary": "Replace the tags",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Tags"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TagSet"
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "operationId": "tag",
+    "summary": "Tag devices, or every device of a region",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Tags"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TagChange"
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "operationId": "untag",
+    "summary": "Untag devices or a region; with neither, clear every tag",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Tags"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "devices",
+      "in": "query",
+      "required": false,
+      "description": "comma-separated device refs",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "region",
+      "in": "query",
+      "required": false,
+      "description": "every device of a region",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/tags/invert": {
+   "post": {
+    "operationId": "invert_tags",
+    "summary": "Invert the tags",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Tags"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   }
+  },
+  "/regions": {
+   "get": {
+    "operationId": "regions",
+    "summary": "The regions the directory spans, first-seen order",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Regions"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   }
+  },
+  "/sets": {
+   "get": {
+    "operationId": "sets",
+    "summary": "The command sets",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Sets"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   }
+  },
+  "/sets/{name}": {
+   "put": {
+    "operationId": "save_set",
+    "summary": "Define or replace a command set; {arg} in a step is filled in at run time",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SetSaved"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SetSave"
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "description": "one word",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "operationId": "remove_set",
+    "summary": "Remove a command set, the shipped one included",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Removed"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "description": "the set",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/shortcuts": {
+   "get": {
+    "operationId": "shortcuts",
+    "summary": "The nine Alt+n shortcuts; an empty string is a free slot",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Shortcuts"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   },
+   "put": {
+    "operationId": "set_shortcuts",
+    "summary": "Replace the shortcuts (up to nine)",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Shortcuts"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Shortcuts"
+       }
+      }
+     }
+    }
+   }
+  },
+  "/help": {
+   "get": {
+    "operationId": "help_index",
+    "summary": "The help topics, and which topic each context opens",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HelpIndex"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   }
+  },
+  "/help/{topic}": {
+   "get": {
+    "operationId": "help_topic",
+    "summary": "One help topic with its links",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HelpTopic"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "topic",
+      "in": "path",
+      "required": true,
+      "description": "the topic's name",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/jobs": {
+   "get": {
+    "operationId": "jobs",
+    "summary": "The jobs this server has run, newest first",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobList"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    }
+   }
+  },
+  "/jobs/{id}": {
+   "get": {
+    "operationId": "job",
+    "summary": "A job: status, progress, the outcomes so far, the result",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "description": "the job's id",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "operationId": "cancel_job",
+    "summary": "Cancel a job: the wait stops, what landed is kept",
+    "responses": {
+     "202": {
+      "description": "Accepted",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "description": "the job's id",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/jobs/send": {
+   "post": {
+    "operationId": "start_send",
+    "summary": "Sign and send a command to devices, the tagged, or a region",
+    "responses": {
+     "202": {
+      "description": "Accepted: the job is running",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SendJob"
+       }
+      }
+     }
+    },
+    "x-result-schema": {
+     "$ref": "#/components/schemas/SendResult"
+    }
+   }
+  },
+  "/jobs/run-set": {
+   "post": {
+    "operationId": "start_run_set",
+    "summary": "Send a command set step by step, stopping at the first refusal or silence",
+    "responses": {
+     "202": {
+      "description": "Accepted: the job is running",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     },
+     "409": {
+      "$ref": "#/components/responses/Conflict"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RunSetJob"
+       }
+      }
+     }
+    },
+    "x-result-schema": {
+     "$ref": "#/components/schemas/RunSetResult"
+    }
+   }
+  },
+  "/jobs/discover": {
+   "post": {
+    "operationId": "start_discover",
+    "summary": "The nodes in one or more regions that accept your key",
+    "responses": {
+     "202": {
+      "description": "Accepted: the job is running",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DiscoverJob"
+       }
+      }
+     }
+    },
+    "x-result-schema": {
+     "$ref": "#/components/schemas/DiscoverResult"
+    }
+   }
+  },
+  "/jobs/refresh-names": {
+   "post": {
+    "operationId": "start_refresh_names",
+    "summary": "get name and ver to devices: the unnamed take the fleet's name",
+    "responses": {
+     "202": {
+      "description": "Accepted: the job is running",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TargetsJob"
+       }
+      }
+     }
+    },
+    "x-result-schema": {
+     "$ref": "#/components/schemas/RefreshNamesResult"
+    }
+   }
+  },
+  "/jobs/refresh-fleet": {
+   "post": {
+    "operationId": "start_refresh_fleet",
+    "summary": "Battery and last-seen from Beacon",
+    "responses": {
+     "202": {
+      "description": "Accepted: the job is running",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TargetsJob"
+       }
+      }
+     }
+    },
+    "x-result-schema": {
+     "$ref": "#/components/schemas/RefreshFleetResult"
+    }
+   }
+  },
+  "/jobs/statistics": {
+   "post": {
+    "operationId": "start_statistics",
+    "summary": "A device's statistics: get stats live, then Beacon's sample and telemetry",
+    "responses": {
+     "202": {
+      "description": "Accepted: the job is running",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/StatisticsJob"
+       }
+      }
+     }
+    },
+    "x-result-schema": {
+     "$ref": "#/components/schemas/StatisticsResult"
+    }
+   }
+  },
+  "/jobs/test": {
+   "post": {
+    "operationId": "start_test",
+    "summary": "Test the control broker: connect, sign in, subscribe, publish, receive",
+    "responses": {
+     "202": {
+      "description": "Accepted: the job is running",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Empty"
+       }
+      }
+     }
+    },
+    "x-result-schema": {
+     "$ref": "#/components/schemas/TestResult"
+    }
+   }
+  },
+  "/jobs/register": {
+   "post": {
+    "operationId": "start_register",
+    "summary": "Register the signing key with the control broker",
+    "responses": {
+     "202": {
+      "description": "Accepted: the job is running",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "requestBody": {
+     "required": false,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Empty"
+       }
+      }
+     }
+    },
+    "x-result-schema": {
+     "$ref": "#/components/schemas/RegisterResult"
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "Error": {
+    "type": "object",
+    "properties": {
+     "error": {
+      "type": "object",
+      "properties": {
+       "code": {
+        "type": "string",
+        "enum": [
+         "bad_request",
+         "not_found",
+         "method_not_allowed",
+         "conflict",
+         "confirm_required",
+         "refused",
+         "store",
+         "broker",
+         "beacon",
+         "internal",
+         "cancelled"
+        ]
+       },
+       "message": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "code",
+       "message"
+      ]
+     }
+    },
+    "example": {
+     "error": {
+      "code": "not_found",
+      "message": "no device matches 'nobody'"
+     }
+    },
+    "required": [
+     "error"
+    ]
+   },
+   "ErrorBody": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "message": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "code",
+     "message"
+    ]
+   },
+   "Config": {
+    "type": "object",
+    "properties": {
+     "broker": {
+      "type": "string"
+     },
+     "port": {
+      "type": "integer"
+     },
+     "username": {
+      "type": "string"
+     },
+     "password": {
+      "type": "string"
+     },
+     "tls": {
+      "type": "boolean"
+     },
+     "ttl_secs": {
+      "type": "integer"
+     },
+     "wait_secs": {
+      "type": "number"
+     },
+     "beacon_url": {
+      "type": "string"
+     },
+     "columns": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "reg",
+        "sent",
+        "batt",
+        "seen",
+        "ver",
+        "result"
+       ]
+      }
+     },
+     "registered": {
+      "$ref": "#/components/schemas/Registration",
+      "nullable": true
+     }
+    },
+    "description": "The control broker and how long to wait; command sets and shortcuts have their own routes.",
+    "example": {
+     "broker": "mqtt.louie.se",
+     "port": 1883,
+     "username": "",
+     "password": "",
+     "ttl_secs": 300,
+     "wait_secs": 20,
+     "beacon_url": "https://beacon.meshat.se/api/v1",
+     "columns": [
+      "reg",
+      "sent",
+      "batt",
+      "seen",
+      "ver",
+      "result"
+     ],
+     "registered": null
+    },
+    "required": [
+     "broker",
+     "port",
+     "username",
+     "password",
+     "ttl_secs",
+     "wait_secs",
+     "beacon_url",
+     "columns"
+    ]
+   },
+   "ConfigChange": {
+    "type": "object",
+    "properties": {
+     "broker": {
+      "type": "string"
+     },
+     "port": {
+      "type": "integer"
+     },
+     "username": {
+      "type": "string"
+     },
+     "password": {
+      "type": "string"
+     },
+     "tls": {
+      "type": "boolean"
+     },
+     "ttl_secs": {
+      "type": "integer"
+     },
+     "wait_secs": {
+      "type": "number"
+     },
+     "beacon_url": {
+      "type": "string"
+     },
+     "columns": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "description": "Only the fields given change; an unknown field is a 400.",
+    "example": {
+     "broker": "mqtt.louie.se",
+     "port": 1883,
+     "username": "mcoar",
+     "password": "secret"
+    }
+   },
+   "Registration": {
+    "type": "object",
+    "properties": {
+     "broker": {
+      "type": "string"
+     },
+     "at": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "broker",
+     "at"
+    ]
+   },
+   "Key": {
+    "type": "object",
+    "properties": {
+     "exists": {
+      "type": "boolean"
+     },
+     "public": {
+      "type": "string",
+      "nullable": true
+     },
+     "path": {
+      "type": "string"
+     },
+     "registered": {
+      "$ref": "#/components/schemas/Registration",
+      "nullable": true
+     },
+     "provision": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "the two serial lines that provision a repeater"
+     }
+    },
+    "example": {
+     "exists": true,
+     "public": "abababababababababababababababababababababababababababababababab",
+     "path": "/home/u/.config/mccontrol/key.seed",
+     "registered": null,
+     "provision": [
+      "set mqtt.cmd.pubkey abababababababababababababababababababababababababababababababab",
+      "set mqtt.cmd on"
+     ]
+    },
+    "required": [
+     "exists",
+     "public",
+     "path",
+     "registered",
+     "provision"
+    ]
+   },
+   "KeyCreate": {
+    "type": "object",
+    "properties": {
+     "overwrite": {
+      "type": "boolean",
+      "description": "replace an existing key: every node provisioned with it stops listening"
+     },
+     "seed": {
+      "type": "string",
+      "description": "import this 64-hex seed instead of generating one"
+     }
+    },
+    "example": {
+     "overwrite": false
+    }
+   },
+   "Cells": {
+    "type": "object",
+    "properties": {
+     "reg": {
+      "type": "string"
+     },
+     "sent": {
+      "type": "string"
+     },
+     "batt": {
+      "type": "string"
+     },
+     "seen": {
+      "type": "string"
+     },
+     "ver": {
+      "type": "string"
+     },
+     "result": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "reg",
+     "sent",
+     "batt",
+     "seen",
+     "ver",
+     "result"
+    ]
+   },
+   "Device": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "node": {
+      "type": "string",
+      "description": "the first 8 hex characters of the node's public key",
+      "example": "4AC61A7F"
+     },
+     "region": {
+      "type": "string",
+      "example": "JKG"
+     },
+     "notes": {
+      "type": "string"
+     },
+     "key": {
+      "type": "string",
+      "description": "the whole 64-hex key, known from ar-11 on",
+      "nullable": true
+     },
+     "added": {
+      "type": "string",
+      "nullable": true
+     },
+     "last_sent": {
+      "type": "string",
+      "nullable": true
+     },
+     "last_result": {
+      "type": "string",
+      "nullable": true
+     },
+     "last_heard": {
+      "type": "string",
+      "nullable": true
+     },
+     "ver": {
+      "type": "string",
+      "nullable": true
+     },
+     "fleet": {
+      "type": "object",
+      "properties": {
+       "battery_mv": {
+        "type": "integer",
+        "nullable": true
+       },
+       "seen": {
+        "type": "string",
+        "nullable": true
+       },
+       "firmware": {
+        "type": "string",
+        "nullable": true
+       },
+       "fetched": {
+        "type": "string",
+        "nullable": true
+       }
+      },
+      "nullable": true
+     },
+     "observer_id": {
+      "type": "string",
+      "nullable": true
+     },
+     "tagged": {
+      "type": "boolean"
+     },
+     "stale": {
+      "type": "boolean",
+      "description": "sent to, and nothing heard for seven days"
+     },
+     "cells": {
+      "$ref": "#/components/schemas/Cells"
+     },
+     "row": {
+      "type": "string",
+      "description": "the directory row laid out to the asked width"
+     }
+    },
+    "example": {
+     "name": "Gisebo",
+     "node": "4AC61A7F",
+     "region": "JKG",
+     "notes": "",
+     "key": null,
+     "added": "2026-10-07 10:00:00",
+     "last_sent": "2026-10-07 11:00:00",
+     "last_result": "ok",
+     "last_heard": "2026-10-07 11:00:00",
+     "ver": null,
+     "fleet": null,
+     "observer_id": null,
+     "tagged": false,
+     "stale": false,
+     "cells": {
+      "reg": "JKG ",
+      "sent": "2 h    ",
+      "batt": "     ",
+      "seen": "     ",
+      "ver": "            ",
+      "result": "ok"
+     },
+     "row": "Gisebo             4AC61A7F JKG  2 h ok"
+    },
+    "required": [
+     "name",
+     "node",
+     "region",
+     "notes",
+     "tagged",
+     "stale",
+     "cells",
+     "row"
+    ]
+   },
+   "DeviceList": {
+    "type": "object",
+    "properties": {
+     "devices": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Device"
+      }
+     },
+     "sort": {
+      "type": "string"
+     },
+     "sorts": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "columns": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "all_columns": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "header": {
+      "type": "string"
+     },
+     "footer": {
+      "type": "string"
+     },
+     "tagged": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "devices",
+     "sort",
+     "sorts",
+     "columns",
+     "all_columns",
+     "header",
+     "footer",
+     "tagged"
+    ]
+   },
+   "DeviceCreate": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "node": {
+      "type": "string",
+      "description": "8 hex, or the whole 64-hex key"
+     },
+     "region": {
+      "type": "string"
+     },
+     "notes": {
+      "type": "string"
+     },
+     "key": {
+      "type": "string",
+      "nullable": true
+     }
+    },
+    "example": {
+     "name": "LOUTEST",
+     "node": "F415473D",
+     "region": "JKG",
+     "notes": "the bench repeater"
+    },
+    "required": [
+     "node",
+     "region"
+    ]
+   },
+   "DeviceChange": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "region": {
+      "type": "string"
+     },
+     "notes": {
+      "type": "string"
+     }
+    },
+    "example": {
+     "name": "Gisebo",
+     "region": "JKG",
+     "notes": "on the water tower"
+    }
+   },
+   "Adopt": {
+    "type": "object",
+    "properties": {
+     "node": {
+      "type": "string"
+     },
+     "region": {
+      "type": "string"
+     },
+     "key": {
+      "type": "string",
+      "nullable": true
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "description": "A discovered node to remember; a taken name gets -2, -3 ...",
+    "example": {
+     "node": "AB6B9285",
+     "region": "JKG",
+     "key": null,
+     "name": "SE-JKG-UGORptr"
+    },
+    "required": [
+     "node",
+     "region"
+    ]
+   },
+   "Forgot": {
+    "type": "object",
+    "properties": {
+     "forgot": {
+      "type": "string",
+      "description": "the first 8 hex characters of the node's public key",
+      "example": "4AC61A7F"
+     }
+    },
+    "required": [
+     "forgot"
+    ]
+   },
+   "HistoryLine": {
+    "type": "object",
+    "properties": {
+     "at": {
+      "type": "string"
+     },
+     "command": {
+      "type": "string"
+     },
+     "topic": {
+      "type": "string"
+     },
+     "code": {
+      "type": "integer",
+      "nullable": true
+     },
+     "code_name": {
+      "type": "string",
+      "nullable": true
+     },
+     "reply": {
+      "type": "string",
+      "nullable": true
+     },
+     "note": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "at",
+     "command",
+     "topic",
+     "code",
+     "code_name",
+     "reply"
+    ]
+   },
+   "History": {
+    "type": "object",
+    "properties": {
+     "node": {
+      "type": "string",
+      "nullable": true
+     },
+     "history": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/HistoryLine"
+      }
+     }
+    },
+    "example": {
+     "node": "4AC61A7F",
+     "history": [
+      {
+       "at": "2026-10-07 11:00:00",
+       "command": "region",
+       "topic": "meshcore/JKG/4AC61A7F/cmd",
+       "code": 0,
+       "code_name": "ok",
+       "reply": "> * F",
+       "note": ""
+      }
+     ]
+    },
+    "required": [
+     "node",
+     "history"
+    ]
+   },
+   "Read": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     },
+     "reply": {
+      "type": "string"
+     },
+     "at": {
+      "type": "string"
+     },
+     "age": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "command",
+     "reply",
+     "at",
+     "age"
+    ]
+   },
+   "Reads": {
+    "type": "object",
+    "properties": {
+     "node": {
+      "type": "string"
+     },
+     "reads": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Read"
+      }
+     }
+    },
+    "required": [
+     "node",
+     "reads"
+    ]
+   },
+   "Command": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "type": "string"
+     },
+     "group": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "none",
+       "choice",
+       "multi",
+       "text"
+      ]
+     },
+     "choices": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "examples": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "read": {
+      "type": "boolean",
+      "description": "the reply is kept in the reads"
+     },
+     "probe": {
+      "type": "string",
+      "description": "the sample the admission is judged on"
+     },
+     "admitted": {
+      "type": "boolean",
+      "description": "does the device's firmware admit it; null with no device",
+      "nullable": true
+     },
+     "needs": {
+      "type": "string",
+      "description": "the oldest build that admits it",
+      "nullable": true
+     },
+     "refusal": {
+      "type": "string",
+      "description": "why the deny list refuses the probe; null when it travels",
+      "nullable": true
+     },
+     "caution": {
+      "type": "string",
+      "nullable": true
+     }
+    },
+    "required": [
+     "text",
+     "group",
+     "kind",
+     "choices",
+     "examples",
+     "read",
+     "probe",
+     "admitted",
+     "needs",
+     "refusal",
+     "caution"
+    ]
+   },
+   "CommandGroup": {
+    "type": "object",
+    "properties": {
+     "group": {
+      "type": "string"
+     },
+     "commands": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Command"
+      }
+     }
+    },
+    "required": [
+     "group",
+     "commands"
+    ]
+   },
+   "CommandList": {
+    "type": "object",
+    "properties": {
+     "node": {
+      "type": "string",
+      "nullable": true
+     },
+     "firmware": {
+      "type": "string",
+      "nullable": true
+     },
+     "version": {
+      "type": "string",
+      "nullable": true
+     },
+     "greyed": {
+      "type": "integer"
+     },
+     "groups": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/CommandGroup"
+      }
+     }
+    },
+    "required": [
+     "node",
+     "firmware",
+     "version",
+     "greyed",
+     "groups"
+    ]
+   },
+   "CommandCheck": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     },
+     "refusal": {
+      "type": "string",
+      "nullable": true
+     },
+     "caution": {
+      "type": "string",
+      "nullable": true
+     },
+     "transmits": {
+      "type": "boolean"
+     },
+     "is_read": {
+      "type": "boolean"
+     },
+     "needs": {
+      "type": "string",
+      "nullable": true
+     },
+     "node": {
+      "type": "string",
+      "nullable": true
+     },
+     "firmware": {
+      "type": "string",
+      "nullable": true
+     },
+     "admitted": {
+      "type": "boolean",
+      "nullable": true
+     }
+    },
+    "example": {
+     "command": "region denyf *",
+     "refusal": null,
+     "caution": "stops this repeater forwarding every message that carries no scope. It may be the only link between two places that rely on that.",
+     "transmits": false,
+     "is_read": false,
+     "needs": "ar-11",
+     "node": null,
+     "firmware": null,
+     "admitted": null
+    },
+    "required": [
+     "command",
+     "refusal",
+     "caution",
+     "transmits",
+     "is_read",
+     "needs",
+     "node",
+     "firmware",
+     "admitted"
+    ]
+   },
+   "Tags": {
+    "type": "object",
+    "properties": {
+     "tagged": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "footer": {
+      "type": "string"
+     }
+    },
+    "example": {
+     "tagged": [
+      "4AC61A7F"
+     ],
+     "footer": "1 of 3 tagged"
+    },
+    "required": [
+     "tagged",
+     "footer"
+    ]
+   },
+   "TagSet": {
+    "type": "object",
+    "properties": {
+     "nodes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "example": {
+     "nodes": [
+      "4AC61A7F",
+      "65C1D12C"
+     ]
+    },
+    "required": [
+     "nodes"
+    ]
+   },
+   "TagChange": {
+    "type": "object",
+    "properties": {
+     "devices": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "region": {
+      "type": "string"
+     }
+    },
+    "example": {
+     "region": "JKG"
+    },
+    "description": "devices by name, node or unique prefix, and/or every device of a region"
+   },
+   "Regions": {
+    "type": "object",
+    "properties": {
+     "regions": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "example": {
+     "regions": [
+      "JKG",
+      "GOT"
+     ]
+    },
+    "required": [
+     "regions"
+    ]
+   },
+   "Sets": {
+    "type": "object",
+    "properties": {
+     "sets": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     },
+     "max_steps": {
+      "type": "integer"
+     }
+    },
+    "example": {
+     "sets": {
+      "add-scope": [
+       "region put {arg} *",
+       "region allowf {arg}",
+       "region save",
+       "region"
+      ]
+     },
+     "max_steps": 6
+    },
+    "required": [
+     "sets",
+     "max_steps"
+    ]
+   },
+   "SetSave": {
+    "type": "object",
+    "properties": {
+     "steps": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "example": {
+     "steps": [
+      "ver",
+      "get name"
+     ]
+    },
+    "required": [
+     "steps"
+    ]
+   },
+   "SetSaved": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "steps": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "name",
+     "steps"
+    ]
+   },
+   "Removed": {
+    "type": "object",
+    "properties": {
+     "removed": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "removed"
+    ]
+   },
+   "Shortcuts": {
+    "type": "object",
+    "properties": {
+     "shortcuts": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "example": {
+     "shortcuts": [
+      "region",
+      "ver",
+      "get name",
+      "get autoreply",
+      "get radio",
+      "get repeat",
+      "",
+      "",
+      ""
+     ]
+    },
+    "required": [
+     "shortcuts"
+    ]
+   },
+   "HelpIndex": {
+    "type": "object",
+    "properties": {
+     "topics": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string"
+        },
+        "title": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "name",
+        "title"
+       ]
+      }
+     },
+     "context": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "topics",
+     "context"
+    ]
+   },
+   "HelpLink": {
+    "type": "object",
+    "properties": {
+     "line": {
+      "type": "integer"
+     },
+     "start": {
+      "type": "integer"
+     },
+     "end": {
+      "type": "integer"
+     },
+     "target": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "line",
+     "start",
+     "end",
+     "target"
+    ]
+   },
+   "HelpTopic": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "lines": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "links": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/HelpLink"
+      }
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "title",
+     "lines",
+     "links",
+     "text"
+    ]
+   },
+   "Progress": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "type": "string",
+      "example": "3 of 12 answered"
+     },
+     "answered": {
+      "type": "integer"
+     },
+     "expected": {
+      "type": "integer"
+     },
+     "elapsed": {
+      "type": "number"
+     },
+     "wait": {
+      "type": "number"
+     },
+     "step": {
+      "type": "integer"
+     },
+     "steps": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "text",
+     "answered",
+     "expected",
+     "elapsed",
+     "wait",
+     "step",
+     "steps"
+    ]
+   },
+   "Outcome": {
+    "type": "object",
+    "properties": {
+     "node": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "command": {
+      "type": "string"
+     },
+     "ok": {
+      "type": "boolean",
+      "description": "null: no answer (yet)",
+      "nullable": true
+     },
+     "code": {
+      "type": "integer",
+      "nullable": true
+     },
+     "code_name": {
+      "type": "string",
+      "nullable": true
+     },
+     "reply": {
+      "type": "string",
+      "nullable": true
+     },
+     "verified": {
+      "type": "boolean",
+      "nullable": true
+     },
+     "line": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "node",
+     "name",
+     "command",
+     "ok",
+     "code",
+     "code_name",
+     "reply",
+     "verified",
+     "line"
+    ]
+   },
+   "Job": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "verb": {
+      "type": "string",
+      "enum": [
+       "send",
+       "run-set",
+       "discover",
+       "refresh-names",
+       "refresh-fleet",
+       "statistics",
+       "test",
+       "register"
+      ]
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "running",
+       "done",
+       "failed",
+       "cancelled"
+      ]
+     },
+     "cancel_requested": {
+      "type": "boolean"
+     },
+     "started": {
+      "type": "string"
+     },
+     "finished": {
+      "type": "string",
+      "nullable": true
+     },
+     "progress": {
+      "$ref": "#/components/schemas/Progress"
+     },
+     "outcomes": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Outcome"
+      }
+     },
+     "result": {
+      "type": "object",
+      "description": "the verb's result; its schema is the operation's x-result-schema",
+      "nullable": true
+     },
+     "error": {
+      "$ref": "#/components/schemas/ErrorBody",
+      "nullable": true
+     }
+    },
+    "example": {
+     "id": "3f2a9c1b07de",
+     "verb": "send",
+     "status": "running",
+     "cancel_requested": false,
+     "started": "2026-10-08 12:00:00",
+     "finished": null,
+     "progress": {
+      "text": "3 of 12 answered",
+      "answered": 3,
+      "expected": 12,
+      "elapsed": 4.2,
+      "wait": 20,
+      "step": 0,
+      "steps": 1
+     },
+     "outcomes": [
+      {
+       "node": "4AC61A7F",
+       "name": "Gisebo",
+       "command": "region",
+       "ok": true,
+       "code": 0,
+       "code_name": "ok",
+       "reply": "> * F",
+       "verified": true,
+       "line": "> * F [signed]"
+      }
+     ],
+     "result": null,
+     "error": null
+    },
+    "required": [
+     "id",
+     "verb",
+     "status",
+     "cancel_requested",
+     "started",
+     "finished",
+     "progress",
+     "outcomes",
+     "result",
+     "error"
+    ]
+   },
+   "JobList": {
+    "type": "object",
+    "properties": {
+     "jobs": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Job"
+      }
+     }
+    },
+    "required": [
+     "jobs"
+    ]
+   },
+   "SendJob": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     },
+     "devices": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "tagged": {
+      "type": "boolean"
+     },
+     "region": {
+      "type": "string"
+     },
+     "dry_run": {
+      "type": "boolean"
+     },
+     "confirm": {
+      "type": "boolean",
+      "description": "required true for a command that takes something away (see /commands/check)"
+     },
+     "wait_secs": {
+      "type": "number"
+     }
+    },
+    "description": "Exactly one target: devices, tagged (the tagged devices), or region (one broadcast).",
+    "example": {
+     "command": "region",
+     "tagged": true
+    },
+    "required": [
+     "command"
+    ]
+   },
+   "RunSetJob": {
+    "type": "object",
+    "properties": {
+     "set": {
+      "type": "string"
+     },
+     "arg": {
+      "type": "string"
+     },
+     "devices": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "tagged": {
+      "type": "boolean"
+     },
+     "region": {
+      "type": "string"
+     },
+     "dry_run": {
+      "type": "boolean"
+     },
+     "confirm": {
+      "type": "boolean"
+     },
+     "wait_secs": {
+      "type": "number"
+     }
+    },
+    "example": {
+     "set": "add-scope",
+     "arg": "se-jkp",
+     "devices": [
+      "loutest"
+     ],
+     "confirm": true
+    },
+    "required": [
+     "set"
+    ]
+   },
+   "DiscoverJob": {
+    "type": "object",
+    "properties": {
+     "region": {
+      "type": "string",
+      "description": "JKG, several with commas, or * for every region you have"
+     },
+     "wait_secs": {
+      "type": "number"
+     },
+     "add": {
+      "type": "boolean",
+      "description": "remember every node not yet in the directory"
+     }
+    },
+    "example": {
+     "region": "JKG, GOT"
+    },
+    "required": [
+     "region"
+    ]
+   },
+   "TargetsJob": {
+    "type": "object",
+    "properties": {
+     "devices": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "tagged": {
+      "type": "boolean"
+     }
+    },
+    "description": "devices, or the tagged; neither means every device",
+    "example": {
+     "tagged": true
+    }
+   },
+   "StatisticsJob": {
+    "type": "object",
+    "properties": {
+     "device": {
+      "type": "string"
+     },
+     "range": {
+      "type": "string",
+      "enum": [
+       "24h",
+       "48h",
+       "168h"
+      ]
+     },
+     "interval": {
+      "type": "string",
+      "enum": [
+       "1h",
+       "6h",
+       "24h"
+      ]
+     },
+     "live": {
+      "type": "boolean",
+      "description": "send get stats first (default true)"
+     }
+    },
+    "example": {
+     "device": "Gisebo",
+     "range": "24h",
+     "interval": "6h",
+     "live": true
+    },
+    "required": [
+     "device"
+    ]
+   },
+   "Empty": {
+    "type": "object",
+    "properties": {},
+    "example": {}
+   },
+   "SendResult": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     },
+     "lines": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "answered": {
+      "type": "integer"
+     },
+     "asked": {
+      "type": "integer"
+     },
+     "dry_run": {
+      "type": "boolean"
+     },
+     "topics": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "command",
+     "lines",
+     "answered",
+     "asked",
+     "dry_run",
+     "topics"
+    ]
+   },
+   "RunSetResult": {
+    "type": "object",
+    "properties": {
+     "steps": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "lines": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "runs": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "target": {
+         "type": "string"
+        },
+        "stopped_at": {
+         "type": "integer",
+         "nullable": true
+        }
+       },
+       "required": [
+        "target",
+        "stopped_at"
+       ]
+      }
+     }
+    },
+    "required": [
+     "steps",
+     "lines",
+     "runs"
+    ]
+   },
+   "Found": {
+    "type": "object",
+    "properties": {
+     "node": {
+      "type": "string"
+     },
+     "region": {
+      "type": "string"
+     },
+     "code": {
+      "type": "integer"
+     },
+     "reply": {
+      "type": "string"
+     },
+     "key": {
+      "type": "string",
+      "nullable": true
+     },
+     "verified": {
+      "type": "boolean",
+      "nullable": true
+     },
+     "known_as": {
+      "type": "string",
+      "nullable": true
+     },
+     "outcome": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "added": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "node",
+     "region",
+     "code",
+     "reply",
+     "key",
+     "verified",
+     "known_as",
+     "outcome",
+     "name",
+     "added"
+    ]
+   },
+   "DiscoverResult": {
+    "type": "object",
+    "properties": {
+     "regions": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "found": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Found"
+      }
+     }
+    },
+    "required": [
+     "regions",
+     "found"
+    ]
+   },
+   "RefreshNamesResult": {
+    "type": "object",
+    "properties": {
+     "named": {
+      "type": "integer"
+     },
+     "versioned": {
+      "type": "integer"
+     },
+     "asked": {
+      "type": "integer"
+     },
+     "lines": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "named",
+     "versioned",
+     "asked",
+     "lines"
+    ]
+   },
+   "RefreshFleetResult": {
+    "type": "object",
+    "properties": {
+     "updated": {
+      "type": "integer"
+     },
+     "failed": {
+      "type": "integer"
+     },
+     "asked": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "updated",
+     "failed",
+     "asked"
+    ]
+   },
+   "StatisticsResult": {
+    "type": "object",
+    "properties": {
+     "node": {
+      "type": "string"
+     },
+     "lines": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "node",
+     "lines"
+    ]
+   },
+   "TestResult": {
+    "type": "object",
+    "properties": {
+     "steps": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "step": {
+         "type": "string"
+        },
+        "ok": {
+         "type": "boolean"
+        },
+        "detail": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "step",
+        "ok",
+        "detail"
+       ]
+      }
+     },
+     "key": {
+      "type": "string",
+      "nullable": true
+     },
+     "registered": {
+      "$ref": "#/components/schemas/Registration",
+      "nullable": true
+     },
+     "ok": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "steps",
+     "key",
+     "registered",
+     "ok"
+    ]
+   },
+   "RegisterResult": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "detail": {
+      "type": "string"
+     },
+     "broker": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "ok",
+     "detail",
+     "broker"
+    ]
+   }
+  },
+  "responses": {
+   "BadRequest": {
+    "description": "A malformed body or parameter, a command the node would refuse (refused), or a store refusal (store)",
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Error"
+      }
+     }
+    }
+   },
+   "NotFound": {
+    "description": "No such route, device, set, topic or job",
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Error"
+      }
+     }
+    }
+   },
+   "Conflict": {
+    "description": "The state forbids it: a key exists, or a command that takes something away was not confirmed (confirm_required)",
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Error"
+      }
+     }
+    }
+   }
+  }
+ }
+}

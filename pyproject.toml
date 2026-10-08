@@ -21,4 +21,4 @@ mccontrol = "mccontrol.cli:main"
 include = ["mccontrol*"]
 
 [tool.setuptools.package-data]
-mccontrol = ["help/*.txt"]
+mccontrol = ["help/*.txt", "api/*.json"]
