@@ -1,0 +1,27 @@
+Monolith keys
+
+  ":" Ctrl+P   the palette: every verb and every command, type to filter
+  Enter        on a device: its command list, greyed where its firmware
+               lacks one; on a read in the device tile: ask it again; on
+               the results: the whole result
+  Space Ins    tag the device;  "*" invert;  "+" "-" tag or untag a region
+  "c"          send a command to the tagged devices, or the cursor device
+  "a"          send a command to every node in a region
+  Alt+1..9     a shortcut, no prompt; the palette's "shortcuts" edits them
+  "s"          statistics: live, then Beacon, drawn as sparklines
+  "n" "r"      names and versions;  battery and seen from Beacon
+  "d"          discover a region and adopt what answers
+  "h" "e" Del  history;  edit;  forget the device
+  "k"          the signing key: provision, generate, register
+  "o" "p"      the next sort;  amber or green phosphor
+  Tab          the next tile (Shift+Tab the one before); Up, Down, PgUp,
+               PgDn, Home and End move in it
+  Mouse        a click focuses a tile, a row takes the cursor, a hint at
+               the bottom presses its key; the wheel scrolls
+  Esc          closes an overlay, cancels a running job
+  F1 "?"       this help;  "q" F10  quit;  Ctrl+L  redraw
+
+In help: Tab to a link, Enter follows it, Backspace goes back, Esc
+closes. See [[screen]] for the tiles, [[dialogs]] for the overlays.
+
+Help contents: [[index]]

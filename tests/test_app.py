@@ -211,6 +211,7 @@ def test_f1_opens_help_for_the_screen_and_enter_follows_a_link(tmp_path):
     text, _ = walk(tmp_path, [(F[1], 0.6), (b"\r", 0.6)])
     assert "Help: The screen" in text
     assert "Help: Keys on the main screen" in text         # the first link on the screen topic
+    assert "Alt+F1" in text and "F9 / F10" in text          # MeshcoreCommander's own keys, as they were
 
 
 def test_the_command_line_prints_a_topic(tmp_path, capsys):

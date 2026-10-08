@@ -1128,18 +1128,13 @@ class Board:
         self.swap_palette()
 
     def v_help(self, _arg):
-        """The board's keys first, then the help topics with their links: Tab to a link,
-        Enter follows, Backspace goes back."""
-        trail = [None]
+        """The help the API has for the board, opening on its keys: Tab to a link, Enter
+        follows, Backspace goes back."""
+        trail = [self.client.help_index(ui=UI)["context"].get("main", "keys")]
         while trail:
-            if trail[-1] is None:
-                title, lines = "Monolith keys", KEYCARD
-                links = [(len(lines) - 1, 2, 15, "index")]
-            else:
-                t = self.client.help_topic(trail[-1])
-                title, lines = t["title"], t["lines"]
-                links = [(l["line"], l["start"], l["end"], l["target"]) for l in t["links"]]
-            nxt = self.sheet(title, lines, links)
+            t = self.client.help_topic(trail[-1], ui=UI)
+            links = [(l["line"], l["start"], l["end"], l["target"]) for l in t["links"]]
+            nxt = self.sheet(t["title"], t["lines"], links)
             if nxt is None:
                 return
             if nxt == "\b":
@@ -1152,23 +1147,10 @@ class Board:
 KEYS = {"c": "send", "a": "region", "s": "stats", "n": "names", "r": "fleet", "d": "discover", "h": "history",
         "e": "edit", "k": "keys", "o": "sortnext", "*": "invert", "+": "tagregion", "-": "tagregion", "p": "phosphor"}
 
-KEYCARD = [
-    ":  Ctrl+P   the palette: every verb and every command, type to filter",
-    "↵           on a device: its command list, greyed where its firmware lacks one",
-    "↵           on a read in the device tile: ask it again;  on the results: the whole result",
-    "␣  Ins      tag the device;  *  invert;  +  -  tag or untag a region",
-    "c           send a command to the tagged devices, or the cursor device",
-    "a           send a command to every node in a region",
-    "Alt+1..9    a shortcut, no prompt;  : shortcuts edits them",
-    "s           statistics: live, then Beacon, drawn as sparklines",
-    "n  r        names and versions;  battery and seen from Beacon",
-    "d           discover a region and adopt what answers",
-    "h  e  Del   history;  edit;  forget the device",
-    "k           the signing key: provision, generate, register",
-    "o  p        sort the directory;  amber or green phosphor",
-    "Tab         the next tile;  mouse: a click focuses, a row takes the cursor",
-    "Esc         closes an overlay, cancels a running job",
-    "q           quit",
-    "",
-    "  help contents",
-]
+UI = "Monolith"                         # the name the API's help is asked for
+
+# Every key the board answers, by the name the help texts give it; tests/test_help.py checks
+# this interface's help against it. "y" answers a confirmation, "g" and "r" the key sheet.
+KEY_NAMES = (":", "Ctrl+P", "Enter", "Space", "Ins", "Del", "Tab", "Shift+Tab", "Up", "Down", "PgUp", "PgDn", "Home",
+             "End", "Backspace", "Esc", "F1", "F2", "F10", "Alt+1..9", "Ctrl+L", "?", "q", "y", "g",
+             *KEYS)

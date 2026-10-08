@@ -1,0 +1,30 @@
+Help: contents
+
+mccontrol signs commands with your key and sends them to the repeaters you
+run, over the control broker. Tab moves to the next link, Enter follows
+it, Backspace goes back, Esc closes help.
+
+Getting around
+  [[screen]]      the board: its tiles and what each shows
+  [[keys]]        every key on the board, and the palette
+  [[dialogs]]     overlays: fields, lists to pick from, confirmations
+
+Doing things
+  [[commandlist]] Enter on a device: every command, its parameter asked for
+  [[send]]        send a command to one device, the tagged ones, or a region
+  [[shortcuts]]   Alt+1..9: a command per key, no prompt
+  [[sets]]        command sets: a rollout as one named list of steps
+  [[discover]]    find the repeaters that accept your key
+  [[devices]]     add, edit, forget; names and regions
+  [[history]]     what was sent and what came back
+  [[reads]]       the device tile: what the device last answered to each read
+  [[stats]]       a device's statistics: battery, airtime, noise floor, from Beacon
+
+Reference
+  [[commands]]    the commands a repeater admits over the control plane
+  [[cautions]]    the commands that take something away
+  [[signing]]     your key, provisioning a repeater, what the signature covers
+  [[assurance]]   can a command be forged, altered or replayed? what is not covered
+  [[broker]]      the control broker, its credentials, the connection test
+  [[protocol]]    the envelope on the wire, for the curious
+  [[cli]]         the same work from the command line

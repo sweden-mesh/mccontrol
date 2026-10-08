@@ -106,7 +106,8 @@ def _has(key, names):
 def _key_names():
     from mccontrol.ui.IBMi import app as ibmi
     from mccontrol.ui.MeshcoreCommander import app as commander
-    return {"MeshcoreCommander": commander.KEY_NAMES, "IBMi": ibmi.KEY_NAMES}
+    from mccontrol.ui.Monolith import board
+    return {"MeshcoreCommander": commander.KEY_NAMES, "IBMi": ibmi.KEY_NAMES, "Monolith": board.KEY_NAMES}
 
 
 # The topics that are how an interface works; every interface has its own text for each.
@@ -135,3 +136,10 @@ def test_the_key_names_are_found_where_they_are_written():
         "F1", "Shift+F1", "Alt+1..9", "Ctrl+P", "F13-F21", "n", "Up"]
     assert _has("Alt+4", ["Alt+1..9"]) and _has("F15", ["F13-F21"]) and not _has("F22", ["F13-F21"])
     assert not _has("F2", ["F1"]) and not _has("Alt+4", ["F1"])
+
+
+def test_the_interfaces_texts_ship_with_the_package():
+    import pathlib
+    pyproject = (pathlib.Path(helptext.__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"help/*.txt"' in pyproject and '"help/*/*.txt"' in pyproject
+    assert {p.name for p in helptext.HERE.iterdir() if p.is_dir()} <= set(helptext.interfaces())

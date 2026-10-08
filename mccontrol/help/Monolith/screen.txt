@@ -1,0 +1,44 @@
+The board
+
+The board is a set of tiles; Tab moves the focus from one to the next,
+and the focused tile's frame is drawn bright.
+
+DEVICES is the device directory: one row per repeater you manage, with
+its name, node id, region, when you last sent to it, its battery and
+last-seen age once asked for, and what it answered. The row under the
+cursor is the current device; Space or Ins tags it, "*" inverts the tags,
+"+" and "-" tag or untag a whole region. The tile's bottom edge counts
+the tags and says the sort.
+
+DEVICE follows the cursor: the node, its region and version, its
+statistics as sparklines once read, and what it last answered to each
+read, with its age (see [[reads]]). Enter on a read asks it again.
+
+RESULTS is the feed: each send, set and discovery as it lands, newest
+first, and the running job as a bar. Enter opens the whole result. A
+short note in the corner says how the last thing came out.
+
+STATUS shows the broker, your key, whether it is registered and whether
+the broker test passed. On a wide terminal a clock is drawn as well. The
+bottom line is the hints: a key and its verb, each one clickable.
+
+Batt and Seen come from Beacon when you ask ("r"); see [[stats]].
+
+A name ending in " ?" marks a device something was sent to and nothing
+heard from for seven days -- no result over the control plane and no
+status seen by Beacon. It is a device to look at, not a verdict: the
+control plane may be off, or the node may answer another key now. A
+device never sent to carries no mark, since nothing is known. Nothing
+refreshes by itself; "s", "r" and "n" ask when you do.
+
+Every wait -- a send, a discovery, a set, a read from Beacon -- is a bar
+in the results tile with the running count; Esc stops waiting early and
+keeps what has come.
+
+Not every column fits a narrow directory: "directory columns" in the
+palette picks which of Reg, Sent, Batt, Seen, Ver and Result show after
+the name and node ("mccontrol config --columns ver,result" does the
+same).
+
+See [[keys]] for the keys, [[send]] for sending, [[discover]] for finding
+repeaters.

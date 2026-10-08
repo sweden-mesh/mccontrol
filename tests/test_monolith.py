@@ -462,10 +462,11 @@ def test_alt_digit_sends_the_shortcut_and_an_unset_one_says_so(tmp_path):
     assert "Alt+9 is not set" in text
 
 
-def test_help_shows_the_keys_and_follows_into_the_topics(tmp_path):
-    text, _ = walk(tmp_path, [(b"?", 0.6), (b"\r", 0.6), (b"\r", 0.6)])
-    assert "MONOLITH KEYS" in text and "help contents" in text
-    assert "HELP: CONTENTS" in text and "THE SCREEN" in text
+def test_help_opens_on_the_boards_keys_and_follows_into_its_own_topics(tmp_path):
+    text, _ = walk(tmp_path, [(b"?", 0.6), (b"\r", 0.6), (b"\x7f", 0.6), (b"\t" * 2, 0.3), (b"\r", 0.6)])
+    assert "MONOLITH KEYS" in text and "Help contents: index" in text      # the keys, from help/Monolith/keys.txt
+    assert "THE BOARD" in text and "DEVICES is the device directory" in text   # its first link: the board's own screen
+    assert "HELP: CONTENTS" in text and "Backspace goes back" in text       # back, then its third link
 
 
 def test_h_shows_history_e_edits_and_del_forgets_after_a_confirm(tmp_path):

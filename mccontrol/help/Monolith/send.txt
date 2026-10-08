@@ -1,0 +1,24 @@
+Sending a command
+
+"c" asks for a command and sends it to the tagged devices, or to the
+cursor device when nothing is tagged; the overlay says which. Up recalls
+earlier commands; Enter sends. Each device gets its own signed publish;
+each answer lands in the results tile as it comes back, and a note says
+how many answered.
+
+"a" sends to every node in a region instead: it asks for the region,
+then the command, and makes one signed publish to the region's broadcast
+topic, answered by every node there that holds your key. A command that
+transmits on the air (a "trigger") cannot be sent to a region; the
+firmware refuses it and so does this.
+
+Tagged devices in two different regions cannot be sent to at once: a send
+is to one region.
+
+Commands that take something away ask first; see [[cautions]]. For what a
+repeater admits, see [[commands]]. A refusal is explained in words:
+"refused: not-allowed" means the firmware does not admit that command;
+"rate-limited" means wait a few minutes; "sig-invalid" means the node
+holds a different public key than yours (see [[signing]]).
+
+Related: [[history]], [[protocol]].
