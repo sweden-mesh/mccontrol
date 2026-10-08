@@ -7,8 +7,8 @@ matters is in the store; the screen is redrawn from it after every key.
 
 import curses
 
-from . import actions, beacon, denylist, directory, envelope, helptext, store as _store, transport
-from .ui import (Button, Dialog, Field, HelpWindow, KeyBar, ListView, Menu, MenuBar, MenuItem, Progress, waiting,
+from . import actions, beacon, commands, denylist, directory, envelope, helptext, store as _store, transport
+from .ui import (Button, ChoiceBox, Dialog, Field, HelpWindow, KeyBar, ListBox, ListView, Menu, MenuBar, MenuItem, Progress, waiting,
                  Message, Panel, confirm, notice)
 from .ui.screen import KEY_ENTER, run as _run
 
@@ -181,8 +181,10 @@ class App:
                 self.do("help:index")
             elif key == curses.KEY_F2:
                 self.do("send")
-            elif key == curses.KEY_F3 or (key in KEY_ENTER and self.left.active):
+            elif key == curses.KEY_F3:
                 self.do("history")
+            elif key in KEY_ENTER and self.left.active:
+                self.do("commands")
             elif key in KEY_ENTER and self.right.active:
                 self.open_line()
             elif key == curses.KEY_F4:
@@ -263,6 +265,8 @@ class App:
             self.helpwin.run(self.screen, action[5:], self.draw)
         elif action == "history":
             self.history_window()
+        elif action == "commands":
+            self.command_list()
         elif action == "send":
             self.send()
         elif action == "discover":
@@ -561,6 +565,55 @@ class App:
         self.reload()
         self.show_results("Names and versions", lines)
         self.message.say(f"{versioned} of {len(devices)} gave a version; {named} named.", error=versioned < len(devices))
+
+    def command_list(self):
+        """Enter on a device: every command the tool offers, by group; Enter on one runs it,
+        asking for its parameter in the way the command needs."""
+        if not self.cursor_device:
+            self.message.say("No device under the cursor; add or discover one first.", error=True)
+            return
+        aimed = self.aim()
+        if not aimed:
+            return
+        _targets, target_line = aimed
+        items = [(group, [(c.text + {"none": "", "choice": "  <" + "|".join(x or "-" for x in c.choices) + ">",
+                                     "multi": "  <...>", "text": "  <...>"}[c.kind], c) for c in cs])
+                 for group, cs in commands.grouped()]
+        box = ListBox(f"Commands  to {target_line[:40]}", items, width=66, height=min(22, self.screen.size[1] - 2))
+        picked = box.run(self.screen, self.draw)
+        if picked is None:
+            return
+        command = self.parameters(picked)
+        if command is None:
+            return
+        self.send(initial=command, immediate=True)
+        if self.right_mode == "results" and self.right_rows:
+            lines = [text for _line, full in self.right_rows for text in full]
+            notice(self.screen, f"Reply: {command[:40]}", lines[:16], self.draw)
+
+    def parameters(self, c):
+        """The command text for a table entry, asking for its parameter: none, one choice,
+        several, or free text with examples. None when the person backs out."""
+        if c.kind == "none":
+            return c.text
+        if c.kind == "choice":
+            value = ChoiceBox(c.text, c.choices).run(self.screen, self.draw)
+            return None if value is None else commands.build(c, [value])
+        if c.kind == "multi":
+            values = ChoiceBox(c.text, c.choices, multi=True).run(self.screen, self.draw)
+            return None if values is None else commands.build(c, values)
+        field = Field("Value", "", width=44)
+        body = [f"{c.text} <value>"] + (["Examples: " + "   ".join(c.examples)] if c.examples else [])
+        d = Dialog(c.text, fields=[field], body=body, width=66,
+                   buttons=[Button("Run", True, default=True), Button("Cancel", None)])
+        while True:
+            if not d.run(self.screen, self.draw):
+                return None
+            value = field.value.strip()
+            if not value:
+                d.message = "Type a value, or Esc."
+                continue
+            return commands.build(c, [value])
 
     def sets_dialog(self):
         """Options > Command sets: one set at a time, by name; empty steps are dropped."""

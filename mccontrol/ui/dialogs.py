@@ -236,3 +236,176 @@ def waiting(screen, title, line, redraw_under, describe):
     def progress(elapsed, total, nodes):
         return box.tick(describe(nodes), elapsed / total if total else 1.0, elapsed, total)
     return progress, box
+
+
+class ListBox:
+    """A framed list over the work: items under group headers, a filter line that narrows
+    as you type, Up/Down/PgUp/PgDn, Enter picks, Esc closes. `items` is
+    `[(group, [(label, value), ...]), ...]`; `run` returns the picked value or None.
+
+    Headers are not selectable; the cursor skips them. The filter matches the label, case-
+    insensitive, and keeps the headers of the groups that still have a match."""
+
+    def __init__(self, title, items, width=60, height=18, hint="Type to filter  Enter=run  Esc=close"):
+        self.title, self.items, self.width, self.height, self.hint = title, items, width, height, hint
+        self.filter = ""
+        self.cursor = 0
+        self.top = 0
+        self.rows = []                 # (kind, text, value): kind is "head" or "item"
+        self._rebuild()
+
+    def _rebuild(self):
+        f = self.filter.lower()
+        rows = []
+        for group, entries in self.items:
+            hits = [(label, value) for label, value in entries if f in label.lower()]
+            if hits:
+                rows.append(("head", group, None))
+                rows += [("item", label, value) for label, value in hits]
+        self.rows = rows
+        self.cursor = min(self.cursor, max(0, len(rows) - 1))
+        self._settle(+1)
+
+    def _settle(self, direction):
+        """Keep the cursor off headers, moving in `direction`; onto nothing when all headers."""
+        n = len(self.rows)
+        if not n:
+            self.cursor = 0
+            return
+        steps = 0
+        while self.rows[self.cursor][0] == "head" and steps < n:
+            self.cursor = (self.cursor + direction) % n
+            steps += 1
+        page = self.height - 6
+        if self.cursor < self.top:
+            self.top = self.cursor
+        elif self.cursor >= self.top + page:
+            self.top = self.cursor - page + 1
+
+    def move(self, delta):
+        n = len(self.rows)
+        if not n:
+            return
+        self.cursor = max(0, min(n - 1, self.cursor + delta))
+        self._settle(1 if delta > 0 else -1)
+
+    def draw(self, screen):
+        w, h = screen.size
+        width, height = min(self.width, w - 4), min(self.height, h - 2)
+        y, x = max(1, (h - height) // 2), max(2, (w - width) // 2)
+        c = screen.colors
+        screen.shadow(y, x, width, height)
+        screen.fill(y, x, width, height, c.dialog)
+        screen.frame(y, x, width, height, c.dialog, self.title)
+        inner = width - 4
+        screen.put(y + 1, x + 2, ("Filter: " + self.filter)[:inner].ljust(inner), c.dialog | curses.A_BOLD)
+        page = height - 6
+        for i in range(page):
+            idx = self.top + i
+            if idx >= len(self.rows):
+                break
+            kind, text, _v = self.rows[idx]
+            if kind == "head":
+                screen.put(y + 3 + i, x + 2, f"-- {text} --".ljust(inner)[:inner], c.dialog | curses.A_DIM)
+            else:
+                attr = c.cursor if idx == self.cursor else c.dialog
+                screen.put(y + 3 + i, x + 2, ("  " + text).ljust(inner)[:inner], attr)
+        screen.put(y + height - 2, x + 2, self.hint[:inner], c.dialog | curses.A_DIM)
+
+    def run(self, screen, redraw_under=None):
+        while True:
+            if redraw_under:
+                redraw_under()
+            self.draw(screen)
+            screen.refresh()
+            key = screen.key()
+            if key == 27:
+                return None
+            if key in KEY_ENTER:
+                if self.rows and self.rows[self.cursor][0] == "item":
+                    return self.rows[self.cursor][2]
+                continue
+            if key == curses.KEY_DOWN:
+                self.move(+1)
+            elif key == curses.KEY_UP:
+                self.move(-1)
+            elif key == curses.KEY_NPAGE:
+                self.move(self.height - 6)
+            elif key == curses.KEY_PPAGE:
+                self.move(-(self.height - 6))
+            elif key == curses.KEY_HOME:
+                self.cursor = 0
+                self._settle(+1)
+            elif key == curses.KEY_END:
+                self.cursor = max(0, len(self.rows) - 1)
+                self._settle(-1)
+            elif key in KEY_BACKSPACE:
+                self.filter = self.filter[:-1]
+                self._rebuild()
+            elif 32 <= key < 127:
+                self.filter += chr(key)
+                self._rebuild()
+
+
+class ChoiceBox:
+    """One of several values as radio buttons, or several as checkboxes (`multi=True`).
+    Space toggles, Enter accepts, Esc backs out. `run` returns the value, the list of
+    chosen values for multi, or None. The command being built is previewed on the last
+    line, so what Enter will send is never a surprise."""
+
+    def __init__(self, command, choices, multi=False, width=50):
+        self.command, self.choices, self.multi, self.width = command, list(choices), multi, width
+        self.cursor = 0
+        self.chosen = set()
+
+    def preview(self):
+        if self.multi:
+            tail = " ".join(c for c in self.choices if c in self.chosen)
+        else:
+            tail = self.choices[self.cursor] if self.choices else ""
+        return f"{self.command} {tail}".strip()
+
+    def draw(self, screen):
+        w, h = screen.size
+        height = len(self.choices) + 6
+        width = min(self.width, w - 4)
+        y, x = max(1, (h - height) // 2), max(2, (w - width) // 2)
+        c = screen.colors
+        screen.shadow(y, x, width, height)
+        screen.fill(y, x, width, height, c.dialog)
+        screen.frame(y, x, width, height, c.dialog, self.command)
+        inner = width - 4
+        for i, choice in enumerate(self.choices):
+            if self.multi:
+                mark = "[X]" if choice in self.chosen else "[ ]"
+            else:
+                mark = "(*)" if i == self.cursor else "( )"
+            label = choice if choice else "(none)"
+            attr = c.cursor if i == self.cursor else c.dialog
+            screen.put(y + 1 + i, x + 2, f" {mark} {label}".ljust(inner)[:inner], attr)
+        screen.put(y + height - 3, x + 2, ("Sends: " + self.preview())[:inner].ljust(inner), c.dialog | curses.A_BOLD)
+        hint = "Space=choose  Enter=run  Esc=back" if self.multi else "Up/Down  Enter=run  Esc=back"
+        screen.put(y + height - 2, x + 2, hint[:inner], c.dialog | curses.A_DIM)
+
+    def run(self, screen, redraw_under=None):
+        while True:
+            if redraw_under:
+                redraw_under()
+            self.draw(screen)
+            screen.refresh()
+            key = screen.key()
+            if key == 27:
+                return None
+            if key in KEY_ENTER:
+                if self.multi:
+                    return [c for c in self.choices if c in self.chosen]
+                return self.choices[self.cursor] if self.choices else None
+            if key == curses.KEY_DOWN:
+                self.cursor = min(len(self.choices) - 1, self.cursor + 1)
+            elif key == curses.KEY_UP:
+                self.cursor = max(0, self.cursor - 1)
+            elif key == 32 and self.choices:
+                if self.multi:
+                    self.chosen ^= {self.choices[self.cursor]}
+                else:
+                    return self.choices[self.cursor]

@@ -311,3 +311,19 @@ def _pty_run_raw(script, cols=80, rows=24, seconds=2.0):
         pass
     os.waitpid(pid, 0)
     return out
+
+
+# ---- the list box -------------------------------------------------------------------
+
+def test_the_list_box_filters_and_the_cursor_skips_headers():
+    from mccontrol.ui.dialogs import ListBox
+    box = ListBox("x", [("reads", [("ver", 1), ("get name", 2)]), ("node", [("reboot", 3)])])
+    assert [r[0] for r in box.rows] == ["head", "item", "item", "head", "item"]
+    assert box.rows[box.cursor][1] == "ver"               # settled past the first header
+    box.move(+1); assert box.rows[box.cursor][1] == "get name"
+    box.move(+1); assert box.rows[box.cursor][1] == "reboot"   # skipped the "node" header
+    box.move(-1); assert box.rows[box.cursor][1] == "get name"
+    box.filter = "re"; box._rebuild()
+    assert [r[1] for r in box.rows] == ["node", "reboot"]       # only reboot matches; its header stays
+    box.filter = "zzz"; box._rebuild()
+    assert box.rows == []

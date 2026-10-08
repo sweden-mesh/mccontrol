@@ -315,3 +315,18 @@ def test_a_command_the_node_would_refuse_is_not_sent_and_the_reason_is_said(tmp_
     text, home = walk(tmp_path, [(F[2], 0.5), (b"set repeat off", 0.3), (b"\r", 0.8)])
     assert "Not sent: the node would refuse it (denied: the remote kill switch" in text
     assert not (home / "history" / "FD700369.jsonl").exists()
+
+
+def test_enter_on_a_device_opens_the_command_list_and_runs_a_bare_command(tmp_path):
+    fake = json.dumps({"FD700369|ver": [0, "> esp32s3-v1.17.1-ar-10"]})
+    # Enter opens the list; typing "ver" filters it to the one entry; Enter runs it
+    text, home = walk(tmp_path, [(b"\r", 0.6), (b"ver", 0.4), (b"\r", 2.0), (b"\r", 0.4)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=5.0)
+    assert "Commands  to Far" in text and "-- reads --" in text and "Filter: ver" in text
+    assert "Reply: ver" in text and "esp32s3-v1.17.1-ar-10" in text
+    assert '"command": "ver"' in (home / "history" / "FD700369.jsonl").read_text()
+
+
+def test_f3_still_opens_history(tmp_path):
+    text, _ = walk(tmp_path, [(F[3], 0.6)])
+    assert "History: Far" in text and "Nothing sent yet." in text
