@@ -55,6 +55,7 @@ class Colors:
         (8, curses.COLOR_YELLOW, curses.COLOR_BLACK),   # message line
         (9, curses.COLOR_BLACK, curses.COLOR_CYAN),     # list cursor bar
         (10, curses.COLOR_BLACK, curses.COLOR_GREEN),   # open menu title and item
+        (11, curses.COLOR_BLACK, curses.COLOR_WHITE),   # disabled text: drawn bold = bright black on grey
     ]
 
     def __init__(self):
@@ -115,6 +116,12 @@ class Colors:
     @property
     def menu_cursor(self):
         return self._pair(10, curses.A_REVERSE)
+
+    @property
+    def disabled(self):
+        """Turbo Vision's disabled item: dark grey on the dialog's grey. A_DIM alone is not
+        it -- many terminals ignore it, and on a light background it shows nothing."""
+        return self._pair(11, curses.A_DIM) | curses.A_BOLD
 
 
 class Screen:

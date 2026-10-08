@@ -681,7 +681,8 @@ class App:
                     rows.append((label, c))
                 else:
                     greyed += 1
-                    rows.append((label, c, firmware.needs(probe) or "no build"))
+                    needs = firmware.needs(probe) or "no build"
+                    rows.append((f"{label}  (needs {needs})", c, needs))      # the mark survives monochrome
             items.append((group, rows))
         box = ListBox(f"Commands  to {target_line[:40]}", items, width=66, height=min(22, self.screen.size[1] - 2))
         if greyed:

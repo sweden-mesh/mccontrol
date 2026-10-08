@@ -476,3 +476,42 @@ def test_keys_register_publishes_and_the_dialog_says_so(tmp_path):
     assert "Registered: ok" in text
     assert re.search(r"Registered with mqtt\.louie\.se on 20\d\d-\d\d-\d\d", text)
     assert json.loads((home / "config.json").read_text())["registered"]["broker"] == "mqtt.louie.se"
+
+
+def test_a_greyed_entry_is_drawn_in_the_disabled_colour_and_names_the_build(tmp_path):
+    """The raw stream: an admitted row and a greyed row must reach the terminal with
+    different attributes (the screenshot of 2026-10-08 showed them identical), and the
+    greyed one carries the build it needs in its text."""
+    import fcntl, signal, struct, termios
+    home = _home(tmp_path)
+    _far_on("ar-10")(home)
+    pid, fd = pty.fork()
+    if pid == 0:
+        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+        os.environ.update({"TERM": "xterm", "COLUMNS": "80", "LINES": "24", "MCCONTROL_HOME": str(home)})
+        os.execvp(sys.executable, [sys.executable, "-c",
+                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([])" % os.getcwd()])
+    out = b""
+
+    def pump(secs):
+        nonlocal out
+        end = time.time() + secs
+        while time.time() < end:
+            r, _, _ = select.select([fd], [], [], 0.1)
+            if r:
+                try:
+                    out += os.read(fd, 65536)
+                except OSError:
+                    return
+    pump(0.8); os.write(fd, b"\r"); pump(1.0)                      # the list, unfiltered: get af admitted, get stats greyed on ar-10
+    os.kill(pid, signal.SIGKILL)
+    os.waitpid(pid, 0)
+    raw = out.decode("utf-8", "replace")
+    text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][0-9A-B]", " ", raw)
+    assert "(needs ar-11)" in text                                   # a greyed entry names its build
+    # the SGR before an admitted row's text differs from the one before a greyed row's
+    admitted = re.search(r"(\x1b\[[0-9;]*m)+\s*get af\b", raw)
+    greyed = re.search(r"(\x1b\[[0-9;]*m)+\s*get stats", raw)
+    assert admitted and greyed
+    sgr = lambda m: "".join(re.findall(r"\x1b\[[0-9;]*m", raw[max(0, m.start() - 40):m.start() + 1]))
+    assert sgr(admitted) != sgr(greyed)

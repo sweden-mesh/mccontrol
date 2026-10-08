@@ -332,7 +332,7 @@ class ListBox:
             if kind == "head":
                 screen.put(y + 3 + i, x + 2, f"-- {text} --".ljust(inner)[:inner], c.dialog | curses.A_DIM)
             elif kind == "grey":
-                screen.put(y + 3 + i, x + 2, ("  " + text).ljust(inner)[:inner], c.dialog | curses.A_DIM)
+                screen.put(y + 3 + i, x + 2, ("  " + text).ljust(inner)[:inner], c.disabled)
             else:
                 attr = c.cursor if idx == self.cursor else c.dialog
                 screen.put(y + 3 + i, x + 2, ("  " + text).ljust(inner)[:inner], attr)
