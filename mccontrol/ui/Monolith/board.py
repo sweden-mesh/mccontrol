@@ -27,6 +27,10 @@ class Cancel(Exception):
     """An overlay was left with Esc."""
 
 
+class Quit(Exception):
+    """q while a job ran: the job was cancelled, now the board goes."""
+
+
 class Board:
     def __init__(self, win, client):
         self.win, self.client = win, client
@@ -412,6 +416,8 @@ class Board:
             try:
                 if self.handle(key) == "quit":
                     return 0
+            except Quit:
+                return 0
             except Cancel:
                 pass
             except ApiError as exc:
@@ -666,15 +672,23 @@ class Board:
         """Draw the job's progress bar in the feed tile until it finishes; Esc cancels it."""
         self.running = (title, job)
 
+        quitting = []
+
         def on_progress(j):
             self.running = (title, j)
             self.draw()
-            return self.key(timeout=0) == ESC
+            key = self.key(timeout=0)
+            if key in (ord("q"), curses.KEY_F10) and not quitting:
+                quitting.append(key)
+                self.toast("cancelling the job, then quitting")
+            return key == ESC or bool(quitting)
 
         try:
             job = self.client.wait_job(job["id"], on_progress=on_progress, poll=0.15)
         finally:
             self.running = None
+        if quitting:
+            raise Quit
         self.tick(force=True)
         if job["status"] == "failed":
             self.toast(f"{title}: {job['error']['message']}", "alert")

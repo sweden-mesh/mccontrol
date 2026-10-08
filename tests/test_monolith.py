@@ -537,3 +537,8 @@ def test_tab_to_the_device_tile_and_enter_reads_a_read_again(tmp_path):
     text, home = walk(tmp_path, [(DOWN, 0.3), (TAB, 0.4), (b"\r", 1.5)], prepare=prepare)
     assert "get autoreply" in text and "1 of 1 answered" in text
     assert _history(home, "4AC61A7F")[-1]["command"] == "get autoreply"
+
+
+def test_q_while_a_job_runs_cancels_it_and_quits(tmp_path):
+    text, home = walk(tmp_path, [(b"c", 0.5), (b"ver", 0.3), (b"\r", 1.2), (b"q", 2.0)], wait=6)
+    assert "Esc cancels" in text and EXITED == [True]
