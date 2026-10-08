@@ -13,8 +13,9 @@ The set shipped as the example, add-scope:
   4. region
 
 "{arg}" is asked for when the set runs (here the scope's name, such as
-se-jkp). A set has six steps at most; sets are run, defined, changed and
-removed from the screen (see [[keys]]) or on the command line:
+se-jkp). A set has six steps at most. Where sets are run, defined,
+changed and removed in your interface is in [[keys]]; on the command
+line:
 
   mccontrol sets                                   list them
   mccontrol sets --set reads ver "get name"        define one

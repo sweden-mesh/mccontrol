@@ -17,21 +17,21 @@ says so and asks you to turn one off (set mqtt2.preset none) -- it never
 does that for you. A region running its own broker sets the slot by
 hand (set mqttN.preset custom, server, audience; set mqtt.cmd.slot N).
 
-The signing key's screen shows that command on one line, creates a key
-when there is none, imports an existing seed, and replaces the key --
-which silences every repeater provisioned with the old one until each is
-re-provisioned.
+Each interface shows that command on one line, creates a key when there
+is none, imports an existing seed, and replaces the key -- which
+silences every repeater provisioned with the old one until each is
+re-provisioned. Where this is in your interface is in [[keys]].
 
 The seed is never shown and never leaves the machine inside anything but
 a signature. "refused: sig-invalid" from a node means it holds a
 different public key than this one.
 
 The same key signs you in to the default broker (see [[broker]]).
-Registering it (on the same screen, or "mccontrol register") publishes
-your public key to the broker once, signed by the key itself; from then
-on the broker checks every command against the registered keys before
-it reaches any node, and a login that keeps sending badly signed
-commands is locked out for 48 hours after five in a day. Register once
-per key, never per device.
+Registering it (beside the key in each interface, or "mccontrol
+register") publishes your public key to the broker once, signed by the
+key itself; from then on the broker checks every command against the
+registered keys before it reaches any node, and a login that keeps
+sending badly signed commands is locked out for 48 hours after five in a
+day. Register once per key, never per device.
 
 See [[protocol]] for what the signature covers.

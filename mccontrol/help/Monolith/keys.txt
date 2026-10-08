@@ -21,6 +21,11 @@ Monolith keys
   Esc          closes an overlay, cancels a running job
   F1 "?"       this help;  "q" F10  quit;  Ctrl+L  redraw
 
+The rest is in the palette, by name: "setup: the control broker", "test
+the broker", "run a command set", "save a command set", "remove a
+command set", "shortcuts Alt+1..9", "generate key", "import a seed",
+"register key", "directory columns", "statistics 48 h" and "7 d".
+
 In help: Tab to a link, Enter follows it, Backspace goes back, Esc
 closes. See [[screen]] for the tiles, [[dialogs]] for the overlays.
 

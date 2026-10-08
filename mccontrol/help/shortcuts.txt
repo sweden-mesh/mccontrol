@@ -11,8 +11,8 @@ The slots as shipped:
   2  ver             5  get radio
   3  get name        6  get repeat
 
-The nine slots are edited from the screen (see [[keys]] for the key each
-slot is on). On the command line the same slots are
+Where the nine slots are edited, and the key each is on, in your
+interface is in [[keys]]. On the command line the same slots are
 
   mccontrol shortcuts                 list them
   mccontrol shortcuts --set 7 "get flood.max"

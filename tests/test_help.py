@@ -82,6 +82,7 @@ def test_the_context_is_per_interface():
 
 KEY = re.compile(r"\b(?:(?:Shift|Alt|Ctrl)\+)?(?:F\d{1,2}(?:-F\d{1,2})?|Enter|Esc|Tab|Ins|Del|Space|Backspace|PgUp|PgDn"
                  r"|Up|Down|Left|Right|Home|End)\b|\b(?:Shift|Alt|Ctrl)\+(?:\d(?:\.\.\d)?|[A-Z])\b|\"([a-z?:])\"")
+WIDGET = re.compile(r"\bthe (?:screen|dialog|panel|menu|palette|tile)\b", re.I)    # one interface's furniture
 MENU = re.compile(r"\b(?:Devices|Send|View|Keys|Options|Help)\s+>\s")
 
 
@@ -130,6 +131,7 @@ def test_the_shared_texts_name_no_interfaces_keys_or_menus():
     for path in sorted(helptext.HERE.glob("*.txt")):
         text = path.read_text(encoding="utf-8")
         assert named_keys(text) == [] and not MENU.search(text), (path.name, named_keys(text), MENU.findall(text))
+        assert not WIDGET.search(text), (path.name, WIDGET.findall(text))
 
 
 def test_the_key_names_are_found_where_they_are_written():
