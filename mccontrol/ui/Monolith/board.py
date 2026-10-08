@@ -38,6 +38,10 @@ def codeset():
         return "ascii"
 
 
+# The jobs a cancel cannot cut short, by what a person calls them.
+UNCUT = {"test": "broker test", "register": "registration"}
+
+
 class Cancel(Exception):
     """An overlay was left with Esc."""
 
@@ -731,7 +735,8 @@ class Board:
             key = self.key(timeout=0)
             if key in (ord("q"), curses.KEY_F10) and not quitting:
                 quitting.append(key)
-                self.toast("cancelling the job, then quitting")
+                self.toast("cancelling the job, then quitting" if j.get("cancellable", True) else
+                           f"waiting for the {UNCUT.get(j['verb'], j['verb'])} to finish, then quitting")
             return key == ESC or bool(quitting)
 
         try:

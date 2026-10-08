@@ -600,3 +600,22 @@ def test_a_resize_reflows_the_board_from_80x24_to_120x40(tmp_path):
     walk(tmp_path, [((120, 40), 1.0)])
     screen = walk.screen.splitlines()
     assert "CLOCK" in walk.screen and len(screen) == 40 and max(len(line) for line in screen) > 100
+
+
+def test_q_during_a_job_nothing_can_cut_short_says_it_waits():
+    from mccontrol.ui.Monolith import board as _board
+    said = []
+
+    class Client:
+        def wait_job(self, job_id, on_progress=None, poll=0.2):
+            on_progress({"id": job_id, "verb": "test", "cancellable": False})
+            return {"status": "done"}
+
+    b = _board.Board.__new__(_board.Board)
+    b.client, b.draw, b.key = Client(), lambda: None, lambda timeout: ord("q")
+    b.toast = lambda text, role="base": said.append(text)
+    try:
+        b.wait("test", {"id": "1"})
+    except _board.Quit:
+        pass
+    assert said == ["waiting for the broker test to finish, then quitting"]
