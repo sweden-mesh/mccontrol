@@ -116,7 +116,7 @@ def docs_page(_ctx, _p, _q, _b):
 # -- configuration and keys --------------------------------------------------------------
 
 CONFIG_TYPES = {"broker": str, "port": int, "username": str, "password": str, "tls": bool,
-                "ttl_secs": int, "wait_secs": (int, float), "beacon_url": str, "columns": list}
+                "ttl_secs": int, "wait_secs": (int, float), "beacon_url": str, "columns": list, "ui": str}
 
 
 def get_config(ctx, _p, _q, _b):

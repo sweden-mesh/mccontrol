@@ -1452,6 +1452,10 @@
         "$ref": "#/components/schemas/Registration"
        }
       ]
+     },
+     "ui": {
+      "type": "string",
+      "description": "the interface `mccontrol --ui` starts when none is named: the last one used"
      }
     },
     "description": "The control broker and how long to wait; command sets and shortcuts have their own routes.",
@@ -1516,6 +1520,9 @@
       "items": {
        "type": "string"
       }
+     },
+     "ui": {
+      "type": "string"
      }
     },
     "description": "Only the fields given change; an unknown field is a 400.",

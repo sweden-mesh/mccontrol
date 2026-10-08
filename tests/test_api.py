@@ -93,6 +93,8 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert "/openapi.json" in call(url, "GET", "/docs")[1]
     assert call(url, "GET", "/config")[1]["broker"] == "127.0.0.1"
     assert call(url, "PATCH", "/config", {"wait_secs": 5, "columns": ["ver", "reg"]})[1]["columns"] == ["reg", "ver"]
+    assert call(url, "PATCH", "/config", {"ui": "MeshcoreCommander"})[1]["ui"] == "MeshcoreCommander"
+    assert call(url, "PATCH", "/config", {"ui": 1})[0] == 400
     assert call(url, "GET", "/key")[1]["exists"] is True
     assert call(url, "POST", "/key", {})[0] == 409
     assert call(url, "POST", "/key", {"overwrite": True, "seed": "22" * 32})[0] == 201
