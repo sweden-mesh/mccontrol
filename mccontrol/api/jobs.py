@@ -17,6 +17,11 @@ from .errors import ApiError, bad, classify, not_found
 from .routes import device_of, devices_of
 
 KEEP = 200                              # finished jobs remembered for GET /jobs
+# What a cancel can interrupt: the waits that take a progress callback. The connection test
+# and the registration wait on paho with none, so a cancel there is noted and nothing more;
+# discovery stops its listening and the regions left, but not the name read after it.
+CANCELLABLE = {"send": True, "run-set": True, "discover": True, "refresh-names": True, "refresh-fleet": True,
+               "statistics": True, "test": False, "register": False}
 _order = itertools.count()
 
 
@@ -24,6 +29,7 @@ class Job:
     def __init__(self, verb):
         self.id = uuid.uuid4().hex[:12]
         self.verb = verb
+        self.cancellable = CANCELLABLE[verb]
         self.order = next(_order)
         self.status = "running"
         self.cancel = threading.Event()
@@ -50,7 +56,7 @@ class Job:
     def snapshot(self):
         with self.lock:
             return {"id": self.id, "verb": self.verb, "status": self.status, "cancel_requested": self.cancel.is_set(),
-                    "started": self.started, "finished": self.finished, "progress": dict(self.progress),
+                    "cancellable": self.cancellable, "started": self.started, "finished": self.finished, "progress": dict(self.progress),
                     "outcomes": list(self.outcomes.values()), "result": self.result, "error": self.error}
 
 

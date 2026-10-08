@@ -2596,6 +2596,10 @@
      "cancel_requested": {
       "type": "boolean"
      },
+     "cancellable": {
+      "type": "boolean",
+      "description": "whether a cancel can interrupt this verb's waits: false for test and register, whose broker waits take no callback; discover stops listening and the regions left, but not the name read after a region"
+     },
      "started": {
       "type": "string"
      },
@@ -2631,6 +2635,7 @@
      "verb": "send",
      "status": "running",
      "cancel_requested": false,
+     "cancellable": true,
      "started": "2026-10-08 12:00:00",
      "finished": null,
      "progress": {
@@ -2663,6 +2668,7 @@
      "verb",
      "status",
      "cancel_requested",
+     "cancellable",
      "started",
      "finished",
      "progress",

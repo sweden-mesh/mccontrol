@@ -144,6 +144,7 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert run(url, "test")["result"]["ok"] is False
     jobs = call(url, "GET", "/jobs")[1]["jobs"]
     assert jobs[0]["verb"] == "test" and len(jobs) == 8
+    assert {j["verb"] for j in jobs if not j["cancellable"]} == {"test", "register"}
     assert call(url, "DELETE", f"/jobs/{jobs[0]['id']}")[0] == 202
     assert call(url, "GET", "/jobs/nope")[0] == 404
     assert spec_routes() - SEEN == set(), "routes the walk did not exercise"
