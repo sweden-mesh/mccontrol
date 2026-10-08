@@ -9,7 +9,7 @@ import urllib.request
 import pytest
 
 from conftest import BEACON_FAKE, SPEC, resolve, validate
-from mccontrol import transport
+from mccontrol import envelope, transport
 from mccontrol.api import server as api_server
 
 METHODS = ("get", "post", "put", "patch", "delete")
@@ -98,6 +98,8 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert call(url, "GET", "/key")[1]["exists"] is True
     assert call(url, "POST", "/key", {})[0] == 409
     assert call(url, "POST", "/key", {"overwrite": True, "seed": "22" * 32})[0] == 201
+    assert call(url, "POST", "/key", {"overwrite": True, "seed": ""})[0] == 400     # an empty import makes no key
+    assert call(url, "GET", "/key")[1]["public"] == envelope.public_key_hex("22" * 32)
     listing = call(url, "GET", "/devices?sort=region&width=60")[1]
     assert [d["node"] for d in listing["devices"]] == ["FD700369", "4AC61A7F", "65C1D12C"]
     assert listing["footer"] == "3 devices" and len(listing["devices"][0]["row"]) <= 59

@@ -154,7 +154,7 @@ def create_key(ctx, _p, _q, body):
         raise ApiError(409, "conflict", f"a key already exists at {ctx.store.key_path}; "
                                         f"replacing it would silence every node provisioned with it")
     try:
-        if seed:
+        if seed is not None:           # an empty seed is refused, never a new key
             ctx.store.import_key(seed, overwrite=overwrite)
         else:
             ctx.store.create_key(overwrite=overwrite)

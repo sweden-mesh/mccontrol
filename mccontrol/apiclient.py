@@ -71,7 +71,7 @@ class Client:
 
     def create_key(self, overwrite=False, seed=None):
         body = {"overwrite": overwrite}
-        if seed:
+        if seed is not None:
             body["seed"] = seed
         return self.call("POST", "/key", body=body)
 

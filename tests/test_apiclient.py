@@ -63,6 +63,9 @@ def test_failures_are_api_errors_with_code_and_status(api):
         c.start_send("region denyf *", devices=["gisebo"])
     assert (exc.value.code, exc.value.status) == ("confirm_required", 409)
     with pytest.raises(apiclient.ApiError) as exc:
+        c.create_key(overwrite=True, seed="")             # an empty import is refused, not a new key
+    assert exc.value.status == 400 and exc.value.message.startswith("not a seed")
+    with pytest.raises(apiclient.ApiError) as exc:
         c.start_statistics("gisebo", range="1y")
     assert exc.value.status == 400
     with pytest.raises(apiclient.ApiError) as exc:
