@@ -2,7 +2,38 @@
 
 For the people who run MeshCore Observer repeaters: sign a command with a key kept on your
 machine, send it to one repeater, to the ones you tagged, or to every repeater in a region,
-see what came back, and keep a history per device. One screen, every verb on a function key.
+see what came back, and keep a history per device. One backend, three interfaces on it, and a
+command line.
+
+## The backend and the API
+
+Everything the tool does -- the key, the devices, signing, the broker, Beacon, history --
+sits behind a JSON API on `127.0.0.1` (`mccontrol/api/`, standard library only). Each
+interface and every subcommand starts it in-process on a free port under a secret path and
+talks to it through `mccontrol/apiclient.py`; nothing else of the backend is imported by them,
+and `tests/test_isolation.py` fails if it is. The contract is `docs/api/openapi.json`, served
+at `<base>/openapi.json`, with a Swagger page over it at `<base>/docs`. `--api <url>` sends a
+subcommand to a server already running instead of starting one of its own.
+
+## The interfaces
+
+`mccontrol --ui <name>` starts one. The name is kept in the configuration, so plain
+`mccontrol` starts the last one used; with none used yet, or a name that is not there, it
+lists them and exits:
+
+```
+interfaces (mccontrol --ui <name>):
+  IBMi               IBMi: the 5250 green screen -- numbered menus, Opt columns, ===> and F3/F5/F12
+  MeshcoreCommander  Norton Commander panels in Turbo Pascal colours: the directory, history and every verb on a function key
+  Monolith           Monolith: a retro-futuristic board of live tiles, a command palette, phosphor on black
+```
+
+Each is a package under `mccontrol/ui/<name>/` with `run(client)` and a one-line
+`DESCRIPTION`; a fourth one is a directory more. Without a terminal each says so and exits 2.
+
+### MeshcoreCommander
+
+One screen, every verb on a function key.
 
 ```
  Devices  Send  Keys  Options  Help
@@ -28,24 +59,6 @@ shows a send's results, or what a discovery found; the lower right keeps what th
 last answered to each read, with its age. Ins tags rows, `*` inverts, `+`/`-` tag a
 region. Dialogs take the one or two values a verb needs; Esc always cancels.
 
-## Install
-
-```
-pip install .
-mccontrol keygen                                  # once; prints the two serial commands
-mccontrol config --username <user> --password <pass>   # the control broker's credentials
-mccontrol test                                    # connect, sign in, subscribe, publish, receive
-mccontrol discover JKG --add                      # every node in JKG that accepts your key
-mccontrol                                         # the screens
-```
-
-Python 3.10 or newer; `pycryptodome` (Ed25519) and `paho-mqtt`; `curses` from the standard
-library. 80x24 is the minimum; wider terminals get wider panels, and on a narrow one
-Options > Directory columns (or `mccontrol config --columns ver,result`) picks which columns
-the directory shows.
-
-## Keys
-
 | key | does |
 |---|---|
 | F1 | help for where you are; Shift+F1 the contents; links are followed with Enter, Backspace or Alt+F1 goes back |
@@ -69,6 +82,105 @@ the directory shows.
 Commands that take something away (`region denyf *`, `region remove`, `set repeat off`, ...)
 say what they do and ask first; a command that transmits is refused as a broadcast, as the
 firmware refuses it.
+
+### IBMi
+
+The IBM i (AS/400, 5250) green screen: a numbered main menu, lists with an Opt column, a
+`===>` command line, the message line above the function keys.
+
+```
+ MCCONTROL                    MCCONTROL Main Menu            09/10/26  00:15:58
+
+ Select one of the following:
+
+       1. Work with devices
+       2. Send a command                            Broker       mqtt.louie.se
+       3. Send a command to every node in a region  Signing key  present
+       4. Run a command set                         Registered   no - select 8
+       5. Discover devices                          Devices      3 devices
+       6. Work with command sets
+       7. Work with shortcuts
+       8. Work with signing key
+       9. Change configuration
+      10. Test the broker connection
+      11. Change directory columns
+      12. Display broadcast history
+      13. Help contents
+      90. Sign off
+ Selection or command
+ ===>
+
+
+
+ F1=Help   F3=Exit   F5=Refresh   F12=Cancel
+```
+
+- **Selection.** A number on `===>` opens that screen; `90`, `signoff` or `quit` signs off.
+- **Opt.** On Work with Devices, type an option on a row and press Enter: `1` tag, `2` change,
+  `4` forget, `5` display, `6` statistics, `7` commands, `8` last answers, `9` send, `10`
+  regions, `11` name and version. Other lists show their own options above the header.
+- **F-keys.** F1 help, F3 exit, F5 refresh, F12 cancel everywhere; on Work with Devices F6
+  discover, F7 Batt/Seen from Beacon, F9 send, F10 names, F11 sort, F13-F21 the shortcuts.
+- **`===>` verbs.** `send <device> <command>`, `all <region> <command>`, `discover <region>`,
+  `run <set> [arg]`, `alt <n>`, `names`, `fleet`, `tag <region>`, `untag`, `invert`, `sort <by>`,
+  `devices`, `help [topic]`; on Work with Devices they act on the tagged rows or the cursor
+  row, and `stats [24h|48h|168h]` is added.
+
+### Monolith
+
+The fleet as a board of tiles in phosphor on black (amber or green): the directory, the device
+under the cursor with its reads and a statistics sparkline, a feed of results, the broker and
+key, a clock. Jobs are drawn as bars. At 80x24:
+
+```
+ ▞▚ M O N O L I T H ▚▞  mccontrol  amber                              00:15:57
+╭─ ◉ DEVICES ──────────────────────────────╮╭─ ● STATUS ───────────────────────╮
+│   Name               Node     Reg  Sent  ││ BROKER  mqtt.louie.se:1883       │
+│   Far                FD700369 GOT  -     ││ KEY     2A6A1C1E…                │
+│   Gisebo             4AC61A7F JKG  -     ││ REG     no  :register            │
+│   (unnamed)          65C1D12C JKG  -     ││ LINK    untested  :test          │
+│                                          │╰──────────────────────────────────╯
+│                                          │╭─ ● DEVICE FAR ───────────────────╮
+│                                          ││ FD700369  GOT  ver ?             │
+│                                          ││ no telemetry yet: s reads the st │
+│                                          ││ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │
+│                                          ││                                  │
+│                                          ││                                  │
+│                                          ││                                  │
+│                                          │╰───────────── s stats  h history ─╯
+│                                          │╭─ ● RESULTS ──────────────────────╮
+│                                          ││ Nothing run yet. : opens the pal │
+│                                          ││                                  │
+│                                          ││                                  │
+│                                          ││                                  │
+│                                          ││                                  │
+│                                          ││                                  │
+╰───────────────────── 3 devices  by name ─╯╰──────────────────────────────────╯
+ : menu ↵ cmds ␣ tag c send a all s stat d find k keys Del forget ? help q quit
+```
+
+- **`:` or Ctrl+P** opens the palette: every verb and every command, type to filter.
+- **Single keys.** Enter the command list (or read again, or open a result, by tile), Space or
+  Ins tag, `*` invert, `+`/`-` tag or untag a region, `c` send, `a` every node in a region,
+  `s` statistics, `n` names and versions, `r` Batt/Seen from Beacon, `d` discover, `h` history,
+  `e` edit, `k` keys, `o` the next sort, `p` amber or green, Del forget, Alt+1..9 the
+  shortcuts, Tab the next tile, `?` or F1 help, `q` or F10 quit. The mouse picks a tile, a row or a key-bar label; the wheel scrolls.
+
+## Install
+
+```
+pip install .
+mccontrol keygen                                  # once; prints the two serial commands
+mccontrol config --username <user> --password <pass>   # the control broker's credentials
+mccontrol test                                    # connect, sign in, subscribe, publish, receive
+mccontrol discover JKG --add                      # every node in JKG that accepts your key
+mccontrol --ui MeshcoreCommander                  # the screens; plain mccontrol is the last used
+```
+
+Python 3.10 or newer; `pycryptodome` (Ed25519) and `paho-mqtt`; `curses` from the standard
+library. 80x24 is the minimum; wider terminals get wider panels, and on a narrow one
+Options > Directory columns (or `mccontrol config --columns ver,result`) picks which columns
+the directory shows.
 
 ## What it does
 
@@ -176,5 +288,6 @@ in `tests/test_envelope.py`; `mccontrol help assurance` is the argument in full.
 
 ## Tests
 
-`pytest` runs the unit tests and the pseudo-terminal walks: every function key is pressed once
-against a scripted transport (`MCCONTROL_FAKE_RESULTS`), on an 80x24 and a 100-column terminal.
+`pytest` runs the unit tests, the API against its OpenAPI document, the isolation test, and
+pseudo-terminal walks of each interface against a scripted transport (`MCCONTROL_FAKE_RESULTS`):
+every function key, option and verb pressed once, on an 80x24 and a wider terminal.
