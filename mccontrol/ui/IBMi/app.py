@@ -740,30 +740,41 @@ class App:
                 t.message = f"Selection {choice} is not valid."
 
     def config_form(self):
+        """Change Configuration: the control broker and the Beacon URL; a value that is not
+        a number keeps the screen, with the message. F10 saves and tests."""
         cfg = self.call(self.c.config)
         if cfg is None:
             return
-        fields = [("Broker", "broker", 40, False), ("Port", "port", 6, False), ("Username", "username", 30, False),
-                  ("Password", "password", 30, True), ("Wait seconds", "wait_secs", 4, False),
-                  ("Statistics URL", "beacon_url", 44, False)]
-        key, values = form(self.t, "Change Configuration",
-                           [{"label": label, "value": cfg.get(k, ""), "width": wd, "secret": s} for label, k, wd, s in fields],
-                           head=["The broker a node's mqtt.cmd.slot points at, and its credentials.",
-                                 "Statistics come from a Beacon server, read-only, no credentials."],
-                           keys=["F1=Help   F3=Exit   F10=Test   F12=Cancel"], context="setup")
-        if key not in ENTER and key != fkey(10):
-            return
-        try:
-            wait = float(values[4])
-            changes = {"broker": values[0].strip(), "port": int(values[1]), "username": values[2].strip(),
-                       "password": values[3], "wait_secs": int(wait) if wait.is_integer() else wait, "beacon_url": values[5].strip()}
-        except ValueError:
-            self.t.message = "Port and wait seconds must be numbers."
-            return
-        if self.call(self.c.set_config, **changes):
-            self.t.message = "Saved."
-            if key == fkey(10):
-                self.test()
+        spec = [("Broker", "broker", 40, False), ("Port", "port", 6, False), ("Username", "username", 30, False),
+                (f"Password ({'set' if cfg.get('password_set') else 'not set'})", "password", 30, True),
+                ("Wait seconds", "wait_secs", 4, False), ("Statistics URL", "beacon_url", 44, False)]
+        fields = [{"label": label, "value": cfg.get(k, ""), "width": wd, "secret": s} for label, k, wd, s in spec]
+        at = 0
+        while True:
+            key, values = form(self.t, "Change Configuration", fields,
+                               head=["The broker a node's mqtt.cmd.slot points at, and its credentials.",
+                                     "Statistics come from a Beacon server, read-only, no credentials.",
+                                     "The password is never shown: type one to change it, *NONE to remove it."],
+                               keys=["F1=Help   F3=Exit   F10=Test   F12=Cancel"], context="setup", at=at)
+            if key not in ENTER and key != fkey(10):
+                return
+            for f, v in zip(fields, values):
+                f["value"] = v
+            try:
+                wait = float(values[4])
+                changes = {"broker": values[0].strip(), "port": int(values[1]), "username": values[2].strip(),
+                           "wait_secs": int(wait) if wait.is_integer() else wait, "beacon_url": values[5].strip()}
+            except ValueError:
+                self.t.message = "Port and wait seconds must be numbers."
+                at = 4 if values[1].strip().isdigit() else 1
+                continue
+            if values[3]:                   # sent only when changed
+                changes["password"] = "" if values[3].strip().upper() == "*NONE" else values[3]
+            if self.call(self.c.set_config, **changes):
+                self.t.message = "Saved."
+                if key == fkey(10):
+                    self.test()
+                return
 
     def columns(self):
         cfg = self.call(self.c.config) or {}

@@ -156,12 +156,14 @@ class OptList:
                 self.command += chr(key)
 
 
-def form(term, title, fields, head=(), keys=("F1=Help   F3=Exit   F12=Cancel",), context="main", instruction="Type choices, press Enter."):
+def form(term, title, fields, head=(), keys=("F1=Help   F3=Exit   F12=Cancel",), context="main", instruction="Type choices, press Enter.",
+         at=0):
     """Prompted fields, one per line: `fields` are dicts with label, value, width and
     optionally secret and recall. Tab and Down move on, Up back; Enter returns
-    `(Enter, values)`, any function key `(key, values)`, F3, F12 and Esc `(key, None)`."""
+    `(Enter, values)`, any function key `(key, values)`, F3, F12 and Esc `(key, None)`.
+    The cursor starts on field `at`."""
     values = [str(f.get("value", "")) for f in fields]
-    i = 0
+    i = at
     while True:
         w, h = term.size
         term.frame(title, keys)

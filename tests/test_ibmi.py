@@ -2,7 +2,6 @@
 in-process API server over the scripted broker (the `api` fixture), the rule that it
 imports nothing of the package but the client, and its pure formatting helpers."""
 import ast
-import json
 import os
 import pathlib
 import pty
@@ -23,7 +22,7 @@ DOWN, UP, TAB = b"\x1bOB", b"\x1bOA", b"\t"
 pytestmark = pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")
 
 
-def walk(api, keys, seconds=1.0, cols=80, rows=24, start=1.0, raw=False):
+def walk(api, keys, seconds=0.5, cols=80, rows=24, start=0.8, raw=False):
     """Start IBMi in a pty on a client of the fixture's server, send `keys` as (bytes,
     delay) pairs, and return the screen text with the escape sequences stripped (`raw`:
     as the terminal received it)."""
@@ -53,7 +52,7 @@ def walk(api, keys, seconds=1.0, cols=80, rows=24, start=1.0, raw=False):
         os.write(fd, k)
         pump(delay)
         os.write(fd, b"\x0c")               # Ctrl+L after each step: the stream carries only changed
-        pump(0.15)                          # cells, so a repaint puts every frame's text in whole
+        pump(0.1)                           # cells, so a repaint puts every frame's text in whole
     pump(seconds)
     try:
         os.kill(pid, signal.SIGKILL)
@@ -302,7 +301,7 @@ def test_7_lists_the_commands_and_greys_what_the_firmware_does_not_admit(api):
 def test_a_bare_command_from_the_list_is_sent_at_once(api):
     _server, _url, store = api
     _far_on(store, "ar-11")
-    transport.FAKE_SCRIPT["FD700369|ver"] = [0, "> esp32s3-v1.17.1-ar-11"]
+    api[0].ctx.script["FD700369|ver"] = [0, "> esp32s3-v1.17.1-ar-11"]
     text = walk(api, [(b"1\r", 0.8), (b"7\r", 0.8), (b"ver\r", 0.6), (b"1\r", 1.2)])
     assert "this device reports" not in text
     assert "Command Results" in text and "> esp32s3-v1.17.1-ar-11" in text
@@ -312,7 +311,7 @@ def test_a_bare_command_from_the_list_is_sent_at_once(api):
 def test_a_choice_is_asked_as_numbered_values_and_its_caution_confirmed(api):
     _server, _url, store = api
     _far_on(store, "ar-11")
-    transport.FAKE_SCRIPT["FD700369|set autoreply off"] = [0, "OK"]
+    api[0].ctx.script["FD700369|set autoreply off"] = [0, "OK"]
     text = walk(api, [(b"1\r", 0.8), (b"7\r", 0.8), (b"set autoreply\r", 0.6), (b"1\r", 0.6), (DOWN, 0.2), (b"1\r", 0.8),
                       (b"\r", 1.2)])
     assert "Select Value" in text and "set autoreply <value>" in text
@@ -324,7 +323,7 @@ def test_a_choice_is_asked_as_numbered_values_and_its_caution_confirmed(api):
 def test_a_text_parameter_shows_examples_and_f12_backs_out(api):
     _server, _url, store = api
     _far_on(store, "ar-11")
-    transport.FAKE_SCRIPT["FD700369|region put se-jkp *"] = [0, "OK"]
+    api[0].ctx.script["FD700369|region put se-jkp *"] = [0, "OK"]
     text = walk(api, [(b"1\r", 0.8), (b"7\r", 0.8), (b"region put\r", 0.6), (b"1\r", 0.6), (F[12], 0.4),
                       (b"1\r", 0.6), (b"se-jkp *\r", 1.2)])
     assert "Specify Value" in text and "Examples:  se-jkp *   se-jkp-mul se-jkp" in text
@@ -333,7 +332,7 @@ def test_a_text_parameter_shows_examples_and_f12_backs_out(api):
 
 def test_5_displays_the_device_and_its_history_and_8_its_last_answers(api):
     _server, _url, store = api
-    transport.FAKE_SCRIPT["FD700369|ver"] = [0, "> v1.17.1-ar-10"]
+    api[0].ctx.script["FD700369|ver"] = [0, "> v1.17.1-ar-10"]
     text = walk(api, [(b"send Far ver\r", 1.2), (F[3], 0.4), (b"1\r", 0.8), (b"5\r", 0.8), (b"5\r", 0.6), (F[3], 0.4),
                       (F[3], 0.4), (b"8\r", 0.8), (b"1\r", 1.2), (F[3], 0.4)])
     assert "Display Device" in text and "Node . . . . :  FD700369" in text and "Region . . :  GOT" in text
@@ -356,7 +355,7 @@ def test_2_changes_a_device_and_4_forgets_one_after_a_confirm(api):
 def test_6_shows_statistics_live_then_from_beacon(api, monkeypatch):
     from conftest import BEACON_FAKE
     monkeypatch.setenv("MCCONTROL_FAKE_BEACON", BEACON_FAKE)
-    transport.FAKE_SCRIPT["4AC61A7F|get stats"] = [0, "> batt=4100mV up=99s noise=-120"]
+    api[0].ctx.script["4AC61A7F|get stats"] = [0, "> batt=4100mV up=99s noise=-120"]
     text = walk(api, [(b"1\r", 0.8), (DOWN, 0.2), (b"6\r", 1.5), (F[10], 1.5)], rows=40)
     assert "Statistics: Gisebo" in text and "4100 mV" in text
     assert "Beacon: sampled" in text and "4261 mV" in text
@@ -379,7 +378,7 @@ def test_11_reads_names_and_versions_and_f7_refreshes_the_tagged_from_beacon(api
 
 def test_5_discovers_a_region_1_adds_one_with_a_name_and_f6_adds_the_rest(api):
     _server, _url, store = api
-    transport.FAKE_SCRIPT["13B58595"] = [17, ""]
+    api[0].ctx.script["13B58595"] = [17, ""]
     text = walk(api, [(b"5\r", 0.6), (b"\r", 1.5), (b"1\r", 0.6), (b"Torpa\r", 0.8), (F[6], 0.8)])
     assert "Discover Devices" in text and "* for every region you have" in text
     assert "Work with Found Devices" in text and "Found in JKG: 4" in text
@@ -391,14 +390,14 @@ def test_5_discovers_a_region_1_adds_one_with_a_name_and_f6_adds_the_rest(api):
 
 
 def test_discovery_where_nothing_answers_says_so(api):
-    transport.FAKE_SCRIPT.clear()
+    api[0].ctx.script.clear()
     text = walk(api, [(b"discover GOT\r", 1.5)])
     assert "No node answered: none there holds your key, or its control plane is off." in text
 
 
 def test_6_works_with_command_sets_creates_runs_and_removes(api):
     _server, _url, store = api
-    transport.FAKE_SCRIPT.update({"FD700369|region put se-jkp *": [0, "OK"], "FD700369|region allowf se-jkp": [14, ""]})
+    api[0].ctx.script.update({"FD700369|region put se-jkp *": [0, "OK"], "FD700369|region allowf se-jkp": [14, ""]})
     text = walk(api, [(b"6\r", 0.6), (F[6], 0.6), (b"reads", 0.2), (TAB, 0.2), (b"ver", 0.2), (TAB, 0.2), (b"get name\r", 0.6),
                       (b"9\r", 0.6), (TAB, 0.2), (b"se-jkp", 0.2), (TAB, 0.2), (b"\x08" * 10 + b"Far\r", 1.5), (F[3], 0.4),
                       (DOWN, 0.2), (b"4\r", 0.6), (b"\r", 0.6)])
@@ -412,7 +411,7 @@ def test_6_works_with_command_sets_creates_runs_and_removes(api):
 
 def test_7_edits_the_shortcuts_and_shift_f2_and_alt_2_send_one(api):
     _server, _url, store = api
-    transport.FAKE_SCRIPT["FD700369|ver"] = [0, "> v1.17.1-ar-11"]
+    api[0].ctx.script["FD700369|ver"] = [0, "> v1.17.1-ar-11"]
     text = walk(api, [(b"7\r", 0.6), (DOWN * 8, 0.3), (b"get flood.max\r", 0.6), (b"1\r", 0.8), (b"\x1b[1;2Q", 1.2), (F[3], 0.4),
                       (b"\x1b2", 1.2), (F[3], 0.4), (b"alt 8\r", 0.6)])
     assert "Work with Shortcuts" in text and "Shortcuts saved." in text
@@ -448,8 +447,12 @@ def test_9_changes_the_configuration_and_f10_tests_the_broker(api):
     assert "registered with broker" in text
     cfg = store.config()
     assert cfg["username"] == "mcoar" and cfg["password"] == "pw" and cfg["broker"] == "127.0.0.1"
-    text = walk(api, [(b"9\r", 0.6), (TAB, 0.2), (b"x\r", 0.6)])
-    assert "Port and wait seconds must be numbers." in text
+    text = walk(api, [(b"9\r", 0.6), (TAB, 0.2), (b"x\r", 0.6), (b"\x08\r", 0.6)])
+    assert "Password (set)" in text and "pw" not in text.replace("pwd", "")
+    assert "Port and wait seconds must be numbers." in text and "Saved." in text
+    assert store.config()["password"] == "pw"                     # an untouched password is not sent
+    walk(api, [(b"9\r", 0.6), (TAB * 3, 0.2), (b"*none\r", 0.6)])
+    assert store.config()["password"] == ""
 
 
 def test_11_picks_the_directory_columns(api):
