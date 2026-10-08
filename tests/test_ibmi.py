@@ -540,3 +540,17 @@ def test_f5_on_the_command_list_asks_again_what_the_firmware_admits(api):
         assert "Select Command" in text and "greyed" not in text and "reports ar-9" not in text
     finally:
         s.close()
+
+
+def test_a_resize_redraws_the_screen_at_the_new_size_at_once(api):
+    import fcntl, struct, termios
+    s = Session(api, fixed=False)
+    try:
+        text = s.drive([(b"1\r", 0.8)])
+        assert "Work with Devices" in text and "Result" not in text          # 80 columns cut the header
+        mark = len(s.out)
+        fcntl.ioctl(s.fd, termios.TIOCSWINSZ, struct.pack("HHHH", 43, 132, 0, 0))
+        s.pump(lambda new: b"Result" in new, 2.0)                           # no key typed
+        assert b"Result" in s.out[mark:]
+    finally:
+        s.close()

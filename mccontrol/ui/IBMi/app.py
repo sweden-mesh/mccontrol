@@ -203,7 +203,8 @@ class App:
     # -- Work with Devices ---------------------------------------------------------------
 
     def work_with_devices(self):
-        lst = OptList(self.t, "Work with Devices", DEVICE_KEYS, legend=DEVICE_LEGEND, ident=lambda d: d["node"])
+        lst = OptList(self.t, "Work with Devices", DEVICE_KEYS, legend=DEVICE_LEGEND, ident=lambda d: d["node"],
+                      resize_returns=True)
         while True:
             data = self.devices()
             lst.header = "  " + data["header"]
@@ -224,6 +225,8 @@ class App:
                 return
             elif key == fkey(5):
                 self.t.message = ""
+            elif key == curses.KEY_RESIZE:
+                pass                            # the rows again, laid out to the new width
             elif key == fkey(6):
                 self.discover(None)
             elif key == fkey(7):
@@ -711,6 +714,8 @@ class App:
             t.put(h - 6, 1, "Selection")
             t.put(h - 5, 1, "===>", "bright")
             key, command = t.edit(h - 5, 6, 20, command)
+            if key == curses.KEY_RESIZE:
+                continue
             if key == fkey(1):
                 self.help("keys")
                 continue

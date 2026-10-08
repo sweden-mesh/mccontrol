@@ -6,6 +6,8 @@ Nothing here knows what a device is; the screens in `app.py` draw on it.
 
 import curses
 import datetime
+import os
+import sys
 
 ENTER = (curses.KEY_ENTER, 10, 13)
 BACKSPACE = (curses.KEY_BACKSPACE, 127, 8, curses.KEY_DC)
@@ -108,11 +110,15 @@ class Terminal:
 
     def key(self):
         """One key, after the frame is on the terminal. Ctrl+L repaints and is not returned;
-        Esc then a digit is Alt+digit, returned negative; an unknown sequence is drained."""
+        a resize is returned as KEY_RESIZE, for the screen to draw itself again at the new
+        size; Esc then a digit is Alt+digit, returned negative; an unknown sequence is drained."""
         while True:
             self.flush()
             key = self.win.getch()
-            if key == 12 or key == curses.KEY_RESIZE:
+            if key == curses.KEY_RESIZE:
+                self.resized()
+                return key
+            if key == 12:
                 self.win.clearok(True)
                 continue
             if key != 27:
@@ -137,6 +143,17 @@ class Terminal:
                 self.win.nodelay(False)
             return SEQUENCES.get(bytes(tail).decode("latin-1"), 27)
 
+    def resized(self):
+        """After KEY_RESIZE: take the size from the terminal itself. curses may keep the
+        LINES and COLUMNS it put in the environment at start, and then never grow."""
+        try:
+            cols, rows = os.get_terminal_size(sys.__stdout__.fileno())
+            if (rows, cols) != self.win.getmaxyx():
+                curses.resizeterm(rows, cols)
+        except (OSError, ValueError, AttributeError, curses.error):
+            pass
+        self.win.clearok(True)
+
     def poll(self):
         """F3, F12 or Esc if one was typed, else -1: how a wait notices a cancel. Any other
         key typed during the wait is kept for after it, the 5250's type-ahead."""
@@ -155,7 +172,7 @@ class Terminal:
             if key in EXIT:
                 found = key
             elif key == curses.KEY_RESIZE:
-                self.win.clearok(True)
+                self.resized()
             elif key >= 0:
                 held.append(key)
         for key in reversed(held):
@@ -197,9 +214,6 @@ class Terminal:
 
 def start(main):
     """Open the terminal and run `main(term)`; say why when it cannot."""
-    import os
-    import sys
-
     if not sys.stdout.isatty():
         print("mccontrol: the screens need a terminal; use the subcommands instead (mccontrol --help)", file=sys.stderr)
         return 2

@@ -26,7 +26,7 @@ class OptList:
     that ended it, the `(opt, payload)` typed, in row order, and the command line."""
 
     def __init__(self, term, title, keys, legend=(), header="", head=(), prompt="Parameters or command", context="main",
-                 ident=None):
+                 ident=None, resize_returns=False):
         self.term, self.title, self.keys = term, title, keys
         self.legend, self.header, self.head = list(legend), header, list(head)
         self.prompt, self.context = prompt, context
@@ -35,6 +35,7 @@ class OptList:
         self.command, self.focus = "", "list"
         self.note = ""                  # right of the instruction line: a count, the sort
         self.ident = ident or (lambda payload: payload)     # what keeps the cursor on a row across a refresh
+        self.resize_returns = resize_returns                 # rows the caller lays out to the width
 
     def set_rows(self, rows, opts=None):
         keep = None if self.payload() is None else self.ident(self.payload())
@@ -114,6 +115,8 @@ class OptList:
             except curses.error:
                 pass
             key = self.term.key()
+            if key == curses.KEY_RESIZE and not self.resize_returns:
+                continue
             if key == fkey(1):
                 _help(self.term, self.context)
                 continue
@@ -180,6 +183,8 @@ def form(term, title, fields, head=(), keys=("F1=Help   F3=Exit   F12=Cancel",),
             term.put(top + n, 32, shown[: f["width"]].ljust(min(f["width"], w - 34)), "field")
         f = fields[i]
         key, values[i] = term.edit(top + i, 32, min(f["width"], w - 34), values[i], f.get("secret"), f.get("recall"))
+        if key == curses.KEY_RESIZE:
+            continue
         if key == fkey(1):
             _help(term, context)
         elif key in ENTER:
@@ -197,13 +202,12 @@ def form(term, title, fields, head=(), keys=("F1=Help   F3=Exit   F12=Cancel",),
 def show(term, title, lines, keys=("F3=Exit   F12=Cancel",), done=(), context="main"):
     """Lines to read, paged: PageDown/PageUp roll, Enter, F3, F12 and Esc leave, as does any
     key in `done`. Long lines wrap. Returns the key that left."""
-    w, _h = term.size
-    wrapped = []
-    for line in lines:
-        wrapped += fmt.wrap(line, w - 3) if len(line) > w - 3 else [line]
     top = 0
     while True:
         w, h = term.size
+        wrapped = []
+        for line in lines:
+            wrapped += fmt.wrap(line, w - 3) if len(line) > w - 3 else [line]
         size = h - 6
         term.frame(title, keys)
         for i, line in enumerate(wrapped[top:top + size]):
@@ -223,15 +227,15 @@ def show(term, title, lines, keys=("F3=Exit   F12=Cancel",), done=(), context="m
 
 def confirm(term, title, lines, prompt="Press Enter to confirm, F12 to cancel."):
     """A Confirm screen: True on Enter."""
-    w, _h = term.size
-    term.frame(title, ["F12=Cancel"])
-    term.put(2, 1, prompt, "bright")
-    y = 4
-    for line in lines:
-        for part in fmt.wrap(line, w - 6):
-            term.put(y, 3, part)
-            y += 1
     while True:
+        w, _h = term.size
+        term.frame(title, ["F12=Cancel"])
+        term.put(2, 1, prompt, "bright")
+        y = 4
+        for line in lines:
+            for part in fmt.wrap(line, w - 6):
+                term.put(y, 3, part)
+                y += 1
         key = term.key()
         if key in ENTER:
             return True
