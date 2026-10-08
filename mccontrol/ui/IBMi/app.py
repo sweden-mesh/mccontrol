@@ -59,7 +59,7 @@ class App:
         def tick(j):
             p = j["progress"]
             clock = f"   {p['elapsed']:.0f}/{p['wait']:.0f} s" if p.get("wait") else ""
-            self.t.say(f"{p['text']}{clock}   F12=Cancel")
+            self.t.say(f"{p['text']}{clock}" + ("   F12=Cancel" if j.get("cancellable", True) else ""))
             return self.t.poll() in EXIT
         self.t.say("Working...   F12=Cancel")
         try:

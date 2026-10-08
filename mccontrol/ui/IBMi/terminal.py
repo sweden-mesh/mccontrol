@@ -87,6 +87,13 @@ class Terminal:
         for i, line in enumerate(list(keys)[-2:][::-1]):
             self.put(h - 1 - i, 1, line, "legend")
 
+    def move(self, y, x):
+        """The hardware cursor, where a 5250 keeps it: in the field being typed into."""
+        try:
+            self.win.move(y, x)
+        except curses.error:
+            pass
+
     def say(self, text):
         """The message line, at once, without redrawing the rest: a wait's progress."""
         w, h = self.size
@@ -156,7 +163,7 @@ class Terminal:
             while True:
                 shown = ("*" * len(buf) if secret else buf)[-width:]
                 self.put(y, x, shown.ljust(width), "field")
-                self.win.move(y, min(x + len(shown), x + width - 1))
+                self.move(y, min(x + len(shown), x + width - 1))
                 key = self.key()
                 if key in BACKSPACE:
                     buf = buf[:-1]

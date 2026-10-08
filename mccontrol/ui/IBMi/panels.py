@@ -101,9 +101,9 @@ class OptList:
             t.put(h - 5, 1, "===>", "bright")
             t.put(h - 5, 6, self.command[-(w - 8):].ljust(w - 8), "field")
         if self.focus == "cmd":
-            self.term.win.move(h - 5, 6 + min(len(self.command), w - 9))
+            self.term.move(h - 5, 6 + min(len(self.command), w - 9))
         elif self.legend and self.rows:
-            self.term.win.move(first + self.cursor - self.top, 1)
+            self.term.move(first + self.cursor - self.top, 1)
         return size
 
     def run(self):
