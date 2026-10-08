@@ -395,25 +395,16 @@ def start_statistics(ctx, _p, _q, body):
     store = ctx.store
 
     def work(job):
-        lines = actions.statistics(store, d, range_, interval, live=live,
+        lines, sample, points = actions.statistics(store, d, range_, interval, live=live, details=True,
                                    progress=ticker(job, lambda n: "answered" if n else "waiting for the live sample"),
                                    script=ctx.script)
         if not lines[0].startswith("live"):             # a live answer is kept by send() itself
             summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
             store.remember_read(d["node"], "stats (Beacon)", summary[:60])
         job.update(text="done")
-        return {"node": d["node"], "lines": lines, "sample": _or_none(beacon.stats, store, d),
-                "points": _or_none(beacon.telemetry, store, d, range_, interval)}
+        return {"node": d["node"], "lines": lines, "sample": sample, "points": points}
 
     return 202, ctx.jobs.start("statistics", work).snapshot()
-
-
-def _or_none(read, *args):
-    """Beacon's numbers for a dashboard beside the lines, or None where it has none."""
-    try:
-        return read(*args)
-    except beacon.BeaconError:
-        return None
 
 
 def start_test(ctx, _p, _q, _b):

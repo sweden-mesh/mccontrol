@@ -270,7 +270,13 @@ def test_names_versions_fleet_and_statistics(api, monkeypatch):
     job = run(url, "refresh-fleet", {})
     assert job["result"] == {"updated": 1, "failed": 2, "asked": 3}
     assert call(url, "GET", "/devices/gisebo")[1]["cells"]["batt"].strip()
+    from mccontrol import beacon
+    store.update_device("4AC61A7F", observer_id=None)                      # cold: the id is looked up once
+    asked, real = [], beacon._get
+    monkeypatch.setattr(beacon, "_get", lambda config, path, params=None: asked.append(path) or real(config, path, params))
     job = run(url, "statistics", {"device": "gisebo", "range": "48h", "live": False})
+    assert sorted(asked) == ["/nodes", "/observers/867a1b43-3f2e-48c4-9ef5-3008a905cfdc",
+                             "/observers/867a1b43-3f2e-48c4-9ef5-3008a905cfdc/telemetry"]
     assert job["result"]["lines"][0].startswith("Beacon: sampled")
     assert job["result"]["sample"]["stats"]["battery_mv"] > 0 and job["result"]["sample"]["age_secs"] >= 0
     assert job["result"]["points"] and all(isinstance(p["t"], int) for p in job["result"]["points"])
