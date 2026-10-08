@@ -135,6 +135,11 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert call(url, "GET", "/tags")[1]["footer"] == "4 devices"
     assert call(url, "GET", "/regions")[1]["regions"] == ["JKG", "GOT"]
     assert "add-scope" in call(url, "GET", "/sets")[1]["sets"]
+    filled = call(url, "GET", "/sets/add-scope?arg=se-jkp")[1]
+    assert filled["name"] == "add-scope" and filled["steps"][0] == "region put se-jkp *" and "{arg}" not in str(filled)
+    status, body = call(url, "GET", "/sets/add-scope")
+    assert status == 400 and body["error"]["message"] == "this set needs a value for {arg}"
+    assert call(url, "GET", "/sets/nothing")[0] == 404
     assert call(url, "PUT", "/sets/reads", {"steps": ["ver", " get name "]})[1]["steps"] == ["ver", "get name"]
     assert call(url, "DELETE", "/sets/add-scope")[1] == {"removed": "add-scope"}
     assert call(url, "DELETE", "/sets/add-scope")[0] == 404

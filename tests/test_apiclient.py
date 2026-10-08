@@ -39,6 +39,7 @@ def test_the_client_round_trips_against_the_live_server(api):
     assert c.untag()["tagged"] == [] and c.tags()["tagged"] == []
     assert c.regions()["regions"] == ["JKG", "GOT"]
     assert c.save_set("x", ["ver"])["steps"] == ["ver"] and "x" in c.sets()["sets"]
+    assert c.filled_set("x")["steps"] == ["ver"]
     assert c.remove_set("x") == {"removed": "x"}
     assert c.set_shortcuts(["ver", "region"])["shortcuts"][:2] == c.shortcuts()["shortcuts"][:2]
     assert c.help_topic(c.help_index()["topics"][0]["name"])["lines"]

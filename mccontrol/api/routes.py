@@ -326,6 +326,17 @@ def get_sets(ctx, _p, _q, _b):
     return 200, {"sets": ctx.store.sets(), "max_steps": _store.SET_STEPS}
 
 
+def filled_set(ctx, params, query, _b):
+    name = params["name"].strip().lower()
+    steps = ctx.store.sets().get(name)
+    if not steps:
+        raise not_found(f"no set named {name}")
+    try:
+        return 200, {"name": name, "steps": actions.fill(steps, query.get("arg") or "")}
+    except envelope.EnvelopeError as exc:
+        raise bad(str(exc)) from None
+
+
 def save_set(ctx, params, _q, body):
     steps = body.get("steps")
     if not isinstance(steps, list) or not all(isinstance(s, str) for s in steps):
@@ -400,6 +411,7 @@ TABLE = [
     ("POST", "/tags/invert", invert_tags),
     ("GET", "/regions", regions),
     ("GET", "/sets", get_sets),
+    ("GET", "/sets/{name}", filled_set),
     ("PUT", "/sets/{name}", save_set),
     ("DELETE", "/sets/{name}", remove_set),
     ("GET", "/shortcuts", get_shortcuts),

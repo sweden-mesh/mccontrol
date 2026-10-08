@@ -816,6 +816,48 @@
    }
   },
   "/sets/{name}": {
+   "get": {
+    "operationId": "filled_set",
+    "summary": "A command set as it would run: its steps with {arg} filled in",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SetSaved"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "description": "the set",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "arg",
+      "in": "query",
+      "required": false,
+      "description": "the value for {arg}; a set whose steps hold {arg} needs one",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
    "put": {
     "operationId": "save_set",
     "summary": "Define or replace a command set; {arg} in a step is filled in at run time",

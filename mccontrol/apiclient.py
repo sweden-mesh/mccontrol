@@ -141,6 +141,9 @@ class Client:
     def sets(self):
         return self.call("GET", "/sets")
 
+    def filled_set(self, name, arg=None):
+        return self.call("GET", f"/sets/{_q(name)}", {"arg": arg})
+
     def save_set(self, name, steps):
         return self.call("PUT", f"/sets/{_q(name)}", body={"steps": list(steps)})
 
