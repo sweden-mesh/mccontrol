@@ -134,8 +134,8 @@ class Board:
 
     def job_title(self, job):
         result = job.get("result") or {}
-        what = result.get("command") or (job["outcomes"][0]["command"] if job["outcomes"] else "")
-        what = what or ", ".join(result.get("regions") or []) or result.get("node") or ""
+        what = (result.get("command") or ", ".join(result.get("regions") or [])
+                or (job["outcomes"][0]["command"] if job["outcomes"] else "") or result.get("node") or "")
         mark = {"done": self.g["ok"], "failed": self.g["bad"], "cancelled": "-", "running": self.g["run"]}[job["status"]]
         return f"{mark} {job['started'][11:16]} {job['verb'].upper()} {what}  {job['progress']['text']}"
 
@@ -479,7 +479,7 @@ class Board:
     def box(self, title, width, height, role="base"):
         """A centred overlay frame; returns its inside `(y, x, w, h)`."""
         w, h = self.size
-        width, height = min(width, w - 2), min(height, h - 2)
+        width, height = min(width, w), min(height, h - 2)
         y, x = (h - height) // 2, (w - width) // 2
         for row in range(y, y + height):
             self.put(row, x, " " * width, role)
@@ -618,6 +618,9 @@ class Board:
         -- are cycled with Tab and followed with Enter (the target returned); a key in `keys`
         is returned; Esc closes."""
         top, link = 0, 0
+        w, h = self.size
+        if not links:                       # long lines wrap where nothing points into them
+            lines = [part for line in lines for part in art.wrap(line, min(100, w - 2) - 4)]
         while True:
             self.draw()
             w, h = self.size
@@ -629,7 +632,7 @@ class Board:
                 ln, s, e, _t = links[link]
                 if top <= ln < top + ih:
                     self.put(y + ln - top, x + s, lines[ln][s:e], "cursor")
-            hint = ("Tab link  ↵ follow  " if links else "") + "↑↓ scroll  Esc close" + (f"  {keys}" if keys else "")
+            hint = ("Tab link  ↵ follow  ⌫ back  " if links else "") + "↑↓ scroll  Esc close"
             self.put(y + ih, x, hint[:iw], "dim")
             self.win.noutrefresh()
             key = self.key(timeout=-1)
@@ -851,7 +854,7 @@ class Board:
         if not found:
             self.toast("no node answered: none there holds your key, or its control plane is off", "alert")
             return
-        new = [e for e in found if not e["known_as"]]
+        new = [e for e in found if e["known_as"] is None]          # "" is a known device without a name
         if not new:
             self.toast(f"{len(found)} answered, every one already known")
             return
@@ -942,6 +945,7 @@ class Board:
         lines = ["Provision each repeater over its serial console with:", ""] + [f"  {line}" for line in k["provision"]] + [
             "", f"The private seed is in {k['path']}", "and never leaves this machine inside anything but a signature.", "",
             f"Registered with {reg['broker']} on {reg['at'][:10]}." if reg else "Not registered with the broker yet."]
+        lines += ["", "g generates a new key   r registers this one with the broker"]
         choice = self.sheet("Signing key", lines, keys="gr")
         if choice == "g":
             self.v_generate(None)
@@ -1027,13 +1031,19 @@ class Board:
     def v_phosphor(self, _arg):
         self.swap_palette()
 
-    def v_help(self, _arg, topic="index"):
-        """Help topics with their links: Tab to a link, Enter follows, Backspace goes back."""
-        trail = [topic]
+    def v_help(self, _arg):
+        """The board's keys first, then the help topics with their links: Tab to a link,
+        Enter follows, Backspace goes back."""
+        trail = [None]
         while trail:
-            t = self.client.help_topic(trail[-1])
-            links = [(l["line"], l["start"], l["end"], l["target"]) for l in t["links"]]
-            nxt = self.sheet(f"Help {t['title']}", t["lines"], links)
+            if trail[-1] is None:
+                title, lines = "Monolith keys", KEYCARD
+                links = [(len(lines) - 1, 2, 15, "index")]
+            else:
+                t = self.client.help_topic(trail[-1])
+                title, lines = t["title"], t["lines"]
+                links = [(l["line"], l["start"], l["end"], l["target"]) for l in t["links"]]
+            nxt = self.sheet(title, lines, links)
             if nxt is None:
                 return
             if nxt == "\b":
@@ -1045,3 +1055,24 @@ class Board:
 # One key per verb on the board; the palette has every one of them by name.
 KEYS = {"c": "send", "a": "region", "s": "stats", "n": "names", "r": "fleet", "d": "discover", "h": "history",
         "e": "edit", "k": "keys", "o": "sortnext", "*": "invert", "+": "tagregion", "-": "tagregion", "p": "phosphor"}
+
+KEYCARD = [
+    ":  Ctrl+P   the palette: every verb and every command, type to filter",
+    "↵           on a device: its command list, greyed where its firmware lacks one",
+    "↵           on the results: the whole result",
+    "␣  Ins      tag the device;  *  invert;  +  -  tag or untag a region",
+    "c           send a command to the tagged devices, or the cursor device",
+    "a           send a command to every node in a region",
+    "Alt+1..9    a shortcut, no prompt;  : shortcuts edits them",
+    "s           statistics: live, then Beacon, drawn as sparklines",
+    "n  r        names and versions;  battery and seen from Beacon",
+    "d           discover a region and adopt what answers",
+    "h  e  Del   history;  edit;  forget the device",
+    "k           the signing key: provision, generate, register",
+    "o  p        sort the directory;  amber or green phosphor",
+    "Tab         the next tile;  mouse: a click focuses, a row takes the cursor",
+    "Esc         closes an overlay, cancels a running job",
+    "q           quit",
+    "",
+    "  help contents",
+]
