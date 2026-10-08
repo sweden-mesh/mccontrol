@@ -19,7 +19,8 @@ subcommand to a server already running instead of starting one of its own.
 
 `mccontrol --ui <name>` starts one. The name is kept in the configuration, so plain
 `mccontrol` starts the last one used; with none used yet, or a name that is not there, it
-lists them and exits:
+lists them and exits. `--api <url>` runs it on a server already running instead of starting
+one of its own, and that server's configuration keeps the name:
 
 ```
 interfaces (mccontrol --ui <name>):
