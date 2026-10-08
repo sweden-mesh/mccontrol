@@ -320,6 +320,12 @@ def regions(ctx, _p, _q, _b):
     return 200, {"regions": ctx.store.regions()}
 
 
+def resolve_regions(ctx, _p, query, _b):
+    if "text" not in query:
+        raise bad("text is required: JKG, several with commas, or *")
+    return 200, {"regions": actions.regions_asked(query["text"], ctx.store)}
+
+
 # -- sets and shortcuts ------------------------------------------------------------------
 
 def get_sets(ctx, _p, _q, _b):
@@ -410,6 +416,7 @@ TABLE = [
     ("DELETE", "/tags", untag),
     ("POST", "/tags/invert", invert_tags),
     ("GET", "/regions", regions),
+    ("GET", "/regions/resolve", resolve_regions),
     ("GET", "/sets", get_sets),
     ("GET", "/sets/{name}", filled_set),
     ("PUT", "/sets/{name}", save_set),

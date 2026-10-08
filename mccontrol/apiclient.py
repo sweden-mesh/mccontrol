@@ -136,6 +136,9 @@ class Client:
     def regions(self):
         return self.call("GET", "/regions")
 
+    def resolve_regions(self, text):
+        return self.call("GET", "/regions/resolve", {"text": text})
+
     # -- sets and shortcuts --------------------------------------------------------------
 
     def sets(self):
