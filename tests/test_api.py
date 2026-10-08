@@ -240,6 +240,7 @@ def test_discovery_finds_names_and_adopts_with_add(api):
     job = run(url, "discover", {"region": "JKG", "add": True})
     found = {e["node"]: e for e in job["result"]["found"]}
     assert found["4AC61A7F"]["known_as"] == "Gisebo" and not found["4AC61A7F"]["added"]
+    assert {"4AC61A7F", "AB6B9285"} <= set(job["progress"]["heard"])     # who answered, during the wait
     assert found["AB6B9285"]["added"] and found["AB6B9285"]["name"] == "SE-JKG-UGORptr"
     assert call(url, "GET", "/devices/AB6B9285")[1]["name"] == "SE-JKG-UGORptr"
     assert call(url, "POST", "/jobs/discover", {"region": " "})[0] == 400

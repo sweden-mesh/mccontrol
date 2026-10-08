@@ -2506,6 +2506,13 @@
      },
      "steps": {
       "type": "integer"
+     },
+     "heard": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "the nodes heard so far in the current wait, as the transport reports them"
      }
     },
     "required": [
@@ -2515,7 +2522,8 @@
      "elapsed",
      "wait",
      "step",
-     "steps"
+     "steps",
+     "heard"
     ]
    },
    "Outcome": {

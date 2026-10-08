@@ -29,7 +29,7 @@ class Job:
         self.cancel = threading.Event()
         self.started = _store._now()
         self.finished = None
-        self.progress = {"text": "starting", "answered": 0, "expected": 0, "elapsed": 0.0, "wait": 0.0, "step": 0, "steps": 1}
+        self.progress = {"text": "starting", "answered": 0, "expected": 0, "elapsed": 0.0, "wait": 0.0, "step": 0, "steps": 1, "heard": []}
         self.outcomes = {}              # key -> outcome, in landing order
         self.result = None
         self.error = None
@@ -112,13 +112,13 @@ def outcome(node, name, command, result, version=None, line=None):
 
 
 def ticker(job, text, names=None, command=""):
-    """A `progress` callback for the transport: elapsed and wait into the record, the
-    answered nodes landed (as "answered" until the final outcome replaces it), and the
+    """A `progress` callback for the transport: elapsed, wait and the nodes heard into the
+    record, the answered nodes landed (as "answered" until the final outcome replaces it), and the
     cancel flag back, which stops the wait."""
     names = names or {}
 
     def tick(elapsed, total, answered):
-        job.update(elapsed=round(elapsed, 1), wait=total, text=text(len(answered)))
+        job.update(elapsed=round(elapsed, 1), wait=total, text=text(len(answered)), heard=list(answered))
         if names:
             job.update(answered=len(answered))
             for node in answered:
