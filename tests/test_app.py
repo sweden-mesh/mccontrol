@@ -144,7 +144,8 @@ def test_f5_discovers_a_region_and_f7_remembers_everyone_with_names_where_the_fl
     fake = json.dumps({"AB6B9285": [0, "> on"], "AB6B9285|get name": [0, "> SE-JKG-UGORptr"],
                        "4AC61A7F": [0, "> on"], "4AC61A7F|get name": [14, ""],
                        "13B58595": [17, ""], "13B58595|get name": [14, ""]})
-    text, home = walk(tmp_path, [(DOWN, 0.3), (F[5], 0.5), (b"\r", 1.5), (F[7], 1.0)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    # after the discovery's outcome window (Enter closes it), F7 adds all; its window closes too
+    text, home = walk(tmp_path, [(DOWN, 0.3), (F[5], 0.5), (b"\r", 1.5), (b"\r", 0.4), (F[7], 1.0), (b"\r", 0.4)], env={"MCCONTROL_FAKE_RESULTS": fake})
     assert "Found in JKG: 3" in text
     assert "= Gisebo" in text                               # the known one is marked
     assert "SE-JKG-UGORptr" in text
@@ -156,7 +157,7 @@ def test_f5_discovers_a_region_and_f7_remembers_everyone_with_names_where_the_fl
 
 def test_f5_again_adds_the_tagged_and_asks_for_a_name(tmp_path):
     fake = json.dumps({"AB6B9285": [0, "> on"], "AB6B9285|get name": [14, ""]})
-    text, home = walk(tmp_path, [(DOWN, 0.3), (F[5], 0.5), (b"\r", 1.5), (INS, 0.3), (F[5], 0.6), (b"UGO\r", 0.8)],
+    text, home = walk(tmp_path, [(DOWN, 0.3), (F[5], 0.5), (b"\r", 1.5), (b"\r", 0.4), (INS, 0.3), (F[5], 0.6), (b"UGO\r", 0.8), (b"\r", 0.4)],
                       env={"MCCONTROL_FAKE_RESULTS": fake})
     assert "Name the device" in text
     assert {d["name"] for d in json.loads((home / "devices.json").read_text())} >= {"UGO"}
@@ -164,7 +165,7 @@ def test_f5_again_adds_the_tagged_and_asks_for_a_name(tmp_path):
 
 def test_f4_edits_the_cursor_device(tmp_path):
     # cursor on Far: rename it, Tab past region, Tab to notes, Enter saves
-    text, home = walk(tmp_path, [(b"\x08\x08\x08Near", 0.3), (F[4], 0.5), (b"\x08\x08\x08Near", 0.3), (b"\r", 0.8)])
+    text, home = walk(tmp_path, [(F[4], 0.5), (b"\x08\x08\x08Near", 0.3), (b"\r", 0.8)])
     names = {d["node"]: d["name"] for d in json.loads((home / "devices.json").read_text())}
     assert names["FD700369"] == "Near"
     assert "Saved." in text
@@ -225,14 +226,14 @@ def test_f3_opens_the_history_window(tmp_path):
 
 def test_alt_digit_sends_the_shortcut_without_a_dialog_and_the_send_menu_lists_it(tmp_path):
     fake = json.dumps({"FD700369": [0, "MeshCore Observer 1.2"]})
-    text, home = walk(tmp_path, [(b"\x1b2", 1.5), (b"\x1bs", 0.6), (b"\x1b", 0.3)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    text, home = walk(tmp_path, [(b"\x1b2", 1.5), (b"\r", 0.4), (b"\x1bs", 0.6), (b"\x1b", 0.3)], env={"MCCONTROL_FAKE_RESULTS": fake})
     assert "Results: ver" in text and "1 of 1 answered" in text
     assert '"command": "ver"' in (home / "history" / "FD700369.jsonl").read_text()
     assert "Alt+2" in text and "get name" in text            # the Send menu, opened with Alt+S
 
 
 def test_an_unset_shortcut_says_so_and_options_edits_the_slots(tmp_path):
-    text, home = walk(tmp_path, [(b"\x1b9", 0.5), (b"\x1bo", 0.5), (DOWN, 0.2), (DOWN, 0.2), (b"\r", 0.5),
+    text, home = walk(tmp_path, [(b"\x1b9", 0.5), (b"\r", 0.4), (b"\x1bo", 0.5), (DOWN, 0.2), (DOWN, 0.2), (b"\r", 0.5),
                                  (b"\t" * 8, 0.4), (b"get flood.max", 0.3), (b"\r", 0.6), (b"\x1b9", 0.5)])
     assert "Alt+9 is not set" in text
     cfg = json.loads((home / "config.json").read_text())
@@ -282,7 +283,7 @@ def test_options_defines_a_set(tmp_path):
 def test_s_shows_the_cursor_devices_statistics_from_beacon_and_says_when_there_are_none(tmp_path):
     fake = str(pathlib.Path(__file__).parent / "data" / "beacon-fake.json")
     live = json.dumps({"4AC61A7F|get stats": [0, "> batt=4100mV up=99s noise=-120"], "FD700369|get stats": [14, ""]})
-    text, _ = walk(tmp_path, [(DOWN, 0.3), (b"s", 2.0), (b"\x1bOA", 0.3), (b"s", 2.0)],
+    text, _ = walk(tmp_path, [(DOWN, 0.3), (b"s", 2.0), (b"\r", 0.4), (b"\x1bOA", 0.3), (b"s", 2.0), (b"\r", 0.4)],
                    env={"MCCONTROL_FAKE_BEACON": fake, "MCCONTROL_FAKE_RESULTS": live}, rows=48, seconds=6.0)
     assert "Stats: Gisebo" in text and "live, just now" in text and "4100 mV" in text     # the node's own, first
     assert "Beacon: sampled" in text and "4261 mV" in text and "dd hh:mm" in text        # then Beacon's, with its age
@@ -341,7 +342,7 @@ def test_enter_on_a_device_opens_the_command_list_and_runs_a_bare_command(tmp_pa
     # the stream carries only changed cells, so a string may arrive in pieces: match loosely
     assert re.search(r"Commands\s+to\s+Far", text) and re.search(r"--\s+reads\s+--", text)
     assert "Filter:" in text                                  # the typed letters arrive one cell at a time
-    assert "Reply: ver" in text and "esp32s3-v1.17.1-ar-10" in text
+    assert "Sent: ver" in text and "esp32s3-v1.17.1-ar-10" in text
     assert '"command": "ver"' in (home / "history" / "FD700369.jsonl").read_text()
 
 
@@ -360,7 +361,7 @@ def test_a_choice_command_offers_radio_buttons_and_previews_what_it_sends(tmp_pa
     assert "(*) on" in text and "(*) off" in text
     assert "Sends:" in text and re.search(r"Command:\s+set\s+autoreply\s+off", text)   # the preview, then the caution's line
     assert "stops this repeater answering test requests" in text
-    assert "Reply: set autoreply off" in text
+    assert "Sent: set autoreply off" in text
     assert '"command": "set autoreply off"' in (home / "history" / "FD700369.jsonl").read_text()
 
 
@@ -369,7 +370,7 @@ def test_a_text_command_shows_examples_and_sends_what_was_typed(tmp_path):
     text, home = walk(tmp_path, [(b"\r", 0.6), (b"region put", 0.4), (b"\r", 0.6), (b"se-jkp *", 0.3), (b"\r", 2.0), (b"\r", 0.4)],
                       env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=6.0, prepare=_far_on("ar-11"))
     assert "Examples: se-jkp *   se-jkp-mul se-jkp" in text
-    assert "Reply: region put se-jkp *" in text
+    assert "Sent: region put se-jkp *" in text
     assert '"command": "region put se-jkp *"' in (home / "history" / "FD700369.jsonl").read_text()
 
 
@@ -382,7 +383,7 @@ def test_backing_out_of_a_parameter_sends_nothing(tmp_path):
 def test_the_lower_panel_keeps_what_the_device_answered_and_enter_reads_it_again(tmp_path):
     fake = json.dumps({"FD700369|ver": [0, "> v1.17.1-ar-10"], "4AC61A7F|ver": [0, "> v1.16.0"]})
     # Alt+2 reads ver on Far; cursor down to Gisebo and back; Tab twice to the lower panel; Enter re-reads
-    text, home = walk(tmp_path, [(b"\x1b2", 1.5), (DOWN, 0.4), (b"\x1bOA", 0.4), (b"\t", 0.2), (b"\t", 0.2), (b"\r", 1.5)],
+    text, home = walk(tmp_path, [(b"\x1b2", 1.5), (b"\r", 0.4), (DOWN, 0.4), (b"\x1bOA", 0.4), (b"\t", 0.2), (b"\t", 0.2), (b"\r", 1.5)],
                       env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=6.0)
     assert "Last answers" in text
     assert re.search(r"now ver\s+> v1\.17\.1", text)
@@ -446,7 +447,7 @@ def test_the_command_list_greys_out_what_the_devices_firmware_does_not_admit(tmp
     # Far on ar-10: Enter opens the list; "ver" narrows it to a greyed entry; Enter does nothing
     text, home = walk(tmp_path, [(b"\r", 0.6), (b"ver", 0.4), (b"\r", 0.8), (b"\x1b", 0.3)], prepare=_far_on("ar-10"))
     assert re.search(r"need a newer build;\s+this device reports ar-10", text)
-    assert "Reply: ver" not in text and not (home / "history" / "FD700369.jsonl").exists()
+    assert "Sent: ver" not in text and not (home / "history" / "FD700369.jsonl").exists()
     # an unknown version is the oldest: the same greying, said as unknown
     text, _ = walk(tmp_path / "unknown", [(b"\r", 0.6), (b"get stats", 0.4), (b"\r", 0.8), (b"\x1b", 0.3)])
     assert re.search(r"this device reports unknown", text)
@@ -469,7 +470,7 @@ def test_a_long_result_line_wraps_in_the_reply_window(tmp_path):
 
 def test_keys_register_publishes_and_the_dialog_says_so(tmp_path):
     # Alt+K opens Keys; Enter runs "Show public key"; Tab to Register; Enter; then Keys again
-    text, home = walk(tmp_path, [(b"\x1bk", 0.6), (b"\r", 0.8), (b"\t", 0.2), (b"\r", 1.5), (b"\x1bk", 0.6), (b"\r", 0.8)],
+    text, home = walk(tmp_path, [(b"\x1bk", 0.6), (b"\r", 0.8), (b"\t", 0.2), (b"\r", 1.5), (b"\r", 0.4), (b"\x1bk", 0.6), (b"\r", 0.8)],
                       env={"MCCONTROL_FAKE_REGISTER": "ok"}, cols=100, seconds=6.0)
     assert "Registered: ok" in text
     assert re.search(r"Registered with mqtt\.louie\.se on 20\d\d-\d\d-\d\d", text)

@@ -73,7 +73,7 @@ class App:
         """Alt+n: the slot's command to the tagged or cursor device, no dialog."""
         command = self.store.shortcuts()[n - 1]
         if not command:
-            self.message.say(f"Alt+{n} is not set; Options > Shortcuts.", error=True)
+            self.refuse(f"Alt+{n} is not set; Options > Shortcuts.")
             return
         self.send(initial=command, immediate=True)
 
@@ -353,7 +353,7 @@ class App:
             if region:
                 self.send(region=region)
         else:
-            self.message.say(f"{action}: not built yet.", error=True)
+            self.refuse(f"{action}: not built yet.")
 
     def open_line(self):
         """Enter on the right panel: the whole reply in a dialog."""
@@ -400,7 +400,10 @@ class App:
                     ok, detail = False, str(exc)
                 finally:
                     box.close()
-                self.message.say(("Registered: " if ok else "Not registered: ") + detail, error=not ok)
+                if ok:
+                    self.outcome("Register", "Registered: " + detail)
+                else:
+                    self.refuse("Not registered: " + detail, title="Register")
                 return
             if choice == "replace":
                 if confirm(self.screen, "Replace key", ["Every repeater provisioned with the current key will stop accepting commands."],
@@ -422,7 +425,7 @@ class App:
                     self.store.import_key(f.value)
                     self.message.say("Key imported.")
         except (_store.StoreError, envelope.EnvelopeError) as exc:
-            self.message.say(str(exc), error=True)
+            self.refuse(str(exc))
 
     def setup_dialog(self):
         cfg = self.store.config()
@@ -441,20 +444,23 @@ class App:
                                    beacon_url=fields[5].value.strip())
             self.message.say("Saved.")
         except ValueError:
-            self.message.say("Port and wait seconds must be numbers.", error=True)
+            self.refuse("Port and wait seconds must be numbers.")
 
     def test_dialog(self):
         cfg = self.store.config()
-        self.message.say(f"Trying {cfg.get('broker')}:{cfg.get('port')} as {cfg.get('username') or '(no username)'}...")
-        self.draw()
-        steps = transport.test_connection(cfg, seed_hex=self.store.seed() if self.store.has_key() else None)
+        box = Progress(self.screen, "Broker test", f"Trying {cfg.get('broker')}:{cfg.get('port')}", self.draw)
+        box.tick("connecting, signing in, subscribing, publishing", 0.0)
+        try:
+            steps = transport.test_connection(cfg, seed_hex=self.store.seed() if self.store.has_key() else None)
+        finally:
+            box.close()
         lines = [f"{'ok  ' if ok else 'FAIL'}  {step:28} {detail}" for step, ok, detail in steps]
         lines.append(f"{'ok  ' if self.store.has_key() else 'FAIL'}  {'signing key':28} {'present' if self.store.has_key() else 'none: see Keys'}")
         reg = self.store.registration()
         lines.append(f"{'ok  ' if reg else 'note'}  {'registered with broker':28} "
                      + (f"{reg['broker']} on {reg['at'][:10]}" if reg else "not yet: Keys > Register"))
-        notice(self.screen, "Broker test", lines, self.draw)
-        self.message.say("Broker test passed." if all(ok for _s, ok, _d in steps) else "Broker test failed.", error=not all(ok for _s, ok, _d in steps))
+        passed = all(ok for _s, ok, _d in steps)
+        self.outcome("Broker test", "Broker test passed." if passed else "Broker test failed.", lines)
 
     def edit(self):
         """F4: name, region and notes of the cursor device."""
@@ -470,7 +476,7 @@ class App:
             self.store.update_device(d["node"], name=name.value.strip(), region=region.value.strip().upper(),
                                      notes=notes.value.strip())
         except _store.StoreError as exc:
-            self.message.say(str(exc), error=True)
+            self.refuse(str(exc))
             return
         self.reload()
         self.show_history(self.cursor_device)
@@ -490,6 +496,16 @@ class App:
         self.show_history(self.cursor_device)
         self.message.say("Forgotten.")
 
+    def outcome(self, title, headline, lines=()):
+        """What an action came to, as a window over the work: the headline first, then the
+        lines (the results, which the right panel also keeps). The message row is for state
+        changes made in a dialog (saved, sorted); an outcome a person waited for is a window."""
+        notice(self.screen, title, [headline] + ([""] + list(lines) if lines else []), self.draw)
+
+    def refuse(self, why, title="Not done"):
+        """Why nothing was done, as a window: a precondition that failed or an error raised."""
+        notice(self.screen, title, [why], self.draw)
+
     def waiting(self, title, line, describe):
         """A Progress box over the work, as the transport's progress callback."""
         return waiting(self.screen, title, line, self.draw, describe)
@@ -498,10 +514,10 @@ class App:
         """Where a send goes: `(targets, target_line)`, or None with the reason said."""
         targets = [] if region else self.targets
         if not region and not targets:
-            self.message.say("No device under the cursor; add or discover one first.", error=True)
+            self.refuse("No device under the cursor; add or discover one first.")
             return None
         if not region and len({(d.get("region") or "").upper() for d in targets}) > 1:
-            self.message.say("The tagged devices span more than one region; a send is to one region.", error=True)
+            self.refuse("The tagged devices span more than one region; a send is to one region.")
             return None
         if region:
             target_line = f"EVERY node in {region}"
@@ -519,7 +535,7 @@ class App:
         targets, target_line = aimed
         sets = self.store.sets()
         if not sets:
-            self.message.say("No command sets; Options > Command sets.", error=True)
+            self.refuse("No command sets; Options > Command sets.")
             return
         names = sorted(sets)
         name = Field("Set", names[0], width=20)
@@ -568,18 +584,18 @@ class App:
                     if box.cancelled:
                         break
         except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
-            self.message.say(str(exc), error=True)
+            self.refuse(str(exc))
             return
         self.reload()
         self.show_results(f"Set: {name.value.strip()[:28]}", lines)
-        self.message.say("Every step answered ok." if stopped is None else f"Stopped at step {stopped + 1}; see the right panel.",
-                         error=stopped is not None)
+        self.outcome(f"Set: {name.value.strip()[:28]}",
+                     "Every step answered ok." if stopped is None else f"Stopped at step {stopped + 1}.", lines)
 
     def statistics(self, range_="24h", interval="6h"):
         """s, or View > Statistics: what Beacon holds for the cursor device, in the right panel."""
         d = self.cursor_device
         if not d:
-            self.message.say("No device under the cursor.", error=True)
+            self.refuse("No device under the cursor.")
             return
         name = d.get("name") or d["node"]
         progress, box = self.waiting("Statistics", f"get stats to {name}, then Beacon",
@@ -589,7 +605,7 @@ class App:
         except beacon.BeaconError as exc:
             box.close()
             self.show_results(f"Stats: {name[:28]}", [f"no statistics: {exc}"])
-            self.message.say(f"No statistics: {exc}", error=True)
+            self.refuse(f"No statistics: {exc}", title=f"Stats: {name[:28]}")
             return
         box.close()
         if not lines[0].startswith("live"):                 # a live answer is kept by send() itself
@@ -600,14 +616,14 @@ class App:
                 pass
         self.reload()
         self.show_results(f"Stats: {name[:28]}", lines)
-        self.message.say(lines[0] + ". Enter opens a line; the cursor returns to history.")
+        self.outcome(f"Stats: {name[:28]}", lines[0], lines[1:])
 
     def refresh_fleet(self):
         """r, or View > Refresh: Batt and Seen from Beacon for the tagged devices, or all of
         them when none is tagged. Only when asked; nothing refreshes by itself."""
         devices = self.targets if self.list.tags else list(self.devices)
         if not devices:
-            self.message.say("No devices to refresh.", error=True)
+            self.refuse("No devices to refresh.")
             return
         box = Progress(self.screen, "Batt and Seen", f"Asking Beacon about {len(devices)} device(s)", self.draw)
         box.tick("one read each, a few seconds", 0.0)
@@ -616,15 +632,15 @@ class App:
         finally:
             box.close()
         self.reload()
-        self.message.say(f"Refreshed {updated} of {len(devices)} from Beacon"
-                         + (f"; {failed} without statistics." if failed else "."), error=bool(failed))
+        self.outcome("Batt and Seen", f"Refreshed {updated} of {len(devices)} from Beacon"
+                     + (f"; {failed} without statistics." if failed else "."))
 
     def refresh_names(self):
         """n, or Devices > Names and versions: `get name` and `ver` to the tagged devices, or
         the cursor one; an unnamed device takes the fleet's name, every one stores its version."""
         devices = self.targets
         if not devices:
-            self.message.say("No device under the cursor.", error=True)
+            self.refuse("No device under the cursor.")
             return
         if len(devices) > 3 and not confirm(self.screen, "Confirm", [f"{len(devices)} devices, two signed reads each."],
                                             "Each read spends one of the node's command slots this hour.", redraw_under=self.draw):
@@ -637,13 +653,13 @@ class App:
             box.close()
         self.reload()
         self.show_results("Names and versions", lines)
-        self.message.say(f"{versioned} of {len(devices)} gave a version; {named} named.", error=versioned < len(devices))
+        self.outcome("Names and versions", f"{versioned} of {len(devices)} gave a version; {named} named.", lines)
 
     def command_list(self):
         """Enter on a device: every command the tool offers, by group; Enter on one runs it,
         asking for its parameter in the way the command needs."""
         if not self.cursor_device:
-            self.message.say("No device under the cursor; add or discover one first.", error=True)
+            self.refuse("No device under the cursor; add or discover one first.")
             return
         aimed = self.aim()
         if not aimed:
@@ -681,9 +697,6 @@ class App:
         if command is None:
             return
         self.send(initial=command, immediate=True)
-        if self.right_mode == "results" and self.right_rows:
-            lines = [text for _line, full in self.right_rows for text in full]
-            notice(self.screen, f"Reply: {command[:40]}", lines[:16], self.draw)
 
     def parameters(self, c):
         """The command text for a table entry, asking for its parameter: none, one choice,
@@ -742,7 +755,7 @@ class App:
                 self.store.save_set(name.value, [f.value for f in steps])
                 self.message.say(f"Saved {name.value.strip().lower()}.")
         except _store.StoreError as exc:
-            self.message.say(str(exc), error=True)
+            self.refuse(str(exc))
 
     def send(self, region=None, initial="", immediate=False):
         """F2: one dialog, then the signed publish, then the results in the right panel."""
@@ -772,13 +785,12 @@ class App:
             break
         refused = denylist.refusal(command)
         if refused:
-            self.message.say(f"Not sent: the node would refuse it ({refused}).", error=True)
+            self.refuse(f"Not sent: the node would refuse it ({refused}).", title="Not sent")
             return
         why = actions.caution(command)
         if why and not confirm(self.screen, "Confirm", [f"Command: {command}", f"To: {target_line}"],
                                f"It {why}", redraw_under=self.draw):
             return
-        self.message.say("Sending...")
         try:
             if region:
                 expected = [d["node"] for d in self.store.devices() if (d.get("region") or "").upper() == region]
@@ -805,11 +817,11 @@ class App:
                     if box.cancelled:
                         break
         except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
-            self.message.say(str(exc), error=True)
+            self.refuse(str(exc))
             return
         self.reload()
         self.show_results(f"Results: {command[:30]}", lines)
-        self.message.say(f"{len(answers)} of {asked} answered.", error=(len(answers) < asked))
+        self.outcome(f"Sent: {command[:40]}", f"{len(answers)} of {asked} answered.", lines)
 
     def discover(self):
         """F5: ask a region which nodes accept the key; the found list lands in the right panel.
@@ -833,7 +845,7 @@ class App:
             found = actions.discover(self.store, region, progress=progress)
         except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
             box.close()
-            self.message.say(str(exc), error=True)
+            self.refuse(str(exc))
             return
         finally:
             box.close()
@@ -842,9 +854,12 @@ class App:
         self.show_results(f"Found in {asked}: {len(found)}", lines or ["(no node answered)"])
         self.right_mode = "found" if found else "results"
         self.activate(self.right)
-        self.message.say(f"{len(found)} answered. Ins tags, F5 adds the tagged, F7 adds all, Esc returns."
-                         if found else "No node answered: none there holds your key, or its control plane is off.",
-                         error=not found)
+        if found:
+            self.outcome(f"Found in {asked}", f"{len(found)} answered.",
+                         lines + ["", "In the right panel: Ins tags, F5 adds the tagged, F7 adds all, Esc returns."])
+        else:
+            self.refuse("No node answered: none there holds your key, or its control plane is off.",
+                        title=f"Found in {asked}")
 
     @staticmethod
     def found_line(e):
@@ -877,7 +892,7 @@ class App:
         lines = [self.found_line(e) for e in self.found]
         self.view.set_rows(lines, keep=False)
         self.right_rows = [(l, [l]) for l in lines]
-        self.message.say(f"{added} device(s) remembered.")
+        self.outcome("Remembered", f"{added} device(s) remembered.")
 
     def tag_region(self, on):
         region = self.ask_region("Tag every device in which region?" if on else "Untag which region?")
