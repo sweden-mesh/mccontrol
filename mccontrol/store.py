@@ -31,6 +31,9 @@ DEFAULT_CONFIG = {
     # Statistics come from a Beacon server (read-only HTTP, no credentials); one URL, since
     # one Beacon covers a country, and another region's Beacon is this one setting.
     "beacon_url": "https://beacon.meshat.se/api/v1",
+    # Which optional columns the directory shows after name and node (directory.COLUMNS);
+    # a narrow terminal shows what is chosen here rather than the first that fit.
+    "columns": ["reg", "sent", "batt", "seen", "ver", "result"],
 }
 
 # Alt+1..9 on the main screen and `mccontrol alt <n>` on the command line: a command each,

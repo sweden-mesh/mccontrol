@@ -25,10 +25,13 @@ def _home(tmp_path):
     return home
 
 
-def walk(tmp_path, keys, seconds=3.0, env=None, cols=80, rows=24):
-    """Start the app in a pty, send `keys` (bytes, delay) pairs, return the stripped text."""
+def walk(tmp_path, keys, seconds=3.0, env=None, cols=80, rows=24, prepare=None):
+    """Start the app in a pty, send `keys` (bytes, delay) pairs, return the stripped text.
+    `prepare(home)` may edit the files before the app starts."""
     import fcntl, signal, struct, termios
     home = _home(tmp_path)
+    if prepare:
+        prepare(home)
     pid, fd = pty.fork()
     if pid == 0:
         # the size is set in the child, before anything reads it: setting it from the parent
@@ -374,3 +377,18 @@ def test_the_lower_panel_keeps_what_the_device_answered_and_enter_reads_it_again
     assert "(nothing read yet)" in text                    # Gisebo, before anything was read from it
     hist = (home / "history" / "FD700369.jsonl").read_text()
     assert hist.count('"command": "ver"') == 2            # the shortcut, then the re-read from the lower panel
+
+
+def test_options_columns_picks_what_an_80_column_directory_shows(tmp_path):
+    # Alt+O, "d" picks Directory columns; the checkbox box has every column chosen: untick
+    # reg, sent, batt, seen with Space (Space toggles and the cursor stays), leaving ver and result
+    def with_version(home):
+        devs = json.loads((home / "devices.json").read_text())
+        devs[0]["ver"] = "esp32s3-v1.17.1-ar-10-observer-42f48ce9"
+        (home / "devices.json").write_text(json.dumps(devs))
+    keys = [(b"\x1bo", 0.5), (b"d", 0.5)] + [(b" ", 0.15), (DOWN, 0.15)] * 4 + [(b"\r", 0.8)]
+    text, _ = walk(tmp_path, keys, prepare=with_version)
+    assert "Columns: ver, result." in text
+    last_header = text[text.rindex("Name   "):][:40]
+    assert re.match(r"Name\s+Node\s+Ver\s", last_header), last_header      # the last frame: no Reg, Sent
+    assert "4AC61A7F 1.17.1-a" in text     # 37 columns: name, node and what fits of the version

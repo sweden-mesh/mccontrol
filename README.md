@@ -41,7 +41,9 @@ mccontrol                                         # the screens
 ```
 
 Python 3.10 or newer; `pycryptodome` (Ed25519) and `paho-mqtt`; `curses` from the standard
-library. 80x24 is the minimum; wider terminals get wider panels.
+library. 80x24 is the minimum; wider terminals get wider panels, and on a narrow one
+Options > Directory columns (or `mccontrol config --columns ver,result`) picks which columns
+the directory shows.
 
 ## Keys
 

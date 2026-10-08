@@ -59,7 +59,14 @@ def stale(device, now=None, days=STALE_DAYS):
     return (now - then).total_seconds() > days * 86400
 
 
-def row(device, width, now=None):
+# The optional columns after name and node, in their order; `columns` in the configuration
+# picks which show, so an 80-column terminal (38 columns for the directory) sees what the
+# person asked for instead of the first that fit.
+COLUMNS = ("reg", "sent", "batt", "seen", "ver", "result")
+DEFAULT_COLUMNS = COLUMNS
+
+
+def row(device, width, now=None, columns=None):
     """One list row for a device, laid out to `width` columns.
 
     name (18)  node (8)  reg (4)  last sent (7)  batt (5)  seen (5)  ver (12)  result (rest)
@@ -72,19 +79,30 @@ def row(device, width, now=None):
     name = (device.get("name") or "(unnamed)")
     name = (f"{name[:16]} ?" if stale(device, now) else name[:18]).ljust(18)
     node = device["node"][:8].ljust(8)
-    region = (device.get("region") or "?")[:4].ljust(4)
-    sent = relative(device.get("last_sent"), now)[:7].ljust(7)
     fleet = device.get("fleet") or {}
-    batt = (f"{fleet['battery_mv'] / 1000:.2f}" if fleet.get("battery_mv") else "")[:5].ljust(5)
-    seen = (relative(fleet.get("seen"), now) if fleet else "")[:5].ljust(5)
-    ver = version_short(device.get("ver"))[:12].ljust(12)
-    result = (device.get("last_result") or "")
-    line = f"{name} {node} {region} {sent} {batt} {seen} {ver} {result}"
+    cells = {
+        "reg": (device.get("region") or "?")[:4].ljust(4),
+        "sent": relative(device.get("last_sent"), now)[:7].ljust(7),
+        "batt": (f"{fleet['battery_mv'] / 1000:.2f}" if fleet.get("battery_mv") else "")[:5].ljust(5),
+        "seen": (relative(fleet.get("seen"), now) if fleet else "")[:5].ljust(5),
+        "ver": version_short(device.get("ver"))[:12].ljust(12),
+        "result": (device.get("last_result") or ""),
+    }
+    line = " ".join([name, node] + [cells[c] for c in chosen(columns)])
     return line[: width - 1].ljust(width - 1)
 
 
-def header(width):
-    return f"{'Name':18} {'Node':8} {'Reg':4} {'Sent':7} {'Batt':5} {'Seen':5} {'Ver':12} Result"[: width - 1]
+def chosen(columns):
+    """The configured columns in COLUMNS order; unknown names dropped; none means all."""
+    wanted = {str(c).strip().lower() for c in (columns or ())}
+    picked = [c for c in COLUMNS if c in wanted]
+    return picked or list(COLUMNS)
+
+
+def header(width, columns=None):
+    heads = {"reg": f"{'Reg':4}", "sent": f"{'Sent':7}", "batt": f"{'Batt':5}", "seen": f"{'Seen':5}",
+             "ver": f"{'Ver':12}", "result": "Result"}
+    return " ".join([f"{'Name':18}", f"{'Node':8}"] + [heads[c] for c in chosen(columns)])[: width - 1]
 
 
 def version_short(ver):

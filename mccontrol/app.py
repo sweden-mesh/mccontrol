@@ -52,7 +52,8 @@ class App:
                           MenuItem("Last 7 days", "stats:168h:24h"), MenuItem("Refresh Batt/Seen", "fleet", "r")]),
             Menu("Keys", [MenuItem("Show public key", "keys")]),
             Menu("Options", [MenuItem("Broker", "setup"), MenuItem("Test the broker", "test"),
-                             MenuItem("Shortcuts", "shortcuts"), MenuItem("Command sets", "sets")]),
+                             MenuItem("Shortcuts", "shortcuts"), MenuItem("Command sets", "sets"),
+                             MenuItem("Directory columns", "columns")]),
             Menu("Help", [MenuItem("Contents", "help:index", "Shift+F1"), MenuItem("This screen", "help", "F1"),
                           MenuItem("Keys", "help:keys"), MenuItem("Commands", "help:commands"),
                           MenuItem("Quit", "quit", "F10")]),
@@ -94,7 +95,8 @@ class App:
         cursor_node = self.devices[self.list.cursor]["node"] if self.devices and self.list.cursor < len(self.devices) else None
         self.devices = directory.sorted_devices(self.store.devices(), self.sort)
         width = self.left.inner[2] - 1
-        self.list.set_rows([directory.row(d, width) for d in self.devices], keep=False)
+        columns = self.store.config().get("columns")
+        self.list.set_rows([directory.row(d, width, columns=columns) for d in self.devices], keep=False)
         self.list.tags = {i for i, d in enumerate(self.devices) if d["node"] in tagged}
         if cursor_node:
             for i, d in enumerate(self.devices):
@@ -178,7 +180,7 @@ class App:
         self.right.draw(s)
         self.lower.draw(s)
         y, x, w, _h = self.left.inner
-        s.put(y, x + 1, directory.header(w), s.colors.desktop | curses.A_UNDERLINE)
+        s.put(y, x + 1, directory.header(w, self.store.config().get("columns")), s.colors.desktop | curses.A_UNDERLINE)
         self.list.draw(s)
         self.view.draw(s)
         self.reads_view.draw(s)
@@ -333,6 +335,8 @@ class App:
             self.shortcuts_dialog()
         elif action == "sets":
             self.sets_dialog()
+        elif action == "columns":
+            self.columns_dialog()
         elif action == "fleet":
             self.refresh_fleet()
         elif action == "names":
@@ -664,6 +668,17 @@ class App:
                 d.message = "Type a value, or Esc."
                 continue
             return commands.build(c, [value])
+
+    def columns_dialog(self):
+        """Options > Directory columns: which optional columns the directory shows."""
+        box = ChoiceBox("columns", list(directory.COLUMNS), multi=True)
+        box.chosen = set(directory.chosen(self.store.config().get("columns")))
+        picked = box.run(self.screen, self.draw)
+        if picked is None:
+            return
+        self.store.save_config(columns=picked or list(directory.COLUMNS))
+        self.reload()
+        self.message.say("Columns: " + ", ".join(directory.chosen(picked)) + ".")
 
     def sets_dialog(self):
         """Options > Command sets: one set at a time, by name; empty steps are dropped."""

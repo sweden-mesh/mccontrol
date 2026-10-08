@@ -34,3 +34,8 @@ the wait. Esc stops waiting early and keeps what has come.
 The right side is two panels: the history (or a send's results) above,
 and "Last answers" below -- what the cursor device last said to each read,
 with its age (see [[reads]]).
+
+On an 80-column terminal the directory is 38 wide, so not every column
+fits: Options > Directory columns picks which of Reg, Sent, Batt, Seen,
+Ver and Result show after the name and node ("mccontrol config
+--columns ver,result" does the same).

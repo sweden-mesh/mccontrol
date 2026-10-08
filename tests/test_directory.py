@@ -79,3 +79,14 @@ def test_a_device_not_heard_from_in_seven_days_is_marked_and_one_never_asked_is_
     assert not directory.stale(beacon_saw, NOW)
     assert directory.row(old, 60, NOW).startswith(old["name"][:16] + " ?")
     assert " ?" not in directory.row(fresh, 60, NOW)[:18]
+
+
+def test_the_chosen_columns_decide_what_a_narrow_row_shows():
+    d = dict(_devs()[0], ver="v1.17.1-ar-10", last_result="ok")
+    assert directory.chosen(["ver", "sent"]) == ["sent", "ver"]            # COLUMNS order, not the asking order
+    assert directory.chosen(["bogus"]) == list(directory.COLUMNS)           # nothing valid: all
+    narrow = directory.row(d, 38, NOW, columns=["ver"])
+    assert "1.17.1-ar" in narrow and "GOT" not in narrow       # 37 columns: nine of the version fit
+    assert directory.header(38, ["ver"]).split() == ["Name", "Node", "Ver"]
+    wide = directory.row(d, 100, NOW)
+    assert "JKG" in wide and "1.17.1-ar-10" in wide and wide.rstrip().endswith("ok")

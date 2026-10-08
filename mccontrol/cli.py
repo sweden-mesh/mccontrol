@@ -31,6 +31,7 @@ def build_parser():
         c.add_argument(f"--{name}")
     c.add_argument("--port", type=int)
     c.add_argument("--wait-secs", type=int)
+    c.add_argument("--columns", help="the directory's optional columns, comma-separated: reg,sent,batt,seen,ver,result")
     a = sub.add_parser("add", help="remember a device")
     a.add_argument("name")
     a.add_argument("node", help="the first 8 hex characters of its public key (a whole key is fine)")
@@ -121,11 +122,14 @@ def _config(store, args):
     changes = {k: getattr(args, k) for k in ("broker", "username", "password", "port")}
     changes["wait_secs"] = args.wait_secs
     changes["beacon_url"] = args.beacon_url
+    changes["columns"] = args.columns.split(",") if args.columns else None
     if any(v is not None for v in changes.values()):
         store.save_config(**changes)
     for key, value in store.config().items():
         if key in ("shortcuts", "sets"):
             continue                              # their own commands list them
+        if key == "columns":
+            value = ",".join(value)
         print(f"{key:12} {'(set)' if key == 'password' else value}")
     return 0
 
@@ -233,9 +237,10 @@ def _fleet(store, args):
     devices = [_device(store, ref) for ref in args.device] if args.device else store.devices()
     updated, failed = actions.refresh_fleet(store, devices)
     from . import directory
-    print(directory.header(100))
+    columns = store.config().get("columns")
+    print(directory.header(100, columns))
     for d in directory.sorted_devices(store.devices(), "name"):
-        print(directory.row(d, 100))
+        print(directory.row(d, 100, columns=columns))
     print(f"refreshed {updated} of {len(devices)}" + (f"; {failed} without statistics" if failed else ""))
     return 0 if not failed else 1
 
