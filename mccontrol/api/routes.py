@@ -106,9 +106,9 @@ def docs_page(_ctx, _p, _q, _b):
     return 200, Html(f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>mccontrol API</title>
 <link rel="stylesheet" href="{SWAGGER}/swagger-ui.css"></head>
-<body><div id="ui">The API viewer loads from {SWAGGER}; offline, read /openapi.json.</div>
+<body><div id="ui">The API viewer loads from {SWAGGER}; offline, read openapi.json beside this page.</div>
 <script src="{SWAGGER}/swagger-ui-bundle.js"></script>
-<script>SwaggerUIBundle({{url: "/openapi.json", dom_id: "#ui"}});</script>
+<script>SwaggerUIBundle({{url: "openapi.json", dom_id: "#ui"}});</script>
 </body></html>
 """)
 

@@ -5,8 +5,10 @@ only parses, dispatches and turns exceptions into the one error shape. Nothing h
 curses, and nothing here knows what a device is.
 """
 
+import hmac
 import json
 import re
+import secrets
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -91,9 +93,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _dispatch(self, method):
         url = urllib.parse.urlsplit(self.path)
+        path = self._inside(url.path)
+        if path is None:                # not under the secret: nothing to say, not even why
+            self._send(404, b"", "text/plain")
+            return
         query = {k: v[0] for k, v in urllib.parse.parse_qs(url.query, keep_blank_values=True).items()}
         try:
-            _t, func, params = match(method, url.path)
+            origin = self.headers.get("Origin")
+            if origin is not None and origin != self.server.origin:
+                raise errors.ApiError(403, "forbidden", "a request from another origin")
+            _t, func, params = match(method, path)
             status, payload = func(self.server.ctx, params, query, self._body())
         except Exception as exc:        # every failure leaves as the one error shape
             status, code, message = errors.classify(exc)
@@ -103,12 +112,28 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(status, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
 
+    def _inside(self, path):
+        """The path under `/<secret>`, or None. The secret is what keeps a web page or another
+        local user's process from driving the signing key: it is only in the base URL handed
+        to the caller of serve()."""
+        prefix = "/" + self.server.secret
+        head, rest = path[:len(prefix)], path[len(prefix):]
+        if not hmac.compare_digest(head.encode(), prefix.encode()) or (rest and not rest.startswith("/")):
+            return None
+        return "/" + rest.lstrip("/")
+
     def _body(self):
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            raise errors.bad("Content-Length is not a number") from None
         if not length:
             return {}
         if length > MAX_BODY:
             raise errors.bad("the body is too large")
+        media = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if media != "application/json":
+            raise errors.ApiError(415, "unsupported_media_type", "a body is application/json")
         try:
             data = json.loads(self.rfile.read(length).decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
@@ -126,15 +151,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(store, transport=None, port=0):
-    """Start the API on 127.0.0.1 (a free port unless given) in a daemon thread.
+    """Start the API on 127.0.0.1 (a free port unless given) in a daemon thread, under an
+    unguessable path: `base_url` is `http://127.0.0.1:<port>/<secret>/`, and a request
+    outside it, or carrying another page's Origin, is refused.
 
     `transport`, for tests: a scripted `{node or "node|command": [code, reply]}` object that
     stands in for the broker, as MCCONTROL_FAKE_RESULTS does. Returns `(server, base_url)`."""
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     server.ctx = Context(store, transport)
+    server.secret = secrets.token_urlsafe(32)
+    server.origin = f"http://127.0.0.1:{server.server_address[1]}"
     threading.Thread(target=server.serve_forever, name="mccontrol-api", daemon=True).start()
-    return server, f"http://127.0.0.1:{server.server_address[1]}"
+    return server, f"{server.origin}/{server.secret}/"
 
 
 def stop(server):

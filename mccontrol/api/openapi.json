@@ -3,11 +3,11 @@
  "info": {
   "title": "mccontrol",
   "version": "1",
-  "description": "The backend of mccontrol on 127.0.0.1: configuration, keys, the device directory, command sets, history, the command table and help, and the long-running verbs as jobs. JSON in and out, UTF-8. A job is started by POST /jobs/<verb> (202 with the job), followed by GET /jobs/<id> until its status is no longer running, and cancelled by DELETE /jobs/<id>. Every error is {\"error\": {\"code\", \"message\"}}; inside a job it is the job's error, with the same codes (broker and beacon for the network)."
+  "description": "The backend of mccontrol on 127.0.0.1: configuration, keys, the device directory, command sets, history, the command table and help, and the long-running verbs as jobs. JSON in and out, UTF-8. A job is started by POST /jobs/<verb> (202 with the job), followed by GET /jobs/<id> until its status is no longer running, and cancelled by DELETE /jobs/<id>. Every error is {\"error\": {\"code\", \"message\"}}; inside a job it is the job's error, with the same codes (broker and beacon for the network). Every route lives under the base URL serve() returns, http://127.0.0.1:<port>/<secret>/, which is why the server entry is relative: a request outside it is a 404 with an empty body. Any route also answers 403 (forbidden) to a request whose Origin header is not the server's own, 415 (unsupported_media_type) to a body that is not application/json, 405 (method_not_allowed) to a method the path does not take, and 500 (internal) to a fault."
  },
  "servers": [
   {
-   "url": "/"
+   "url": "."
   }
  ],
  "paths": {
@@ -1366,7 +1366,9 @@
          "broker",
          "beacon",
          "internal",
-         "cancelled"
+         "cancelled",
+         "forbidden",
+         "unsupported_media_type"
         ]
        },
        "message": {
