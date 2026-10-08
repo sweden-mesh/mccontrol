@@ -375,3 +375,105 @@ def test_11_reads_names_and_versions_and_f7_refreshes_the_tagged_from_beacon(api
     devs = {d["node"]: d for d in store.devices()}
     assert devs["65C1D12C"]["name"] == "SE-JKG-Vaster-65c1"
     assert devs["4AC61A7F"]["fleet"]["battery_mv"] == 4261 and "fleet" not in devs["FD700369"]   # the tagged one only
+
+
+def test_5_discovers_a_region_1_adds_one_with_a_name_and_f6_adds_the_rest(api):
+    _server, _url, store = api
+    transport.FAKE_SCRIPT["13B58595"] = [17, ""]
+    text = walk(api, [(b"5\r", 0.6), (b"\r", 1.5), (b"1\r", 0.6), (b"Torpa\r", 0.8), (F[6], 0.8)])
+    assert "Discover Devices" in text and "* for every region you have" in text
+    assert "Work with Found Devices" in text and "Found in JKG: 4" in text
+    assert re.search(r"4AC61A7F\s+JKG\s+SE-JKG-Gisebo\s+= Gisebo", text)
+    assert "= (unnamed)" in text                                  # 65C1D12C is known, without a name
+    assert "Name the Device" in text and "1 device(s) remembered." in text
+    names = {d["node"]: d["name"] for d in store.devices()}
+    assert names["13B58595"] == "Torpa" and names["AB6B9285"] == "SE-JKG-UGORptr" and len(names) == 5
+
+
+def test_discovery_where_nothing_answers_says_so(api):
+    transport.FAKE_SCRIPT.clear()
+    text = walk(api, [(b"discover GOT\r", 1.5)])
+    assert "No node answered: none there holds your key, or its control plane is off." in text
+
+
+def test_6_works_with_command_sets_creates_runs_and_removes(api):
+    _server, _url, store = api
+    transport.FAKE_SCRIPT.update({"FD700369|region put se-jkp *": [0, "OK"], "FD700369|region allowf se-jkp": [14, ""]})
+    text = walk(api, [(b"6\r", 0.6), (F[6], 0.6), (b"reads", 0.2), (TAB, 0.2), (b"ver", 0.2), (TAB, 0.2), (b"get name\r", 0.6),
+                      (b"9\r", 0.6), (TAB, 0.2), (b"se-jkp", 0.2), (TAB, 0.2), (b"\x08" * 10 + b"Far\r", 1.5), (F[3], 0.4),
+                      (DOWN, 0.2), (b"4\r", 0.6), (b"\r", 0.6)])
+    assert "Work with Command Sets" in text and "2=Change  4=Remove  5=Display  9=Run" in text
+    assert "Create Command Set" in text and "Saved reads." in text
+    assert "Run a Command Set" in text and "Set: add-scope" in text and "Stopped at step 2." in text
+    assert "Confirm Remove of Command Set" in text and "Removed reads." in text
+    assert sent(store, "FD700369") == ["region put se-jkp *", "region allowf se-jkp"]
+    assert set(store.sets()) == {"add-scope"}
+
+
+def test_7_edits_the_shortcuts_and_shift_f2_and_alt_2_send_one(api):
+    _server, _url, store = api
+    transport.FAKE_SCRIPT["FD700369|ver"] = [0, "> v1.17.1-ar-11"]
+    text = walk(api, [(b"7\r", 0.6), (DOWN * 8, 0.3), (b"get flood.max\r", 0.6), (b"1\r", 0.8), (b"\x1b[1;2Q", 1.2), (F[3], 0.4),
+                      (b"\x1b2", 1.2), (F[3], 0.4), (b"alt 8\r", 0.6)])
+    assert "Work with Shortcuts" in text and "Shortcuts saved." in text
+    assert store.shortcuts()[8] == "get flood.max" and store.shortcuts()[0] == "region"
+    assert "Command  . :  ver" in text and "> v1.17.1-ar-11" in text
+    assert "Shortcut 8 is not set; main menu option 7." in text
+    assert sent(store, "FD700369") == ["ver", "ver"]
+
+
+def test_8_shows_the_key_registers_it_and_replaces_it_after_a_confirm(api, monkeypatch):
+    from mccontrol import envelope
+    _server, _url, store = api
+    monkeypatch.setenv("MCCONTROL_FAKE_REGISTER", "ok")
+    before = store.public_key()
+    text = walk(api, [(b"8\r", 0.8), (b"1\r", 1.2), (b"2\r", 0.6), (F[12], 0.4)], cols=100)
+    assert "Work with Signing Key" in text and f"set mqtt.cmd.pubkey {before}" in text and "set mqtt.cmd on" in text
+    assert "Registered: ok" in text and re.search(r"Registered with 127\.0\.0\.1 on 20\d\d-\d\d-\d\d", text)
+    assert "Confirm Replace of Signing Key" in text and store.public_key() == before
+    text = walk(api, [(b"8\r", 0.8), (b"2\r", 0.6), (b"\r", 0.6)])
+    assert "Key replaced." in text and store.public_key() != before
+    store.key_path.unlink()
+    text = walk(api, [(b"8\r", 0.8), (b"2\r", 0.6), (b"22" * 32 + b"\r", 0.8)])
+    assert "No signing key yet." in text and "Import a Seed" in text and "Key imported." in text
+    assert store.public_key() == envelope.public_key_hex("22" * 32)
+
+
+def test_9_changes_the_configuration_and_f10_tests_the_broker(api):
+    _server, _url, store = api
+    port = store.config()["port"]
+    text = walk(api, [(b"9\r", 0.6), (TAB * 2, 0.2), (b"mcoar", 0.2), (TAB, 0.2), (b"pw", 0.2), (F[10], 2.0)])
+    assert "Change Configuration" in text and "Statistics come from a Beacon server" in text
+    assert "Broker Test" in text and "Broker test failed." in text and f"cannot reach 127.0.0.1:{port}" in text
+    assert "registered with broker" in text
+    cfg = store.config()
+    assert cfg["username"] == "mcoar" and cfg["password"] == "pw" and cfg["broker"] == "127.0.0.1"
+    text = walk(api, [(b"9\r", 0.6), (TAB, 0.2), (b"x\r", 0.6)])
+    assert "Port and wait seconds must be numbers." in text
+
+
+def test_11_picks_the_directory_columns(api):
+    _server, _url, store = api
+    text = walk(api, [(b"11\r", 0.6)] + [(b" " + DOWN, 0.15)] * 4 + [(b"\r", 0.6), (b"1\r", 0.8)])
+    assert "Change Directory Columns" in text and "Columns: ver, result." in text
+    assert store.config()["columns"] == ["ver", "result"]
+    assert re.search(r"Opt\s+Name\s+Node\s+Ver\s+Result", text)
+
+
+def test_f1_opens_help_for_the_screen_follows_a_link_and_help_names_a_topic(api):
+    text = walk(api, [(b"1\r", 0.6), (F[1], 0.6), (b"\r", 0.6), (F[11], 0.6), (F[3], 0.4), (F[3], 0.4), (b"help cautions\r", 0.6)])
+    assert "Help: The screen" in text                             # Work with Devices opens "screen"
+    assert "Help: Keys on the main screen" in text                # its first link, followed with Enter
+    assert "Help Contents" in text and "5=Display" in text
+    assert "Help: Commands that take something away" in text
+
+
+def test_a_wait_shows_its_progress_and_f12_cancels_the_job(api, monkeypatch):
+    server, _url, store = api
+    monkeypatch.setattr(transport, "FAKE_WAIT_SECS", 4.0)
+    text = walk(api, [(b"send Gisebo,65C1D12C region\r", 1.0), (F[12], 1.0)])
+    assert "waiting for Gisebo (1 of 2)" in text and "F12=Cancel" in text
+    assert "Cancelled: what landed is kept." in text
+    job = server.ctx.jobs.all()[0]
+    assert job.verb == "send" and job.snapshot()["status"] == "cancelled"
+    assert sent(store, "65C1D12C") == []                          # the second device was never asked
