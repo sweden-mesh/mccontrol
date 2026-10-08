@@ -18,6 +18,27 @@ def is_enter(key):
     return key in KEY_ENTER
 
 
+# Function keys the terminal's description did not cover, so a PuTTY, a Windows console or a
+# tmux with a mismatched TERM still gets F1..F12 and their Shift forms. The sequence is what
+# follows the Esc; the value is what curses would have returned under the right TERM.
+SEQUENCES = {}
+for _n, _s in enumerate(("OP", "OQ", "OR", "OS", "[15~", "[17~", "[18~", "[19~", "[20~", "[21~", "[23~", "[24~"), 1):
+    SEQUENCES[_s] = curses.KEY_F0 + _n
+for _n, _s in enumerate(("[11~", "[12~", "[13~", "[14~"), 1):                 # VT220 / PuTTY F1..F4
+    SEQUENCES[_s] = curses.KEY_F0 + _n
+for _n, _s in enumerate(("[1;2P", "[1;2Q", "[1;2R", "[1;2S", "[15;2~", "[17;2~", "[18;2~", "[19;2~", "[20;2~", "[21;2~"), 1):
+    SEQUENCES[_s] = curses.KEY_F0 + 12 + _n                                   # Shift+F1..F10 (xterm)
+for _n, _s in enumerate(("[23~", "[24~", "[25~", "[26~", "[28~", "[29~", "[31~", "[32~", "[33~", "[34~"), 1):
+    SEQUENCES.setdefault(_s, curses.KEY_F0 + 12 + _n)                         # Shift+F1..F10 (VT220 / PuTTY)
+for _n, _s in enumerate(("[1;3P", "[1;3Q", "[1;3R", "[1;3S"), 1):
+    SEQUENCES[_s] = curses.KEY_F0 + 48 + _n                                   # Alt+F1..F4 (xterm)
+SEQUENCES.update({"[A": curses.KEY_UP, "[B": curses.KEY_DOWN, "[C": curses.KEY_RIGHT, "[D": curses.KEY_LEFT,
+                  "OA": curses.KEY_UP, "OB": curses.KEY_DOWN, "OC": curses.KEY_RIGHT, "OD": curses.KEY_LEFT,
+                  "[H": curses.KEY_HOME, "[F": curses.KEY_END, "[1~": curses.KEY_HOME, "[4~": curses.KEY_END,
+                  "[2~": curses.KEY_IC, "[3~": curses.KEY_DC, "[5~": curses.KEY_PPAGE, "[6~": curses.KEY_NPAGE,
+                  "[Z": curses.KEY_BTAB})
+
+
 class Colors:
     """The Turbo Pascal scheme, as curses attribute bundles: a black menu bar and key bar
     with red hot letters, a blue work area, grey dialogs, green for the open menu's cursor.
@@ -220,7 +241,7 @@ class Screen:
                 tail.append(nxt)
         finally:
             self.win.nodelay(False)
-        return 27
+        return SEQUENCES.get(bytes(tail).decode("latin-1"), 27)
 
     def cursor(self, visible):
         try:

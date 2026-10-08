@@ -13,7 +13,7 @@ NODES = [("Gisebo", "4AC61A7F", "JKG"), ("", "65C1D12C", "JKG"), ("Far", "FD7003
 
 def _home(tmp_path):
     home = tmp_path / "home"
-    home.mkdir()
+    home.mkdir(parents=True)
     (home / "history").mkdir()
     (home / "key.seed").write_text("11" * 32 + "\n")
     os.chmod(home / "key.seed", 0o600)
@@ -289,3 +289,12 @@ def test_n_reads_names_and_versions_and_the_directory_shows_the_version(tmp_path
     assert "SE-JKG-Vaster-65c1" in text and "1.17.1-ar-10" in text
     devs = {d["node"]: d for d in json.loads((home / "devices.json").read_text())}
     assert devs["65C1D12C"]["name"] == "SE-JKG-Vaster-65c1"
+
+
+def test_f1_works_when_the_terminal_sends_a_sequence_the_description_lacks(tmp_path):
+    # PuTTY and the Windows console send F1 as Esc [ 1 1 ~, which xterm's description does
+    # not list; the fallback table maps it, so help still opens.
+    text, _ = walk(tmp_path / "a", [(b"\x1b[11~", 0.6)])
+    assert "Help: The screen" in text
+    text, _ = walk(tmp_path / "b", [(b"\x1b[21~", 0.6)])      # F10 the VT220 way: quits
+    assert "Help:" not in text
