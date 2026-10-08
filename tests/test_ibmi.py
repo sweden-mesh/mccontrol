@@ -25,7 +25,8 @@ pytestmark = pytest.mark.filterwarnings("ignore:This process .* is multi-threade
 
 def walk(api, keys, seconds=1.0, cols=80, rows=24, start=1.0, raw=False):
     """Start IBMi in a pty on a client of the fixture's server, send `keys` as (bytes,
-    delay) pairs, and return the screen text with the escape sequences stripped."""
+    delay) pairs, and return the screen text with the escape sequences stripped (`raw`:
+    as the terminal received it)."""
     import fcntl, signal, struct, termios
     _server, url, _store = api
     pid, fd = pty.fork()
@@ -51,7 +52,8 @@ def walk(api, keys, seconds=1.0, cols=80, rows=24, start=1.0, raw=False):
     for k, delay in keys:
         os.write(fd, k)
         pump(delay)
-    os.write(fd, b"\x0c")                   # Ctrl+L: the last frame in full
+        os.write(fd, b"\x0c")               # Ctrl+L after each step: the stream carries only changed
+        pump(0.15)                          # cells, so a repaint puts every frame's text in whole
     pump(seconds)
     try:
         os.kill(pid, signal.SIGKILL)
@@ -277,3 +279,99 @@ def test_3_sends_to_every_node_in_a_region_and_12_shows_the_broadcast(api):
     assert "Display Broadcast History" in text and "region put se-jkp *" in text
     assert [l["command"] for l in store.history(None)] == ["region put se-jkp *"]
     assert sent(store, "FD700369") == []                          # Far is in GOT
+
+
+def _far_on(store, tag):
+    store.update_device("FD700369", ver=f"esp32s3-v1.17.1-{tag}-observer-2c079ed7")
+
+
+def test_7_lists_the_commands_and_greys_what_the_firmware_does_not_admit(api):
+    _server, _url, store = api
+    raw = walk(api, [(b"1\r", 0.8), (b"7\r", 0.8), (b"get stats\r", 0.6), (b"1\r", 0.6)], raw=True)
+    text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][0-9A-B]|\x1b[=>]", " ", raw)
+    assert "Select Command" in text and "-- reads --" in text
+    assert "57 greyed: need a newer build; this device reports unknown" in text
+    assert re.search(r"get stats\s+needs ar-11", text) and re.search(r"get autoreply\s+yes", text)
+    assert "get stats: needs ar-11; not sent." in text
+    assert sent(store, "FD700369") == []
+    # the greyed row reaches the terminal in another colour than an admitted one
+    before = lambda i: "".join(re.findall(r"\x1b\[[0-9;]*m", raw[max(0, i - 40):i]))
+    assert before(raw.index("get autoreply")) != before(raw.index("get stats"))
+
+
+def test_a_bare_command_from_the_list_is_sent_at_once(api):
+    _server, _url, store = api
+    _far_on(store, "ar-11")
+    transport.FAKE_SCRIPT["FD700369|ver"] = [0, "> esp32s3-v1.17.1-ar-11"]
+    text = walk(api, [(b"1\r", 0.8), (b"7\r", 0.8), (b"ver\r", 0.6), (b"1\r", 1.2)])
+    assert "this device reports" not in text
+    assert "Command Results" in text and "> esp32s3-v1.17.1-ar-11" in text
+    assert sent(store, "FD700369") == ["ver"]
+
+
+def test_a_choice_is_asked_as_numbered_values_and_its_caution_confirmed(api):
+    _server, _url, store = api
+    _far_on(store, "ar-11")
+    transport.FAKE_SCRIPT["FD700369|set autoreply off"] = [0, "OK"]
+    text = walk(api, [(b"1\r", 0.8), (b"7\r", 0.8), (b"set autoreply\r", 0.6), (b"1\r", 0.6), (DOWN, 0.2), (b"1\r", 0.8),
+                      (b"\r", 1.2)])
+    assert "Select Value" in text and "set autoreply <value>" in text
+    assert "stops this repeater answering test requests" in text
+    assert "Command  . :  set autoreply off" in text and "1 of 1 answered." in text
+    assert sent(store, "FD700369") == ["set autoreply off"]
+
+
+def test_a_text_parameter_shows_examples_and_f12_backs_out(api):
+    _server, _url, store = api
+    _far_on(store, "ar-11")
+    transport.FAKE_SCRIPT["FD700369|region put se-jkp *"] = [0, "OK"]
+    text = walk(api, [(b"1\r", 0.8), (b"7\r", 0.8), (b"region put\r", 0.6), (b"1\r", 0.6), (F[12], 0.4),
+                      (b"1\r", 0.6), (b"se-jkp *\r", 1.2)])
+    assert "Specify Value" in text and "Examples:  se-jkp *   se-jkp-mul se-jkp" in text
+    assert sent(store, "FD700369") == ["region put se-jkp *"]        # the first prompt sent nothing
+
+
+def test_5_displays_the_device_and_its_history_and_8_its_last_answers(api):
+    _server, _url, store = api
+    transport.FAKE_SCRIPT["FD700369|ver"] = [0, "> v1.17.1-ar-10"]
+    text = walk(api, [(b"send Far ver\r", 1.2), (F[3], 0.4), (b"1\r", 0.8), (b"5\r", 0.8), (b"5\r", 0.6), (F[3], 0.4),
+                      (F[3], 0.4), (b"8\r", 0.8), (b"1\r", 1.2), (F[3], 0.4)])
+    assert "Display Device" in text and "Node . . . . :  FD700369" in text and "Region . . :  GOT" in text
+    assert re.search(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d\s+ver\s+> v1\.17\.1-ar-10", text)
+    assert "Display History Entry" in text and "Topic  . . :" in text
+    assert "Display Last Answers" in text and "1=Read again" in text and re.search(r"now\s+ver\s+> v1\.17\.1-ar-10", text)
+    assert sent(store, "FD700369") == ["ver", "ver"]                 # the send, then the read again
+
+
+def test_2_changes_a_device_and_4_forgets_one_after_a_confirm(api):
+    _server, _url, store = api
+    text = walk(api, [(b"1\r", 0.8), (b"2\r", 0.6), (b"\x08\x08\x08Near\r", 0.8), (DOWN, 0.2), (b"4\r", 0.6), (F[12], 0.4),
+                      (b"4\r", 0.6), (b"\r", 0.8)])
+    assert "Change Device" in text and "Saved." in text
+    assert "Confirm Forget of Device" in text and "its history file stays" in text and "Forgotten." in text
+    names = {d["node"]: d["name"] for d in store.devices()}
+    assert names == {"FD700369": "Near", "4AC61A7F": "Gisebo"}         # the cursor stayed on Near; the row under it went
+
+
+def test_6_shows_statistics_live_then_from_beacon(api, monkeypatch):
+    from conftest import BEACON_FAKE
+    monkeypatch.setenv("MCCONTROL_FAKE_BEACON", BEACON_FAKE)
+    transport.FAKE_SCRIPT["4AC61A7F|get stats"] = [0, "> batt=4100mV up=99s noise=-120"]
+    text = walk(api, [(b"1\r", 0.8), (DOWN, 0.2), (b"6\r", 1.5), (F[10], 1.5)], rows=40)
+    assert "Statistics: Gisebo" in text and "4100 mV" in text
+    assert "Beacon: sampled" in text and "4261 mV" in text
+    assert "last 24h" in text and "last 48h" in text and "F11=7 days" in text
+
+
+def test_11_reads_names_and_versions_and_f7_refreshes_the_tagged_from_beacon(api, monkeypatch):
+    from conftest import BEACON_FAKE
+    _server, _url, store = api
+    monkeypatch.setenv("MCCONTROL_FAKE_BEACON", BEACON_FAKE)
+    text = walk(api, [(b"1\r", 0.8), (DOWN, 0.2), (DOWN, 0.2), (b"11\r", 1.5), (F[3], 0.4), (UP, 0.2), (b"1\r", 0.6),
+                      (F[7], 1.0)], cols=100)
+    assert "Names and Versions" in text and "1 of 1 gave a version; 1 named." in text
+    assert "SE-JKG-Vaster-65c1" in text and "1.17.1-ar-10" in text
+    assert "Refreshed 1 of 1 from Beacon." in text
+    devs = {d["node"]: d for d in store.devices()}
+    assert devs["65C1D12C"]["name"] == "SE-JKG-Vaster-65c1"
+    assert devs["4AC61A7F"]["fleet"]["battery_mv"] == 4261 and "fleet" not in devs["FD700369"]   # the tagged one only

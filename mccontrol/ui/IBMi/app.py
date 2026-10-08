@@ -199,7 +199,7 @@ class App:
     # -- Work with Devices ---------------------------------------------------------------
 
     def work_with_devices(self):
-        lst = OptList(self.t, "Work with Devices", DEVICE_KEYS, legend=DEVICE_LEGEND)
+        lst = OptList(self.t, "Work with Devices", DEVICE_KEYS, legend=DEVICE_LEGEND, ident=lambda d: d["node"])
         while True:
             data = self.devices()
             lst.header = "  " + data["header"]

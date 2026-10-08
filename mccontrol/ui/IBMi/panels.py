@@ -25,7 +25,8 @@ class OptList:
     line, and Tab moves between the two. `run()` returns `(key, picks, command)`: the key
     that ended it, the `(opt, payload)` typed, in row order, and the command line."""
 
-    def __init__(self, term, title, keys, legend=(), header="", head=(), prompt="Parameters or command", context="main"):
+    def __init__(self, term, title, keys, legend=(), header="", head=(), prompt="Parameters or command", context="main",
+                 ident=None):
         self.term, self.title, self.keys = term, title, keys
         self.legend, self.header, self.head = list(legend), header, list(head)
         self.prompt, self.context = prompt, context
@@ -33,14 +34,15 @@ class OptList:
         self.cursor = self.top = 0
         self.command, self.focus = "", "list"
         self.note = ""                  # right of the instruction line: a count, the sort
+        self.ident = ident or (lambda payload: payload)     # what keeps the cursor on a row across a refresh
 
     def set_rows(self, rows, opts=None):
-        keep = self.payload()
+        keep = None if self.payload() is None else self.ident(self.payload())
         self.rows = list(rows)
         self.opts = dict(opts or {})
         self.cursor = min(self.cursor, max(0, len(self.rows) - 1))
         for i, (_t, _a, p) in enumerate(self.rows):
-            if keep is not None and p is keep:
+            if keep is not None and p is not None and self.ident(p) == keep:
                 self.cursor = i
         if self.rows and self.rows[self.cursor][2] is None:
             self.cursor = next((i for i, r in enumerate(self.rows) if r[2] is not None), self.cursor)
