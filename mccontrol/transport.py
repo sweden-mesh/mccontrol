@@ -63,6 +63,7 @@ def _connect(client, config, timeout=10.0, seed_hex=None):
 
 
 FAKE_WAIT_SECS = float(os.environ.get("MCCONTROL_FAKE_WAIT", "0.6"))   # a faked send still waits a little, so a bar can be seen to move
+FAKE_SCRIPT = None      # the same object as MCCONTROL_FAKE_RESULTS, set by `api.serve(transport=...)` in tests
 
 
 def _fake(topic, command, counter, nodes):
@@ -71,9 +72,9 @@ def _fake(topic, command, counter, nodes):
     import json
     import os
     spec = os.environ.get("MCCONTROL_FAKE_RESULTS")
-    if spec is None:
+    if spec is None and FAKE_SCRIPT is None:
         return None
-    scripted = json.loads(spec)
+    scripted = FAKE_SCRIPT if FAKE_SCRIPT is not None else json.loads(spec)
     answers = {}
     nodes = list(nodes) or [k.split("|")[0] for k in scripted]      # a broadcast: everyone scripted
     for node in nodes:

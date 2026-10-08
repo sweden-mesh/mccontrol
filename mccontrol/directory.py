@@ -79,8 +79,15 @@ def row(device, width, now=None, columns=None):
     name = (device.get("name") or "(unnamed)")
     name = (f"{name[:16]} ?" if stale(device, now) else name[:18]).ljust(18)
     node = device["node"][:8].ljust(8)
+    shown = cells(device, now)
+    line = " ".join([name, node] + [shown[c] for c in chosen(columns)])
+    return line[: width - 1].ljust(width - 1)
+
+
+def cells(device, now=None):
+    """The optional columns of a row, each padded to its width, by name."""
     fleet = device.get("fleet") or {}
-    cells = {
+    return {
         "reg": (device.get("region") or "?")[:4].ljust(4),
         "sent": relative(device.get("last_sent"), now)[:7].ljust(7),
         "batt": (f"{fleet['battery_mv'] / 1000:.2f}" if fleet.get("battery_mv") else "")[:5].ljust(5),
@@ -88,8 +95,6 @@ def row(device, width, now=None, columns=None):
         "ver": version_short(device.get("ver"))[:12].ljust(12),
         "result": (device.get("last_result") or ""),
     }
-    line = " ".join([name, node] + [cells[c] for c in chosen(columns)])
-    return line[: width - 1].ljust(width - 1)
 
 
 def chosen(columns):
