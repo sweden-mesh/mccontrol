@@ -1,6 +1,14 @@
-from mccontrol import cli
+import pytest
+
+from mccontrol import cli, transport
 
 NODE = "CCCCCCCC"
+
+
+@pytest.fixture(autouse=True)
+def quick_broker(monkeypatch):
+    """Every command starts its own API over MCCONTROL_HOME; the scripted broker answers fast."""
+    monkeypatch.setattr(transport, "FAKE_WAIT_SECS", 0.05)
 
 
 def test_the_command_line_round_trip(tmp_path, monkeypatch, capsys):
@@ -145,3 +153,4 @@ def test_register_from_the_command_line(tmp_path, monkeypatch, capsys):
     assert cli.main(["key"]) == 0 and "registered with mqtt.louie.se on" in capsys.readouterr().out
     monkeypatch.setenv("MCCONTROL_FAKE_REGISTER", "refused locked out")
     assert cli.main(["register"]) == 1 and "not registered: refused locked out" in capsys.readouterr().out
+
