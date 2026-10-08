@@ -201,6 +201,16 @@ def test_setup_saves_the_control_broker(tmp_path):
     assert "Saved." in text
 
 
+def test_setup_says_whether_a_password_is_set_and_an_empty_field_keeps_it(tmp_path):
+    def with_password(home):
+        (home / "config.json").write_text(json.dumps({"username": "mcoar", "password": "old"}))
+    text, home = walk(tmp_path, [(b"\x1bo", 0.5), (b"\r", 0.5), (b"\x08" * 20 + b"mqtt.example", 0.3), (b"\r", 0.8)],
+                      prepare=with_password)
+    assert "Password (set)" in text
+    cfg = json.loads((home / "config.json").read_text())
+    assert cfg["broker"] == "mqtt.example" and cfg["password"] == "old"
+
+
 
 
 def test_f1_opens_help_for_the_screen_and_enter_follows_a_link(tmp_path):
