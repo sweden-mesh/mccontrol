@@ -309,3 +309,9 @@ def test_a_wait_is_a_progress_box_with_a_count_and_a_bar_that_fills(tmp_path):
     assert "/0s" in text                                      # the clock, over the faked wait
     text, _ = walk(tmp_path / "send", [(DOWN, 0.3), (b"\x1b2", 1.5)], env={"MCCONTROL_FAKE_RESULTS": fake})
     assert "Sending" in text and "ver  to Gisebo (1 of 1)" in text and "answered" in text
+
+
+def test_a_command_the_node_would_refuse_is_not_sent_and_the_reason_is_said(tmp_path):
+    text, home = walk(tmp_path, [(F[2], 0.5), (b"set repeat off", 0.3), (b"\r", 0.8)])
+    assert "Not sent: the node would refuse it (denied: the remote kill switch" in text
+    assert not (home / "history" / "FD700369.jsonl").exists()

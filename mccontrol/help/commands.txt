@@ -1,8 +1,39 @@
 Commands a repeater admits over the control plane
 
-Only what the firmware's allowlist admits travels this way; everything
-else is refused before it reaches the node's command line, with
-"not-allowed". The list, as of the firmware this tool was written against:
+Since the firmware of 2026-10-08 the control plane is a command centre:
+every command the repeater's own console answers travels this way,
+EXCEPT a deny list. A command must start with one of the verbs
+
+  set  get  region  trigger test  trigger private  neighbor.remove
+  sensor  gps  powersaving  clock          (with their arguments)
+  ver  reboot  clkreboot  neighbors  board  memory  clear stats  ota check
+
+and must match nothing on the deny list. This tool knows the list and
+says why before signing, so a refused command costs no command slot:
+
+  identity        set prv.key, set public.key
+  the plane       set mqtt.cmd (.slot, .pubkey), get mqtt.cmd.pubkey
+  credentials     password, wifi.pwd, wifi.ssid, guest.password,
+                  alert.psk, bridge.secret, snmp.community, mqtt.email,
+                  mqtt.owner, owner.info, tls*, get prv*, and a slot's
+                  get mqttN.password / .token / .username
+  destructive     erase, start *, ota update, poweroff, shutdown,
+                  set bootloader.ver
+  position, role  set/get lat, set/get lon, set role, set repeat
+  the radio       set freq, set radio*, set tx, set extra.sf,
+                  set dutycycle, tempradio
+  transmissions   advert*, alert *, set advert.interval,
+                  set flood.advert.interval   (trigger is the one sanctioned transmit)
+  the clock       time <epoch>                (clock sync is fine)
+  serial-only     log, stats-*
+
+What that leaves is most of what you want: every tuning setting
+(txdelay, rxdelay, af, cad, int.thresh, flood.max, path.hash.mode,
+loop.detect, ...), every mqtt.* and mqttN.* setting so a broker can be
+replaced without a visit, set name, the auto-reply family, the region
+map, reboot, and every read that names no secret.
+
+The ones used most:
 
   region                   read the region map (the tree with F flags)
   region put <name> [*]    add a region as a child of * (or of a parent)
@@ -10,22 +41,19 @@ else is refused before it reaches the node's command line, with
   region denyf <name>      stop forwarding that scope   (see [[cautions]])
   region remove <name>     delete a region             (see [[cautions]])
   region default <name>    the scope on the repeater's own adverts
-  region home <name>       the repeater's home region (not acted upon)
   region save              keep the map after a reboot
-
   set autoreply on|off     answer test requests, or not
   set autoreply.<x> <v>    hops, direct.flood, slot, window, slots,
-                           region, mode, private: the auto-reply settings
+                           region, mode, private, delay
   get autoreply[.<x>]      read them back
   trigger test [<id>] [F|P|D|S]      originate a test probe
   trigger private <64hex> [<id>]     a test request to one repeater
-
-  get txdelay  get direct.txdelay  get rxdelay  get af  get cad
-  get int.thresh  get radio  get repeat  get flood.max  get flood.max.unscoped
-  ver                      which firmware the node runs
-  get name                 the node's name
+  ver / get name / neighbors / get radio / get repeat / reboot
 
 A region tree line with "|" (region def a|* b|*) cannot travel: "|" is the
 envelope's field separator. Add names one at a time with region put.
 
 "trigger" commands transmit on the air and are refused as a broadcast.
+A node on older firmware admits only the auto-reply family, the region
+map, the triggers and a dozen reads, and answers not-allowed to the rest;
+the tool reports that as the node said it.

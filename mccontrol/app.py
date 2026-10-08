@@ -7,7 +7,7 @@ matters is in the store; the screen is redrawn from it after every key.
 
 import curses
 
-from . import actions, beacon, directory, envelope, helptext, store as _store, transport
+from . import actions, beacon, denylist, directory, envelope, helptext, store as _store, transport
 from .ui import (Button, Dialog, Field, HelpWindow, KeyBar, ListView, Menu, MenuBar, MenuItem, Progress, waiting,
                  Message, Panel, confirm, notice)
 from .ui.screen import KEY_ENTER, run as _run
@@ -612,6 +612,10 @@ class App:
                 dialog.message = "Type a command."
                 continue
             break
+        refused = denylist.refusal(command)
+        if refused:
+            self.message.say(f"Not sent: the node would refuse it ({refused}).", error=True)
+            return
         why = actions.caution(command)
         if why and not confirm(self.screen, "Confirm", [f"Command: {command}", f"To: {target_line}"],
                                f"It {why}", redraw_under=self.draw):

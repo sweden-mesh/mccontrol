@@ -162,7 +162,7 @@ def test_discover_finds_the_nodes_that_answer_your_signature_and_marks_the_known
     store.add_device("LOUTEST", NODE, "JKG")
     _FakeClient.answers = [(NODE, 0, "> on"), ("BBBBBBBB", 17, ""), ("short", 0, "x")]
     monkeypatch.setattr(transport, "_client", _FakeClient)
-    monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(transport, "_wait", lambda *a, **k: None)
     found = actions.discover(store, "jkg")
     assert [(e["node"], e["region"], e["code"]) for e in found] == [("AAAAAAAA", "JKG", 0), ("BBBBBBBB", "JKG", 17)]
     assert found[0]["known_as"] == "LOUTEST" and found[1]["known_as"] is None
@@ -186,7 +186,7 @@ def test_discovery_broadcasts_one_signed_read_on_the_control_broker(store, monke
 
     _FakeClient.answers = []
     monkeypatch.setattr(transport, "_client", _Spy)
-    monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(transport, "_wait", lambda *a, **k: None)
     assert actions.discover(store, "JKG") == []
     assert published["topic"] == "meshcore/JKG/all/cmd"
     assert envelope.verify(store.public_key(), published["topic"], published["payload"])
@@ -245,7 +245,7 @@ def test_discovery_asks_several_regions_in_one_run_and_star_means_every_region_y
             return super().publish(topic, payload, qos)
 
     monkeypatch.setattr(transport, "_client", _Spy)
-    monkeypatch.setattr(transport.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(transport, "_wait", lambda *a, **k: None)
     assert actions.regions_asked("jkg, got", store) == ["JKG", "GOT"]
     assert actions.regions_asked("*", store) == store.regions()
     assert actions.regions_asked("JKG JKG;got", store) == ["JKG", "GOT"]

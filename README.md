@@ -126,8 +126,12 @@ A region belongs to a device, not to the configuration.
 The envelope is the one the Observer auto-reply firmware verifies (`src/helpers/MqttControlLogic.h`
 there): `v1|counter|expiry|command|signature`, signed over the topic and the body together, so a
 command captured from one node cannot be replayed at another. The node checks the signature,
-that the counter is higher than the last it accepted, the expiry, its rate limit, and an
-allowlist of commands; a result is published only when the signature verified. A region tree
+that the counter is higher than the last it accepted, the expiry, its rate limit, and a deny
+list of commands (since 2026-10-08 everything the console answers travels except identity, the
+control plane's own settings, credentials, the destructive group, position and role, the radio,
+transmissions and the clock step; `mccontrol help commands` has it, and `mccontrol/denylist.py`
+mirrors it so a refusal is explained before signing); a result is published only when the
+signature verified. A region tree
 line (`region def a|* b|*`) cannot travel: `|` is the field separator; `region put` one name at
 a time does the same job. `mccontrol help protocol` has the rest.
 

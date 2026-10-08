@@ -2,7 +2,7 @@
 
 import datetime
 
-from . import beacon, envelope, store as _store, transport
+from . import beacon, denylist, envelope, store as _store, transport
 from .store import _now as _store_now
 
 # Commands that take something away from a repeater. Each is sent only after the person has
@@ -13,9 +13,21 @@ CAUTIONS = (
     ("region denyf", "stops this repeater forwarding that scope."),
     ("region remove", "deletes that region from the repeater. Messages scoped to it are dropped."),
     ("set autoreply off", "stops this repeater answering test requests."),
-    ("set repeat off", "stops this repeater forwarding anything at all."),
-    ("set mqtt.cmd off", "switches the control plane off. The next command must come over serial."),
-    ("erase", "erases the node."),
+    # `set repeat off`, `erase` and `set mqtt.cmd*` used to be here; the firmware's deny list of
+    # 2026-10-08 refuses them outright (`denylist.py`), so there is nothing to ask.
+    # Admitted since that list; each can take the node out of reach for a while or move
+    # where it listens, so the person is told first.
+    ("reboot", "restarts the node. It is off the air and off the control plane until it is back."),
+    ("clkreboot", "restarts the node. It is off the air and off the control plane until it is back."),
+    ("set mqtt.iata", "moves the node to another region's topics: this tool must change its region to match."),
+    ("set mqtt.presets", "changes how many MQTT slots run; the control plane's slot may stop."),
+    ("set mqtt1*", "changes slot 1's broker or credentials; if the control plane rides this slot, it may go silent."),
+    ("set mqtt2*", "changes slot 2's broker or credentials; if the control plane rides this slot, it may go silent."),
+    ("set mqtt3*", "changes slot 3's broker or credentials; if the control plane rides this slot, it may go silent."),
+    ("set mqtt4*", "changes slot 4's broker or credentials; if the control plane rides this slot, it may go silent."),
+    ("set mqtt5*", "changes slot 5's broker or credentials; if the control plane rides this slot, it may go silent."),
+    ("set mqtt6*", "changes slot 6's broker or credentials; if the control plane rides this slot, it may go silent."),
+    ("set name", "renames the node as the whole mesh sees it in every advert."),
 )
 
 
@@ -23,7 +35,10 @@ def caution(command):
     """A sentence saying what a command takes away, or None for a harmless one."""
     text = " ".join(command.lower().split())
     for prefix, why in CAUTIONS:
-        if text == prefix or text.startswith(prefix + " ") or (prefix.endswith("*") and text.startswith(prefix)):
+        if prefix.endswith("*") and not prefix.endswith(" *"):   # `set mqtt1*`: any setting of the slot
+            if text.startswith(prefix[:-1]):
+                return why
+        elif text == prefix or text.startswith(prefix + " "):   # `region denyf *` is a literal star
             return why
     return None
 
@@ -44,6 +59,9 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     Raises `envelope.EnvelopeError`, `transport.BrokerError` or `store.StoreError`.
     """
     config = store.config()
+    why = denylist.refusal(command)
+    if why:
+        raise envelope.EnvelopeError(f"the node would refuse {command!r}: {why}")
     broadcast = device is None
     if broadcast and not region:
         raise envelope.EnvelopeError("a broadcast needs a region")
