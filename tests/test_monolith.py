@@ -265,7 +265,8 @@ EXITED = []
 def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, settle=1.2, env=None):
     """Start Monolith in a pty against a fresh API, send `keys` as `(bytes, delay)` pairs,
     and return every screen it showed (one after the other, as text) with the home
-    directory. The last screen is `walk.screen`."""
+    directory. The last screen is `walk.screen`. A key of `(cols, rows)` resizes the
+    terminal, as a window manager would."""
     import codecs, fcntl, signal, struct, termios
     home = _home(tmp_path, prepare)
     pid, fd = pty.fork()
@@ -280,6 +281,7 @@ def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, 
     term, decode, screens = Terminal(cols, rows), codecs.getincrementaldecoder("utf-8")("replace"), []
 
     def drain(secs):
+        nonlocal term
         end = time.time() + secs
         while time.time() < end:
             r, _, _ = select.select([fd], [], [], 0.05)
@@ -293,7 +295,13 @@ def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, 
 
     drain(settle)
     for k, delay in keys:
-        os.write(fd, k)
+        if isinstance(k, tuple):
+            cols, rows = k
+            fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+            term = Terminal(cols, rows)
+            os.kill(pid, signal.SIGWINCH)
+        else:
+            os.write(fd, k)
         drain(delay)
     os.write(fd, b"\x0c")                   # Ctrl+L: the whole last frame is drawn again
     drain(1.0)
@@ -582,3 +590,9 @@ def test_without_a_utf8_locale_the_board_draws_in_ascii(tmp_path):
     screen = walk.screen
     assert "+--" in screen and "| " in screen and "DEVICES" in screen and "Gisebo" in screen
     assert not set(screen) & set("╭╮╰╯│─▁▂▃▄▅▆▇█◆◉●↵␣")
+
+
+def test_a_resize_reflows_the_board_from_80x24_to_120x40(tmp_path):
+    walk(tmp_path, [((120, 40), 1.0)])
+    screen = walk.screen.splitlines()
+    assert "CLOCK" in walk.screen and len(screen) == 40 and max(len(line) for line in screen) > 100

@@ -7,6 +7,8 @@ a bar in the feed tile while `wait_job` polls it, and Esc cancels it with `DELET
 
 import curses
 import locale
+import os
+import sys
 import time
 
 from mccontrol.apiclient import ApiError
@@ -452,7 +454,7 @@ class Board:
         if key in (ord("q"), curses.KEY_F10):
             return "quit"
         if key == curses.KEY_RESIZE:
-            self.last_tick = 0
+            self.resize()
         elif key in (ord(":"), CTRL_P):
             return self.palette_run()
         elif key == TAB:
@@ -483,6 +485,19 @@ class Board:
             self.do("tagregion", key == ord("+"))
         elif 32 < key < 127 and chr(key) in KEYS:
             return self.do(KEYS[chr(key)])
+
+    def resize(self):
+        """The terminal changed size: take the size it has now, even where LINES and
+        COLUMNS in the environment would pin the old one, and lay the tiles out again."""
+        try:
+            cols, rows = os.get_terminal_size(sys.__stdout__.fileno())
+            if (rows, cols) != self.win.getmaxyx():
+                curses.resizeterm(rows, cols)
+            curses.update_lines_cols()
+        except (OSError, ValueError, curses.error):
+            pass
+        self.win.clearok(True)
+        self.last_tick = 0
 
     def move(self, key):
         step = {curses.KEY_UP: -1, curses.KEY_DOWN: 1, curses.KEY_PPAGE: -10,
