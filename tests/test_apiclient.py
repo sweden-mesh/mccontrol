@@ -62,6 +62,7 @@ def test_failures_are_api_errors_with_code_and_status(api):
     with pytest.raises(apiclient.ApiError) as exc:
         c.start_send("region denyf *", devices=["gisebo"])
     assert (exc.value.code, exc.value.status) == ("confirm_required", 409)
+    assert [c["command"] for c in exc.value.cautions] == ["region denyf *"]
     with pytest.raises(apiclient.ApiError) as exc:
         c.start_statistics("gisebo", range="1y")
     assert exc.value.status == 400

@@ -196,7 +196,8 @@ def _vet(ctx, commands_, region, body):
             raise ApiError(400, "refused", "a command that transmits may not be sent to every node; the firmware refuses it")
     cautions = [f"'{c}' {actions.caution(c)}" for c in commands_ if actions.caution(c)]
     if cautions and not body.get("dry_run") and not body.get("confirm"):
-        raise ApiError(409, "confirm_required", " ".join(cautions) + " Send again with confirm: true.")
+        raise ApiError(409, "confirm_required", " ".join(cautions) + " Send again with confirm: true.",
+                       cautions=[{"command": c, "caution": actions.caution(c)} for c in commands_ if actions.caution(c)])
     ctx.store.seed()                    # no key, or a readable one, is a StoreError now
 
 

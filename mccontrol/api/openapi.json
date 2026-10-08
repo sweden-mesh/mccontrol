@@ -1377,6 +1377,25 @@
        },
        "message": {
         "type": "string"
+       },
+       "cautions": {
+        "type": "array",
+        "description": "With confirm_required only: each command that takes something away and what it takes",
+        "items": {
+         "type": "object",
+         "properties": {
+          "command": {
+           "type": "string"
+          },
+          "caution": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "command",
+          "caution"
+         ]
+        }
        }
       },
       "required": [

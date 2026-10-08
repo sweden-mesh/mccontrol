@@ -16,9 +16,10 @@ FINISHED = ("done", "failed", "cancelled")
 
 
 class ApiError(Exception):
-    def __init__(self, code, message, status):
+    def __init__(self, code, message, status, cautions=None):
         super().__init__(f"{message} ({code})")
         self.code, self.message, self.status = code, message, status
+        self.cautions = cautions or []      # a 409 confirm_required: [{command, caution}]
 
 
 def _q(ref):
@@ -43,7 +44,7 @@ class Client:
         except urllib.error.HTTPError as exc:
             try:
                 err = json.loads(exc.read().decode("utf-8"))["error"]
-                raise ApiError(err["code"], err["message"], exc.code) from None
+                raise ApiError(err["code"], err["message"], exc.code, err.get("cautions")) from None
             except (ValueError, KeyError, TypeError):
                 raise ApiError("http", f"{method} {path} answered {exc.code}", exc.code) from None
         except (urllib.error.URLError, OSError) as exc:

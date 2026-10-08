@@ -107,6 +107,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:        # every failure leaves as the one error shape
             status, code, message = errors.classify(exc)
             payload = errors.body(code, message)
+            payload["error"].update(getattr(exc, "extra", None) or {})
         if isinstance(payload, routes.Html):
             self._send(status, payload.text.encode("utf-8"), "text/html; charset=utf-8")
         else:

@@ -4,9 +4,10 @@ from .. import beacon, envelope, store as _store, transport
 
 
 class ApiError(Exception):
-    def __init__(self, status, code, message):
+    def __init__(self, status, code, message, **extra):
         super().__init__(message)
         self.status, self.code, self.message = status, code, message
+        self.extra = extra              # more fields for the error body, e.g. a 409's cautions
 
 
 def bad(message):

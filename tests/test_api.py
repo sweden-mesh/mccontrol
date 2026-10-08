@@ -175,6 +175,8 @@ def test_a_send_is_refused_before_anything_is_signed(api):
     assert status == 400 and "transmits" in body["error"]["message"]
     status, body = call(url, "POST", "/jobs/send", {"command": "region denyf *", "devices": ["gisebo"]})
     assert status == 409 and body["error"]["code"] == "confirm_required" and "no scope" in body["error"]["message"]
+    assert body["error"]["cautions"] == [{"command": "region denyf *", "caution": body["error"]["cautions"][0]["caution"]}]
+    assert "no scope" in body["error"]["cautions"][0]["caution"]
     assert call(url, "POST", "/jobs/send", {"command": "region", "devices": ["gisebo"], "region": "JKG"})[0] == 400
     assert call(url, "POST", "/jobs/send", {"command": "region", "tagged": True})[1]["error"]["message"] == "nothing is tagged"
     assert call(url, "POST", "/jobs/send", {"command": "region", "devices": ["nobody"]})[0] == 404
