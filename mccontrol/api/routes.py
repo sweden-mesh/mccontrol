@@ -88,7 +88,7 @@ def command_list(d):
                          "caution": actions.caution(sample)})
         groups.append({"group": group, "commands": rows})
     return {"node": d["node"] if d else None, "firmware": firmware.entry_for(version)[0] if d else None,
-            "version": version, "greyed": greyed, "groups": groups}
+            "version": version, "revision": firmware.revision(version) if d else None, "greyed": greyed, "groups": groups}
 
 
 def public_config(store):
@@ -121,7 +121,7 @@ def docs_page(_ctx, _p, _q, _b):
 # -- configuration and keys --------------------------------------------------------------
 
 CONFIG_TYPES = {"broker": str, "port": int, "username": str, "password": str, "tls": bool,
-                "ttl_secs": int, "wait_secs": (int, float), "beacon_url": str, "columns": list}
+                "ttl_secs": int, "wait_secs": (int, float), "beacon_url": str, "columns": list, "ui": str}
 
 
 def get_config(ctx, _p, _q, _b):
@@ -159,7 +159,7 @@ def create_key(ctx, _p, _q, body):
         raise ApiError(409, "conflict", f"a key already exists at {ctx.store.key_path}; "
                                         f"replacing it would silence every node provisioned with it")
     try:
-        if seed:
+        if seed is not None:           # an empty seed is refused, never a new key
             ctx.store.import_key(seed, overwrite=overwrite)
         else:
             ctx.store.create_key(overwrite=overwrite)
@@ -172,13 +172,14 @@ def create_key(ctx, _p, _q, body):
 
 def list_devices(ctx, _p, query, _b):
     sort = query.get("sort", "name")
-    sorts = list(directory.SORTS) + ["version"]
+    sorts = list(directory.SORTS) + ["version", "added"]
     if sort not in sorts:
         raise bad(f"sort is one of {', '.join(sorts)}")
     width = _int(query, "width", 100)
     columns = ctx.store.config().get("columns")
     tags = tags_view(ctx)
-    return 200, {"devices": [view(ctx, d, columns, width) for d in directory.sorted_devices(ctx.store.devices(), sort)],
+    rows = ctx.store.devices() if sort == "added" else directory.sorted_devices(ctx.store.devices(), sort)
+    return 200, {"devices": [view(ctx, d, columns, width) for d in rows],
                  "sort": sort, "sorts": sorts, "columns": directory.chosen(columns),
                  "all_columns": list(directory.COLUMNS), "header": directory.header(width, columns),
                  "footer": tags["footer"], "tagged": tags["tagged"]}
@@ -268,6 +269,16 @@ def check_command(ctx, _p, query, _b):
                  "admitted": firmware.admits(d.get("ver"), command) if d else None}
 
 
+def build_command(_ctx, _p, _q, body):
+    text, values = _str(body, "command"), body.get("values")
+    if not text or not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+        raise bad("a build needs command, a table entry, and values, a list of strings")
+    entry = next((c for c in commands.TABLE if c.text == " ".join(text.split())), None)
+    if entry is None:
+        raise not_found(f"no table entry {text!r}; GET /commands lists them")
+    return 200, {"command": commands.build(entry, values)}
+
+
 # -- tags, regions -----------------------------------------------------------------------
 
 def _tag_targets(ctx, refs, region):
@@ -310,10 +321,27 @@ def regions(ctx, _p, _q, _b):
     return 200, {"regions": ctx.store.regions()}
 
 
+def resolve_regions(ctx, _p, query, _b):
+    if "text" not in query:
+        raise bad("text is required: JKG, several with commas, or *")
+    return 200, {"regions": actions.regions_asked(query["text"], ctx.store)}
+
+
 # -- sets and shortcuts ------------------------------------------------------------------
 
 def get_sets(ctx, _p, _q, _b):
     return 200, {"sets": ctx.store.sets(), "max_steps": _store.SET_STEPS}
+
+
+def filled_set(ctx, params, query, _b):
+    name = params["name"].strip().lower()
+    steps = ctx.store.sets().get(name)
+    if not steps:
+        raise not_found(f"no set named {name}")
+    try:
+        return 200, {"name": name, "steps": actions.fill(steps, query.get("arg") or "")}
+    except envelope.EnvelopeError as exc:
+        raise bad(str(exc)) from None
 
 
 def save_set(ctx, params, _q, body):
@@ -382,13 +410,16 @@ TABLE = [
     ("GET", "/history", broadcast_history),
     ("GET", "/commands", table),
     ("GET", "/commands/check", check_command),
+    ("POST", "/commands/build", build_command),
     ("GET", "/tags", get_tags),
     ("PUT", "/tags", set_tags),
     ("POST", "/tags", tag),
     ("DELETE", "/tags", untag),
     ("POST", "/tags/invert", invert_tags),
     ("GET", "/regions", regions),
+    ("GET", "/regions/resolve", resolve_regions),
     ("GET", "/sets", get_sets),
+    ("GET", "/sets/{name}", filled_set),
     ("PUT", "/sets/{name}", save_set),
     ("DELETE", "/sets/{name}", remove_set),
     ("GET", "/shortcuts", get_shortcuts),

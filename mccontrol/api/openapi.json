@@ -180,14 +180,15 @@
       "name": "sort",
       "in": "query",
       "required": false,
-      "description": "name, region, last sent or version",
+      "description": "name, region, last sent, version, or added (the order the devices were added in)",
       "schema": {
        "type": "string",
        "enum": [
         "name",
         "region",
         "last sent",
-        "version"
+        "version",
+        "added"
        ]
       }
      },
@@ -591,6 +592,40 @@
     ]
    }
   },
+  "/commands/build": {
+   "post": {
+    "operationId": "build_command",
+    "summary": "The command text for a table entry with its chosen values: what the command list sends",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Built"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Build"
+       }
+      }
+     }
+    }
+   }
+  },
   "/tags": {
    "get": {
     "operationId": "tags",
@@ -760,6 +795,38 @@
     }
    }
   },
+  "/regions/resolve": {
+   "get": {
+    "operationId": "resolve_regions",
+    "summary": "The regions a typed answer names: JKG, JKG, GOT (commas, semicolons or spaces), or * for every region the directory spans",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Regions"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     }
+    },
+    "parameters": [
+     {
+      "name": "text",
+      "in": "query",
+      "required": true,
+      "description": "what was typed",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
   "/sets": {
    "get": {
     "operationId": "sets",
@@ -782,6 +849,48 @@
    }
   },
   "/sets/{name}": {
+   "get": {
+    "operationId": "filled_set",
+    "summary": "A command set as it would run: its steps with {arg} filled in",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SetSaved"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "description": "the set",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "arg",
+      "in": "query",
+      "required": false,
+      "description": "the value for {arg}; a set whose steps hold {arg} needs one",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
    "put": {
     "operationId": "save_set",
     "summary": "Define or replace a command set; {arg} in a step is filled in at run time",
@@ -1478,6 +1587,10 @@
         "$ref": "#/components/schemas/Registration"
        }
       ]
+     },
+     "ui": {
+      "type": "string",
+      "description": "the interface `mccontrol --ui` starts when none is named: the last one used"
      }
     },
     "description": "The control broker and how long to wait; command sets and shortcuts have their own routes.",
@@ -1544,6 +1657,9 @@
       "items": {
        "type": "string"
       }
+     },
+     "ui": {
+      "type": "string"
      }
     },
     "description": "Only the fields given change; an unknown field is a 400.",
@@ -2146,6 +2262,11 @@
       "type": "string",
       "nullable": true
      },
+     "revision": {
+      "type": "integer",
+      "nullable": true,
+      "description": "the ar-N number the version reports; null when it reports none"
+     },
      "greyed": {
       "type": "integer"
      },
@@ -2160,6 +2281,7 @@
      "node",
      "firmware",
      "version",
+     "revision",
      "greyed",
      "groups"
     ]
@@ -2527,6 +2649,13 @@
      },
      "steps": {
       "type": "integer"
+     },
+     "heard": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "the nodes heard so far in the current wait, as the transport reports them"
      }
     },
     "required": [
@@ -2536,7 +2665,8 @@
      "elapsed",
      "wait",
      "step",
-     "steps"
+     "steps",
+     "heard"
     ]
    },
    "Outcome": {
@@ -3249,6 +3379,46 @@
      "ok",
      "detail",
      "broker"
+    ]
+   },
+   "Build": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string",
+      "description": "a table entry text, as GET /commands lists it"
+     },
+     "values": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "the chosen choice, choices or typed value; empty ones are dropped"
+     }
+    },
+    "example": {
+     "command": "region put",
+     "values": [
+      "se-jkp *"
+     ]
+    },
+    "required": [
+     "command",
+     "values"
+    ]
+   },
+   "Built": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     }
+    },
+    "example": {
+     "command": "region put se-jkp *"
+    },
+    "required": [
+     "command"
     ]
    }
   },

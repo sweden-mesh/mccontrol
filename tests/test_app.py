@@ -43,7 +43,7 @@ def walk(tmp_path, keys, seconds=3.0, env=None, cols=80, rows=24, prepare=None):
         os.environ["MCCONTROL_HOME"] = str(home)
         os.environ.update(env or {})
         sys.path.insert(0, os.getcwd())
-        os.execvp(sys.executable, [sys.executable, "-c", "import sys; sys.path.insert(0, %r); from mccontrol import cli; sys.exit(cli.main([]))" % os.getcwd()])
+        os.execvp(sys.executable, [sys.executable, "-c", "import sys; sys.path.insert(0, %r); from mccontrol import cli; sys.exit(cli.main([\"--ui\", \"MeshcoreCommander\"]))" % os.getcwd()])
     time.sleep(0.8)
     for k, delay in keys:
         os.write(fd, k)
@@ -201,6 +201,16 @@ def test_setup_saves_the_control_broker(tmp_path):
     assert "Saved." in text
 
 
+def test_setup_says_whether_a_password_is_set_and_an_empty_field_keeps_it(tmp_path):
+    def with_password(home):
+        (home / "config.json").write_text(json.dumps({"username": "mcoar", "password": "old"}))
+    text, home = walk(tmp_path, [(b"\x1bo", 0.5), (b"\r", 0.5), (b"\x08" * 20 + b"mqtt.example", 0.3), (b"\r", 0.8)],
+                      prepare=with_password)
+    assert "Password (set)" in text
+    cfg = json.loads((home / "config.json").read_text())
+    assert cfg["broker"] == "mqtt.example" and cfg["password"] == "old"
+
+
 
 
 def test_f1_opens_help_for_the_screen_and_enter_follows_a_link(tmp_path):
@@ -269,6 +279,13 @@ def test_a_set_runs_from_the_send_menu_and_stops_where_a_node_refuses(tmp_path):
     assert "Stopped at step 2" in text
     hist = (home / "history" / "FD700369.jsonl").read_text()
     assert "region put se-jkp *" in hist and "region allowf se-jkp" in hist and "region save" not in hist
+
+
+def test_a_set_that_needs_a_value_asks_again_and_sends_nothing(tmp_path):
+    # Alt+S, "c": the set field holds add-scope, the value is left empty; Enter is refused in the dialog
+    text, home = walk(tmp_path, [(b"\x1bs", 0.5), (b"c", 0.5), (b"\r", 0.8)])
+    assert "this set needs a value for {arg}" in text and "Run a Command Set" in text
+    assert not (home / "history" / "FD700369.jsonl").exists()
 
 
 def test_options_defines_a_set(tmp_path):
@@ -422,7 +439,7 @@ def test_a_wait_writes_the_box_once(tmp_path):
         os.environ.update({"TERM": "xterm", "COLUMNS": "80", "LINES": "24", "MCCONTROL_HOME": str(home),
                            "MCCONTROL_FAKE_RESULTS": fake, "MCCONTROL_FAKE_WAIT": "2"})
         os.execvp(sys.executable, [sys.executable, "-c",
-                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([])" % os.getcwd()])
+                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([\"--ui\", \"MeshcoreCommander\"])" % os.getcwd()])
     out = b""
 
     def pump(secs):
@@ -490,7 +507,7 @@ def test_a_greyed_entry_is_drawn_in_the_disabled_colour_and_names_the_build(tmp_
         fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
         os.environ.update({"TERM": "xterm", "COLUMNS": "80", "LINES": "24", "MCCONTROL_HOME": str(home)})
         os.execvp(sys.executable, [sys.executable, "-c",
-                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([])" % os.getcwd()])
+                  "import sys; sys.path.insert(0, %r); from mccontrol.cli import main; main([\"--ui\", \"MeshcoreCommander\"])" % os.getcwd()])
     out = b""
 
     def pump(secs):
@@ -516,3 +533,12 @@ def test_a_greyed_entry_is_drawn_in_the_disabled_colour_and_names_the_build(tmp_
     assert admitted > 0 and greyed > 0
     before = lambda i: "".join(re.findall(r"\x1b\[[0-9;]*m", raw[max(0, i - 60):i]))
     assert before(admitted) != before(greyed), (before(admitted), before(greyed))
+
+
+def test_esc_during_a_wait_cancels_the_job_and_keeps_what_came(tmp_path):
+    # a 30-second wait: Esc cancels the job, and the answer already in is shown at once
+    fake = json.dumps({"FD700369": [0, "> v1.17.1-ar-11"]})
+    text, home = walk(tmp_path, [(b"\x1b2", 1.5), (b"\x1b", 1.5)],
+                      env={"MCCONTROL_FAKE_RESULTS": fake, "MCCONTROL_FAKE_WAIT": "30"})
+    assert "Sending" in text and "Sent: ver" in text and "1 of 1 answered" in text
+    assert '"command": "ver"' in (home / "history" / "FD700369.jsonl").read_text()
