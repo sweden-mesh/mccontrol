@@ -4,6 +4,7 @@ import pytest
 
 from conftest import closed_port
 from mccontrol import apiclient, cli, transport
+from mccontrol import store as _store
 from mccontrol.api.server import stop
 
 NODE = "CCCCCCCC"
@@ -23,9 +24,14 @@ def test_the_command_line_round_trip(tmp_path, monkeypatch, capsys):
     assert cli.main(["config", "--username", "mcoar"]) == 0
     out = capsys.readouterr().out
     assert "username     mcoar\npassword     (not set)\n" in out and "password_set" not in out
+    assert "ui_settings" not in out and "ui." not in out             # nothing kept: no line
     assert cli.main(["config", "--password", "hunter2"]) == 0
     out = capsys.readouterr().out
     assert "password     (set)\n" in out and "hunter2" not in out
+    _store.Store(tmp_path).save_config(ui_settings={"Monolith": {"palette": "green"}, "IBMi": {"rows": [1, 2]}})
+    assert cli.main(["config"]) == 0
+    out = capsys.readouterr().out
+    assert "ui.Monolith.palette = green\n" in out and "ui.IBMi.rows = [1, 2]\n" in out and "ui_settings" not in out
     assert cli.main(["add", "LOUTEST", NODE, "jkg", "bench"]) == 0
     assert cli.main(["devices"]) == 0
     out = capsys.readouterr().out

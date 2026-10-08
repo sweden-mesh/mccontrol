@@ -1591,6 +1591,19 @@
      "ui": {
       "type": "string",
       "description": "the interface `mccontrol --ui` starts when none is named: the last one used"
+     },
+     "ui_settings": {
+      "type": "object",
+      "description": "each interface's own preferences, by interface name then key, for it alone to read; {} when none is kept",
+      "additionalProperties": {
+       "type": "object",
+       "additionalProperties": {}
+      },
+      "example": {
+       "Monolith": {
+        "palette": "green"
+       }
+      }
      }
     },
     "description": "The control broker and how long to wait; command sets and shortcuts have their own routes.",
@@ -1610,7 +1623,8 @@
       "ver",
       "result"
      ],
-     "registered": null
+     "registered": null,
+     "ui_settings": {}
     },
     "required": [
      "broker",
@@ -1620,7 +1634,8 @@
      "ttl_secs",
      "wait_secs",
      "beacon_url",
-     "columns"
+     "columns",
+     "ui_settings"
     ]
    },
    "ConfigChange": {
@@ -1660,6 +1675,24 @@
      },
      "ui": {
       "type": "string"
+     },
+     "ui_settings": {
+      "type": "object",
+      "description": "merged into what is kept, interface by interface and key by key: an interface not named and a key not named stay as they are, a key given a value takes it, a key given null is deleted, and an interface left with no keys goes. Each interface's value must be an object, or the whole change is a 400",
+      "additionalProperties": {
+       "type": "object",
+       "additionalProperties": {
+        "nullable": true
+       }
+      },
+      "example": {
+       "Monolith": {
+        "palette": "green"
+       },
+       "IBMi": {
+        "old": null
+       }
+      }
      }
     },
     "description": "Only the fields given change; an unknown field is a 400.",

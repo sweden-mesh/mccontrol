@@ -231,7 +231,8 @@ EXITED = []
 def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, settle=1.2, env=None):
     """Start Monolith in a pty against a fresh API, send `keys` as `(bytes, delay)` pairs,
     and return every screen it showed (one after the other, as text) with the home
-    directory. The last screen is `walk.screen`. A key of `(cols, rows)` resizes the
+    directory. The last screen is `walk.screen`, and every byte it wrote, colours too,
+    `walk.raw`. A key of `(cols, rows)` resizes the
     terminal, as a window manager would."""
     import codecs, fcntl, signal, struct, termios
     home = _home(tmp_path, prepare)
@@ -245,8 +246,10 @@ def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, 
         code = CHILD.format(cwd=os.getcwd(), wait=wait, home=str(home), script=dict(script or SCRIPT))
         os.execvp(sys.executable, [sys.executable, "-c", code])
     term, decode, screens = Terminal(cols, rows), codecs.getincrementaldecoder("utf-8")("replace"), []
+    walk.raw = b""
 
     def sink(data):
+        walk.raw += data
         term.feed(decode.decode(data))
         if not screens or screens[-1] != term.text():
             screens.append(term.text())
@@ -483,6 +486,35 @@ def test_o_sorts_columns_pick_and_p_swaps_the_phosphor(tmp_path):
                                  (b"\r", 0.8)])
     assert "by region" in text and "green phosphor" in text
     assert json.loads((home / "config.json").read_text())["columns"] == ["sent", "batt", "seen", "ver", "result"]
+
+
+def test_a_phosphor_the_api_cannot_keep_is_not_shown_either():
+    from mccontrol.apiclient import ApiError
+    from mccontrol.ui.Monolith.board import Board
+
+    class Refusing:
+        def set_config(self, **_changes):
+            raise ApiError("unavailable", "the API is not answering", 503)
+    board = object.__new__(Board)                                   # no terminal: only what swap_palette touches
+    board.client, board.palette, board.colors, board.toasts = Refusing(), "amber", "as drawn", []
+    board.swap_palette()
+    assert board.palette == "amber" and board.colors == "as drawn"
+    assert [(text, role) for _t, text, role in board.toasts] == [("the API is not answering", "alert")]
+
+
+def test_the_phosphor_is_kept_and_the_next_start_is_drawn_in_it(tmp_path):
+    from mccontrol import store as _store
+    text, _home = walk(tmp_path / "a", [(b"p", 0.5), (b"q", 0.5)])
+    assert "mccontrol  amber" in text and "green phosphor" in text and EXITED[0]
+    kept = json.loads((tmp_path / "a" / "home" / "config.json").read_text())["ui_settings"]
+    assert kept == {"Monolith": {"palette": "green"}}
+
+    def again(home):                                                # the next start, on what the first left
+        _store.Store(home).save_config(ui_settings=kept)
+    walk(tmp_path / "b", [], prepare=again)
+    assert "mccontrol  green" in walk.screen and b"\x1b[32m" in walk.raw    # the green pair from the start
+    walk(tmp_path / "c", [], prepare=lambda home: _store.Store(home).save_config(ui_settings={"Monolith": {"palette": "plaid"}}))
+    assert "mccontrol  amber" in walk.screen and b"\x1b[32m" not in walk.raw  # not one of ours: amber
 
 
 def _click(x, y):

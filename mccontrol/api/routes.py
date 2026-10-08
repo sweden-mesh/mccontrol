@@ -97,6 +97,7 @@ def public_config(store):
     config = store.config()
     out = {k: v for k, v in config.items() if k not in ("sets", "shortcuts", "password")}
     out["password_set"] = bool(config.get("password"))
+    out.setdefault("ui_settings", {})
     return out
 
 
@@ -121,7 +122,7 @@ def docs_page(_ctx, _p, _q, _b):
 # -- configuration and keys --------------------------------------------------------------
 
 CONFIG_TYPES = {"broker": str, "port": int, "username": str, "password": str, "tls": bool,
-                "ttl_secs": int, "wait_secs": (int, float), "beacon_url": str, "columns": list, "ui": str}
+                "ttl_secs": int, "wait_secs": (int, float), "beacon_url": str, "columns": list, "ui": str, "ui_settings": dict}
 
 
 def get_config(ctx, _p, _q, _b):
@@ -137,8 +138,28 @@ def set_config(ctx, _p, _q, body):
             raise bad(f"{key} has the wrong type")
     if "columns" in body:
         body = dict(body, columns=directory.chosen(body["columns"]))
+    if "ui_settings" in body:
+        body = dict(body, ui_settings=merged_ui_settings(ctx.store.config().get("ui_settings", {}), body["ui_settings"]))
     ctx.store.save_config(**body)
     return 200, public_config(ctx.store)
+
+
+def merged_ui_settings(stored, change):
+    """Each interface's own preferences with `change` merged in, interface by interface and
+    key by key: a null value removes its key, and an interface left with none goes."""
+    out = {name: dict(keys) for name, keys in stored.items()}
+    for name, keys in change.items():
+        if not isinstance(keys, dict):
+            raise bad(f"ui_settings.{name} has the wrong type: it is an object of settings")
+        mine = out.setdefault(name, {})
+        for key, value in keys.items():
+            if value is None:
+                mine.pop(key, None)
+            else:
+                mine[key] = value
+        if not mine:
+            del out[name]
+    return out
 
 
 def key_view(store):
