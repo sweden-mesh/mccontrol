@@ -19,6 +19,7 @@ DEVICE_LEGEND = ["1=Tag/untag  2=Change  4=Forget  5=Display  6=Statistics  7=Co
 DEVICE_KEYS = fmt.fkeys(["F1=Help", "F3=Exit", "F5=Refresh", "F6=Discover", "F7=Batt/Seen", "F9=Send",
                          "F10=Names", "F11=Sort", "F12=Cancel", "F13-F21=Shortcuts"])
 LIST_KEYS = ["F1=Help   F3=Exit   F5=Refresh   F12=Cancel"]
+VIEW_KEYS = ["F1=Help   F3=Exit   F12=Cancel"]
 
 
 class App:
@@ -107,10 +108,10 @@ class App:
             t.put(2, 1, "Select one of the following:")
             for i, (n, label) in enumerate(MENU):
                 t.put(4 + i, 6, f"{n:>2}. {label}")
-            cfg, key, data = self.call(self.c.config) or {}, self.call(self.c.key) or {}, self.devices()
-            reg = key.get("registered")
+            cfg, signing, data = self.call(self.c.config) or {}, self.call(self.c.key) or {}, self.devices()
+            reg = signing.get("registered")
             info = [("Broker", f"{cfg.get('broker')}:{cfg.get('port')}"),
-                    ("Signing key", "present" if key.get("exists") else "NONE - select 8"),
+                    ("Signing key", "present" if signing.get("exists") else "NONE - select 8"),
                     ("Registered", reg["at"][:10] if reg else "no - select 8"),
                     ("Devices", data.get("footer", ""))]
             for i, (label, value) in enumerate(info):
@@ -153,8 +154,10 @@ class App:
             if targets is None:
                 ref, _s, command = rest.partition(" ")
                 devices = self.resolve(ref)
-                if devices:
-                    self.send(devices, None, command.strip()) if command.strip() else self.send_form(devices)
+                if devices and command.strip():
+                    self.send(devices, None, command.strip())
+                elif devices:
+                    self.send_form(devices)
             elif rest.strip():
                 self.send(here, None, rest.strip())
             else:
@@ -296,6 +299,8 @@ class App:
                         f"Notes  . . :  {d.get('notes') or ''}"]
             lst.set_rows([(fmt.history_row(line), "normal", line) for line in reversed(hist)])
             key, picks, _c = lst.run()
+            if key == fkey(5):
+                continue
             if key not in ENTER:
                 return
             for _opt, line in picks:
@@ -311,6 +316,8 @@ class App:
             rows = (self.call(self.c.reads, d["node"]) or {}).get("reads", [])
             lst.set_rows([(f"{r['age']:>5}  {r['command'][:18]:18} {r['reply']}", "normal", r) for r in rows])
             key, picks, _c = lst.run()
+            if key == fkey(5):
+                continue
             if key not in ENTER:
                 return
             for opt, r in picks:
@@ -322,10 +329,12 @@ class App:
     # -- sending -------------------------------------------------------------------------
 
     def recall(self, devices):
-        """Earlier commands, oldest first, for Up and Down in the command field."""
+        """Earlier commands, oldest first, for Up and Down in the command field: the
+        broadcasts and the first device's, or every device's when none is named yet."""
         lines = (self.call(self.c.broadcast_history, limit=50) or {}).get("history", [])
-        for d in (devices or [])[:1]:
+        for d in devices[:1] if devices else self.devices()["devices"]:
             lines += (self.call(self.c.history, d["node"], limit=50) or {}).get("history", [])
+        lines.sort(key=lambda l: l.get("at") or "")
         seen = list(dict.fromkeys(l["command"] for l in reversed(lines)))
         return list(reversed(seen))
 
@@ -346,6 +355,7 @@ class App:
             targets = self.resolve(values[0])
             if not targets:
                 continue
+            self.t.message = ""
             if key == fkey(4):
                 picked = self.commands_for(targets, pick=True)
                 if picked:
@@ -388,7 +398,7 @@ class App:
         self.results(command, to, headline, job["outcomes"])
 
     def results(self, command, to, headline, outcomes):
-        lst = OptList(self.t, "Command Results", LIST_KEYS, legend=["5=Display"], prompt=None, context="send",
+        lst = OptList(self.t, "Command Results", VIEW_KEYS, legend=["5=Display"], prompt=None, context="send",
                       head=[f"Command  . :  {command}", f"To . . . . :  {to}", headline],
                       header=f"{'Device':18} {'Signature':17} Result")
         lst.set_rows([(fmt.outcome_row(o), "error" if o.get("verified") is False else "normal", o) for o in outcomes])
@@ -475,7 +485,7 @@ class App:
             return c["text"]
         if c["kind"] in ("choice", "multi"):
             many = c["kind"] == "multi"
-            lst = OptList(self.t, "Select Value", LIST_KEYS, legend=["1=Select" + ("  (several may be)" if many else "")],
+            lst = OptList(self.t, "Select Value", VIEW_KEYS, legend=["1=Select" + ("  (several may be)" if many else "")],
                           header="Value", head=[f"Command  . :  {c['text']} <value>"], prompt=None, context="commands")
             lst.set_rows([(v or "-", "normal", v) for v in c["choices"]])
             while True:
@@ -741,7 +751,7 @@ class App:
                            head=["The broker a node's mqtt.cmd.slot points at, and its credentials.",
                                  "Statistics come from a Beacon server, read-only, no credentials."],
                            keys=["F1=Help   F3=Exit   F10=Test   F12=Cancel"], context="setup")
-        if values is None:
+        if key not in ENTER and key != fkey(10):
             return
         try:
             wait = float(values[4])
@@ -760,7 +770,7 @@ class App:
         data = self.devices()
         every = data.get("all_columns") or ["reg", "sent", "batt", "seen", "ver", "result"]
         chosen = cfg.get("columns") or every
-        lst = OptList(self.t, "Change Directory Columns", LIST_KEYS, legend=["1=Show  (blank hides the column)"],
+        lst = OptList(self.t, "Change Directory Columns", VIEW_KEYS, legend=["1=Show  (blank hides the column)"],
                       header="Column", head=["Name and node always show; on a narrow terminal pick what matters."],
                       prompt=None, context="main")
         lst.set_rows([(c, "normal", c) for c in every], {i: "1" for i, c in enumerate(every) if c in chosen})
@@ -789,7 +799,7 @@ class App:
         while True:
             if not stack:
                 index = self.call(self.c.help_index) or {"topics": []}
-                lst = OptList(self.t, "Help Contents", LIST_KEYS, legend=["5=Display"], header=f"{'Topic':14} Title",
+                lst = OptList(self.t, "Help Contents", VIEW_KEYS, legend=["5=Display"], header=f"{'Topic':14} Title",
                               prompt=None, context=None)
                 lst.set_rows([(f"{t['name']:14} {t['title']}", "normal", t["name"]) for t in index["topics"]])
                 key, picks, _c = lst.run()

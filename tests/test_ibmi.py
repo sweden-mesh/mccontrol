@@ -477,3 +477,13 @@ def test_a_wait_shows_its_progress_and_f12_cancels_the_job(api, monkeypatch):
     job = server.ctx.jobs.all()[0]
     assert job.verb == "send" and job.snapshot()["status"] == "cancelled"
     assert sent(store, "65C1D12C") == []                          # the second device was never asked
+
+
+def test_2_sends_to_a_named_device_f4_prompts_the_command_and_up_recalls_it(api):
+    _server, _url, store = api
+    text = walk(api, [(b"2\r", 0.6), (b"\r", 0.4), (b"\x08" * 8 + b"Gisebo", 0.2), (TAB, 0.2), (F[4], 0.8),
+                      (b"get autoreply\r", 0.4), (b"1\r", 0.6), (b"\r", 1.2), (F[3], 0.4),
+                      (b"2\r", 0.6), (b"\x08" * 8 + b"Gisebo", 0.2), (TAB, 0.2), (UP, 0.2), (b"\r", 1.2)])
+    assert "Nothing is tagged" in text                            # *TAGGED, with nothing tagged
+    assert "Select Command" in text and "F4=Prompt" in text
+    assert sent(store, "4AC61A7F") == ["get autoreply", "get autoreply"]
