@@ -254,9 +254,15 @@ def test_names_versions_fleet_and_statistics(api, monkeypatch):
     assert call(url, "GET", "/devices/gisebo")[1]["cells"]["batt"].strip()
     job = run(url, "statistics", {"device": "gisebo", "range": "48h", "live": False})
     assert job["result"]["lines"][0].startswith("Beacon: sampled")
+    assert job["result"]["sample"]["stats"]["battery_mv"] > 0 and job["result"]["sample"]["age_secs"] >= 0
+    assert job["result"]["points"] and all(isinstance(p["t"], int) for p in job["result"]["points"])
     assert call(url, "GET", "/devices/gisebo/reads")[1]["reads"][0]["command"] == "stats (Beacon)"
     job = run(url, "statistics", {"device": "far", "live": False})
     assert job["status"] == "failed" and job["error"]["code"] == "beacon"
+    _server.ctx.script["FD700369|get stats"] = [0, "> batt=4100mV up=60s"]
+    job = run(url, "statistics", {"device": "far"})                       # live answered, Beacon has nothing
+    assert job["result"]["lines"][0] == "live, just now (get stats)"
+    assert job["result"]["sample"] is None and job["result"]["points"] is None
     assert call(url, "POST", "/jobs/statistics", {"device": "gisebo", "range": "1y"})[0] == 400
 
 

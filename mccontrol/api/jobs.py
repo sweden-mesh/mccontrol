@@ -388,9 +388,18 @@ def start_statistics(ctx, _p, _q, body):
             summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
             store.remember_read(d["node"], "stats (Beacon)", summary[:60])
         job.update(text="done")
-        return {"node": d["node"], "lines": lines}
+        return {"node": d["node"], "lines": lines, "sample": _or_none(beacon.stats, store, d),
+                "points": _or_none(beacon.telemetry, store, d, range_, interval)}
 
     return 202, ctx.jobs.start("statistics", work).snapshot()
+
+
+def _or_none(read, *args):
+    """Beacon's numbers for a dashboard beside the lines, or None where it has none."""
+    try:
+        return read(*args)
+    except beacon.BeaconError:
+        return None
 
 
 def start_test(ctx, _p, _q, _b):

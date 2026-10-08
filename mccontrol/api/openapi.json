@@ -3042,6 +3042,82 @@
      "asked"
     ]
    },
+   "Sample": {
+    "type": "object",
+    "properties": {
+     "stats": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "number"
+      },
+      "description": "Beacon's status block: battery_mv, uptime_secs, noise_floor, tx_air_secs, rx_air_secs, packets_sent, packets_received, errors, recv_errors, queue_len, internal_heap"
+     },
+     "sampled_at": {
+      "type": "number",
+      "description": "epoch seconds"
+     },
+     "age_secs": {
+      "type": "integer"
+     },
+     "firmware": {
+      "type": "string"
+     },
+     "model": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "stats",
+     "sampled_at",
+     "age_secs",
+     "firmware",
+     "model",
+     "name"
+    ]
+   },
+   "Point": {
+    "type": "object",
+    "properties": {
+     "t": {
+      "type": "integer",
+      "description": "epoch milliseconds, the bucket's start"
+     },
+     "batteryMv": {
+      "type": "number",
+      "nullable": true
+     },
+     "airtimeTxSecs": {
+      "type": "number",
+      "nullable": true
+     },
+     "airtimeRxSecs": {
+      "type": "number",
+      "nullable": true
+     },
+     "noiseFloorDb": {
+      "type": "number",
+      "nullable": true
+     },
+     "uptimeSeconds": {
+      "type": "number",
+      "nullable": true
+     },
+     "queueLength": {
+      "type": "number",
+      "nullable": true
+     },
+     "receiveErrors": {
+      "type": "number",
+      "nullable": true
+     }
+    },
+    "required": [
+     "t"
+    ]
+   },
    "StatisticsResult": {
     "type": "object",
     "properties": {
@@ -3053,11 +3129,30 @@
       "items": {
        "type": "string"
       }
+     },
+     "sample": {
+      "nullable": true,
+      "allOf": [
+       {
+        "$ref": "#/components/schemas/Sample"
+       }
+      ],
+      "description": "the latest Beacon status, null when Beacon has none"
+     },
+     "points": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Point"
+      },
+      "description": "the telemetry buckets, oldest first; null when Beacon has none",
+      "nullable": true
      }
     },
     "required": [
      "node",
-     "lines"
+     "lines",
+     "sample",
+     "points"
     ]
    },
    "TestResult": {
