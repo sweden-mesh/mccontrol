@@ -1018,7 +1018,7 @@
   "/help": {
    "get": {
     "operationId": "help_index",
-    "summary": "The help topics, and which topic each context opens",
+    "summary": "The help topics, and which topic each context opens, for one interface or shared",
     "responses": {
      "200": {
       "description": "OK",
@@ -1033,13 +1033,24 @@
      "400": {
       "$ref": "#/components/responses/BadRequest"
      }
-    }
+    },
+    "parameters": [
+     {
+      "name": "ui",
+      "in": "query",
+      "required": false,
+      "description": "the interface the help is for (IBMi, MeshcoreCommander, Monolith): its own text for a topic where it has one, the shared text otherwise; without it, the shared texts. An interface that is not there is a 400",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
    }
   },
   "/help/{topic}": {
    "get": {
     "operationId": "help_topic",
-    "summary": "One help topic with its links",
+    "summary": "One help topic with its links, as one interface shows it or shared",
     "responses": {
      "200": {
       "description": "OK",
@@ -1064,6 +1075,15 @@
       "in": "path",
       "required": true,
       "description": "the topic's name",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "ui",
+      "in": "query",
+      "required": false,
+      "description": "the interface the help is for (IBMi, MeshcoreCommander, Monolith): its own text for a topic where it has one, the shared text otherwise; without it, the shared texts. An interface that is not there is a 400",
       "schema": {
        "type": "string"
       }

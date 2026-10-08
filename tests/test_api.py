@@ -312,6 +312,29 @@ def test_names_versions_fleet_and_statistics(api, monkeypatch):
     assert call(url, "POST", "/jobs/statistics", {"device": "gisebo", "range": "1y"})[0] == 400
 
 
+def test_help_for_one_interface_takes_its_own_text_falls_back_and_refuses_an_unknown_one(api, tmp_path, monkeypatch):
+    from mccontrol import helptext
+    _server, url, _store = api
+    (tmp_path / "IBMi").mkdir()
+    (tmp_path / "a.txt").write_text("A\n\nshared a, see [[b]]\n")
+    (tmp_path / "b.txt").write_text("B\n\nshared b\n")
+    (tmp_path / "IBMi" / "b.txt").write_text("B on the green screen\n\nsee [[c]]\n")
+    (tmp_path / "IBMi" / "c.txt").write_text("C\n\nonly here\n")
+    monkeypatch.setattr(helptext, "HERE", tmp_path)
+    assert call(url, "GET", "/help/b?ui=IBMi")[1]["title"] == "B on the green screen"
+    assert call(url, "GET", "/help/b")[1]["title"] == call(url, "GET", "/help/b?ui=Monolith")[1]["title"] == "B"
+    assert call(url, "GET", "/help/a?ui=IBMi")[1]["text"] == "A\n\nshared a, see [b]"
+    link = call(url, "GET", "/help/b?ui=IBMi")[1]["links"][0]["target"]
+    assert call(url, "GET", f"/help/{link}?ui=IBMi")[1]["title"] == "C" and call(url, "GET", f"/help/{link}")[0] == 404
+    assert [t["name"] for t in call(url, "GET", "/help?ui=IBMi")[1]["topics"]] == ["a", "b", "c"]
+    assert call(url, "GET", "/help?ui=Monolith")[1]["context"]["main"] == "keys"
+    assert call(url, "GET", "/help")[1]["context"]["main"] == "screen"
+    for path in ("/help?ui=Nope", "/help/a?ui=Nope", "/help/a?ui=..", "/help?ui=ibmi"):
+        status, body = call(url, "GET", path)
+        assert status == 400 and "no interface" in body["error"]["message"], path
+    assert call(url, "GET", "/help/a?ui=")[0] == 200                 # empty is no interface: the shared text
+
+
 def test_a_job_without_a_key_is_refused_at_once(api):
     _server, url, store = api
     store.key_path.unlink()

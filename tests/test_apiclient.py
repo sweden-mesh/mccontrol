@@ -44,6 +44,7 @@ def test_the_client_round_trips_against_the_live_server(api):
     assert c.remove_set("x") == {"removed": "x"}
     assert c.set_shortcuts(["ver", "region"])["shortcuts"][:2] == c.shortcuts()["shortcuts"][:2]
     assert c.help_topic(c.help_index()["topics"][0]["name"])["lines"]
+    assert c.help_index(ui="Monolith")["context"]["main"] == "keys" and c.help_topic("index", ui="IBMi")["lines"]
     assert c.forget("B2B2B2B2") == {"forgot": "B2B2B2B2"}
     seen = []
     job = c.start_send("region", devices=["gisebo"])

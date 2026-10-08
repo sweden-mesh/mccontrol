@@ -376,18 +376,28 @@ def set_shortcuts(ctx, _p, _q, body):
 
 # -- help --------------------------------------------------------------------------------
 
-def help_index(_ctx, _p, _q, _b):
-    return 200, {"topics": [{"name": n, "title": helptext.load(n).title} for n in helptext.topics()],
-                 "context": dict(helptext.CONTEXT)}
+def _ui(query):
+    """The `ui` a help request names, None for the shared texts; 400 for one that is not there."""
+    ui = query.get("ui") or None
+    if ui is not None and ui not in helptext.interfaces():
+        raise bad(f"no interface {ui!r}; there are {', '.join(helptext.interfaces())}")
+    return ui
 
 
-def help_topic(_ctx, params, _q, _b):
-    topic = helptext.load(params["topic"]) if params["topic"] in helptext.topics() else None
+def help_index(_ctx, _p, query, _b):
+    ui = _ui(query)
+    return 200, {"topics": [{"name": n, "title": helptext.load(n, ui).title} for n in helptext.topics(ui)],
+                 "context": helptext.context(ui)}
+
+
+def help_topic(_ctx, params, query, _b):
+    ui = _ui(query)
+    topic = helptext.load(params["topic"], ui)
     if topic is None:
         raise not_found(f"no help topic {params['topic']!r}")
     return 200, {"name": topic.name, "title": topic.title, "lines": topic.lines,
                  "links": [{"line": l, "start": s, "end": e, "target": t} for l, s, e, t in topic.links],
-                 "text": helptext.as_text(topic.name)}
+                 "text": helptext.as_text(topic.name, ui)}
 
 
 # Literal paths before parameterised ones: the first match wins.

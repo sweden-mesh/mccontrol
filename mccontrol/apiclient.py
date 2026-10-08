@@ -162,11 +162,11 @@ class Client:
 
     # -- help ----------------------------------------------------------------------------
 
-    def help_index(self):
-        return self.call("GET", "/help")
+    def help_index(self, ui=None):
+        return self.call("GET", "/help", {"ui": ui})
 
-    def help_topic(self, name):
-        return self.call("GET", f"/help/{_q(name)}")
+    def help_topic(self, name, ui=None):
+        return self.call("GET", f"/help/{_q(name)}", {"ui": ui})
 
     # -- jobs ----------------------------------------------------------------------------
 
