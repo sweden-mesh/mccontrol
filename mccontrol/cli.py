@@ -12,17 +12,24 @@
     mccontrol history <device>
     mccontrol discover <region> [--add]   the nodes there that accept your key
     mccontrol test                 connect, sign in, subscribe and publish on the control broker
+    mccontrol --api <url> ...      any of these through a running API instead of one of its own
+
+Every subcommand is a client of the API (`apiclient`): it starts one in-process for the
+command unless --api names one already running.
 """
 
 import argparse
+import contextlib
 import sys
 
-from . import actions, envelope, store as _store, transport
+from .apiclient import ApiError, Client
+from .api.server import serve, stop
 
 
 def build_parser():
     p = argparse.ArgumentParser(prog="mccontrol", description=__doc__.split("\n")[0])
     p.add_argument("--ui", metavar="NAME", help="the interface to start; the last one used when not given")
+    p.add_argument("--api", metavar="URL", help="use a running mccontrol API instead of starting one")
     sub = p.add_subparsers(dest="command")
     sub.add_parser("keygen", help="create the signing key").add_argument(
         "--force", action="store_true", help="replace an existing key (silences provisioned nodes)")
@@ -95,65 +102,115 @@ def build_parser():
 
 
 def main(argv=None):
-    args = build_parser().parse_args(argv)
-    store = _store.Store()
     try:
+        args = build_parser().parse_args(argv)
         if args.command is None:
             from . import launch
-            return launch.run(store, args.ui)
-        return COMMANDS[args.command](store, args)
-    except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
-        print(f"mccontrol: {exc}", file=sys.stderr)
+            return launch.run(None, args.ui)
+        with _client(args) as api:
+            return COMMANDS[args.command](api, args)
+    except ApiError as exc:
+        print(f"mccontrol: {exc.message}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:                   # the server, if one was started, is stopped by now
+        print("interrupted", file=sys.stderr)
+        return 130
 
 
-def _keygen(store, args):
-    public = store.create_key(overwrite=args.force)
-    print(f"key created at {store.key_path} (mode 600; keep it, never share it)")
+@contextlib.contextmanager
+def _client(args):
+    """A client of the API at --api, or of one started for this command and stopped after it."""
+    if args.api:
+        yield Client(args.api)
+        return
+    server, url = serve()
+    try:
+        yield Client(url)
+    finally:
+        stop(server)
+
+
+def _job(api, started, quiet=False):
+    """Wait for a job, its progress on stderr (none when `quiet`); Ctrl+C cancels it. The
+    finished record, or None when cancelled; a failed job is its error."""
+    shown = [None]
+
+    def show(job):
+        text = job["progress"]["text"]
+        if text != shown[0] and not quiet:
+            print(text, file=sys.stderr, flush=True)
+            shown[0] = text
+
+    try:
+        job = api.wait_job(started["id"], on_progress=show)
+    except KeyboardInterrupt:
+        try:
+            api.cancel_job(started["id"])
+        except ApiError as exc:
+            if exc.status != 409:               # it finished meanwhile: nothing left to cancel
+                raise
+        print("cancelled", file=sys.stderr)
+        return None
+    if job["status"] == "failed":
+        raise ApiError(job["error"]["code"], job["error"]["message"], 0)
+    return job
+
+
+def _keygen(api, args):
+    key = api.create_key(overwrite=args.force)
+    print(f"key created at {key['path']} (mode 600; keep it, never share it)")
     print("provision each repeater over serial with:")
-    print(f"  set mqtt.cmd.pubkey {public}")
-    print("  set mqtt.cmd on")
+    for line in key["provision"]:
+        print(f"  {line}")
     return 0
 
 
-def _key(store, _args):
-    print(store.public_key())
-    reg = store.registration()
+def _key(api, _args):
+    key = api.key()
+    if not key["exists"]:
+        raise ApiError("store", "no signing key yet: create one first", 0)
+    print(key["public"])
+    reg = key["registered"]
     if reg:
         print(f"registered with {reg['broker']} on {reg['at'][:10]}")
     return 0
 
 
-def _register(store, _args):
-    ok, detail = actions.register(store)
+def _register(api, _args):
+    job = _job(api, api.start_register())
+    if job is None:
+        return 130
+    ok, detail = job["result"]["ok"], job["result"]["detail"]
     print(f"{'registered' if ok else 'not registered'}: {detail}")
     return 0 if ok else 1
 
 
-def _config(store, args):
+def _config(api, args):
     changes = {k: getattr(args, k) for k in ("broker", "username", "password", "port")}
     changes["wait_secs"] = args.wait_secs
     changes["beacon_url"] = args.beacon_url
     changes["columns"] = args.columns.split(",") if args.columns else None
-    if any(v is not None for v in changes.values()):
-        store.save_config(**changes)
-    for key, value in store.config().items():
-        if key in ("shortcuts", "sets"):
-            continue                              # their own commands list them
+    changes = {k: v for k, v in changes.items() if v is not None}
+    config = api.set_config(**changes) if changes else api.config()
+    for key, value in config.items():
+        if key == "password_set":
+            continue                              # shown after the username, as the password
         if key == "columns":
             value = ",".join(value)
-        print(f"{key:12} {'(set)' if key == 'password' else value}")
+        print(f"{key:12} {value}")
+        if key == "username":
+            print(f"{'password':12} {'(set)' if config.get('password_set') else '(not set)'}")
     return 0
 
 
-def _add(store, args):
-    entry = store.add_device(args.name, args.node, args.region, " ".join(args.notes))
+def _add(api, args):
+    entry = api.add_device(args.node, args.region, name=args.name, notes=" ".join(args.notes))
     print(f"added {entry['name']} ({entry['node'][:8]}) in {entry['region']}")
     return 0
 
 
-def _devices(store, _args):
-    rows = store.devices()
+def _devices(api, _args):
+    rows = api.devices(sort="added")["devices"]
     if not rows:
         print("no devices yet: mccontrol add <name> <node-hex>")
         return 0
@@ -163,196 +220,227 @@ def _devices(store, _args):
     return 0
 
 
-def _remove(store, args):
-    device = _device(store, args.device)
-    store.remove_device(device["node"])
+def _remove(api, args):
+    device = _device(api, args.device)
+    api.forget(device["node"])
     print(f"forgot {device['name'] or device['node']}")
     return 0
 
 
-def _device(store, ref):
-    device = store.device(ref)
-    if device is None:
-        raise _store.StoreError(f"no device matches {ref!r}; see 'mccontrol devices'")
-    return device
+def _device(api, ref):
+    try:
+        return api.device(ref)
+    except ApiError as exc:
+        if exc.status != 404:
+            raise
+        raise ApiError(exc.code, f"no device matches {ref!r}; see 'mccontrol devices'", exc.status) from None
 
 
-def _send(store, args, command=None):
+def _send(api, args, command=None):
     command = command or " ".join(args.words)
-    device = None if args.all else _device(store, args.device)
+    device = None if args.all else _device(api, args.device)
     region = args.device.upper() if args.all else None
-    why = actions.caution(command)
+    why = api.check_command(command)["caution"]
     if why and not args.dry_run and not args.yes:
         where = f"EVERY node in {region}" if args.all else (device["name"] or device["node"])
         print(f"'{command}' {why}\nSend it to {where}? [y/N] ", end="", flush=True)
         if input().strip().lower() != "y":
             print("not sent")
             return 2
-    _topic, _payload, _answers, lines = actions.send(store, command, device=device, region=region,
-                                                     dry_run=args.dry_run)
-    print("\n".join(lines))
+    job = _job(api, api.start_send(command, devices=None if args.all else [device["node"]], region=region,
+                                   dry_run=args.dry_run, confirm=True), quiet=args.dry_run)
+    if job is None:
+        return 130
+    print("\n".join(job["result"]["lines"]))
     return 0
 
 
-def _alt(store, args):
-    slots = store.shortcuts()
+def _alt(api, args):
+    slots = api.shortcuts()["shortcuts"]
     if not 1 <= args.n <= len(slots) or not slots[args.n - 1]:
-        raise _store.StoreError(f"shortcut {args.n} is not set; see 'mccontrol shortcuts'")
-    return _send(store, args, command=slots[args.n - 1])
+        raise ApiError("store", f"shortcut {args.n} is not set; see 'mccontrol shortcuts'", 0)
+    return _send(api, args, command=slots[args.n - 1])
 
 
-def _run(store, args):
-    steps = store.sets().get(args.set.lower())
+def _run(api, args):
+    steps = api.sets()["sets"].get(args.set.lower())
     if not steps:
-        raise _store.StoreError(f"no set named {args.set}; 'mccontrol sets' lists them")
-    steps = actions.fill(steps, args.arg)
-    device = None if args.all else _device(store, args.device)
+        raise ApiError("not_found", f"no set named {args.set}; 'mccontrol sets' lists them", 0)
+    device = None if args.all else _device(api, args.device)
     region = args.device.upper() if args.all else None
-    cautions = [f"'{s}' {actions.caution(s)}" for s in steps if actions.caution(s)]
-    if cautions and not args.dry_run and not args.yes:
-        where = f"EVERY node in {region}" if args.all else (device["name"] or device["node"])
-        print("\n".join(cautions) + f"\nRun the set on {where}? [y/N] ", end="", flush=True)
-        if input().strip().lower() != "y":
-            print("not sent")
-            return 2
-    lines, stopped = actions.run_set(store, steps, device=device, region=region, dry_run=args.dry_run)
-    print("\n".join(lines))
-    return 0 if stopped is None else 3
+    arg = args.arg.strip()
+    if not args.dry_run and not args.yes and (arg or not any("{arg}" in s for s in steps)):
+        filled = [s.replace("{arg}", arg) for s in steps]
+        cautions = [f"'{s}' {why}" for s, why in ((s, api.check_command(s)["caution"]) for s in filled) if why]
+        if cautions:
+            where = f"EVERY node in {region}" if args.all else (device["name"] or device["node"])
+            print("\n".join(cautions) + f"\nRun the set on {where}? [y/N] ", end="", flush=True)
+            if input().strip().lower() != "y":
+                print("not sent")
+                return 2
+    job = _job(api, api.start_run_set(args.set.lower(), arg=args.arg, devices=None if args.all else [device["node"]],
+                                      region=region, dry_run=args.dry_run, confirm=True), quiet=args.dry_run)
+    if job is None:
+        return 130
+    lines = job["result"]["lines"]
+    print("\n".join(lines if args.all else lines[1:]))       # one device: no "== name" heading
+    return 0 if job["result"]["runs"][0]["stopped_at"] is None else 3
 
 
-def _sets(store, args):
+def _sets(api, args):
     if args.set:
         if len(args.set) < 2:
-            raise _store.StoreError("--set takes the name and then at least one step")
-        store.save_set(args.set[0], args.set[1:])
+            raise ApiError("store", "--set takes the name and then at least one step", 0)
+        api.save_set(args.set[0], args.set[1:])
     if args.remove:
-        store.remove_set(args.remove.lower())
-    for name, steps in sorted(store.sets().items()):
+        api.remove_set(args.remove.lower())
+    for name, steps in sorted(api.sets()["sets"].items()):
         print(name)
         for i, s in enumerate(steps, 1):
             print(f"  {i}. {s}")
     return 0
 
 
-def _stats(store, args):
-    from . import beacon
-    device = _device(store, args.device)
+def _stats(api, args):
+    device = _device(api, args.device)
     try:
-        print("\n".join(actions.statistics(store, device, args.range, args.interval, live=args.live)))
-    except beacon.BeaconError as exc:
-        print(f"no statistics: {exc}", file=sys.stderr)
+        job = _job(api, api.start_statistics(device["node"], range=args.range, interval=args.interval, live=args.live))
+    except ApiError as exc:
+        if exc.code != "beacon":
+            raise
+        print(f"no statistics: {exc.message}", file=sys.stderr)
         return 1
+    if job is None:
+        return 130
+    print("\n".join(job["result"]["lines"]))
     return 0
 
 
-def _fleet(store, args):
-    devices = [_device(store, ref) for ref in args.device] if args.device else store.devices()
-    updated, failed = actions.refresh_fleet(store, devices)
-    from . import directory
-    columns = store.config().get("columns")
-    print(directory.header(100, columns))
-    for d in directory.sorted_devices(store.devices(), "name"):
-        print(directory.row(d, 100, columns=columns))
+def _fleet(api, args):
+    devices = [_device(api, ref) for ref in args.device] if args.device else api.devices(sort="added")["devices"]
+    updated = failed = 0
+    if devices:
+        job = _job(api, api.start_refresh_fleet(devices=[d["node"] for d in devices]))
+        if job is None:
+            return 130
+        updated, failed = job["result"]["updated"], job["result"]["failed"]
+    listing = api.devices(sort="name", width=100)
+    print(listing["header"])
+    for d in listing["devices"]:
+        print(d["row"].ljust(99))
     print(f"refreshed {updated} of {len(devices)}" + (f"; {failed} without statistics" if failed else ""))
     return 0 if not failed else 1
 
 
-def _refresh(store, args):
-    devices = [_device(store, ref) for ref in args.device] if args.device else store.devices()
-    named, versioned, lines = actions.refresh_names(store, devices)
+def _refresh(api, args):
+    devices = [_device(api, ref) for ref in args.device] if args.device else api.devices(sort="added")["devices"]
+    named = versioned = 0
+    lines = []
+    if devices:
+        job = _job(api, api.start_refresh_names(devices=[d["node"] for d in devices]))
+        if job is None:
+            return 130
+        named, versioned, lines = job["result"]["named"], job["result"]["versioned"], job["result"]["lines"]
     print("\n".join(lines))
     print(f"{versioned} of {len(devices)} gave a version; {named} named")
     return 0 if versioned == len(devices) else 1
 
 
-def _reads(store, args):
-    from . import directory
-    device = _device(store, args.device)
-    rows = store.reads(device)
+def _reads(api, args):
+    rows = api.reads(_device(api, args.device)["node"])["reads"]
     if not rows:
         print("nothing read yet")
         return 0
-    for command, reply, at in rows:
-        print(f"{directory.relative(at):>5}  {command:28} {reply}")
+    for r in rows:
+        print(f"{r['age']:>5}  {r['command']:28} {r['reply']}")
     return 0
 
 
-def _commands(store, args):
-    from . import commands, firmware
-    version = _device(store, args.device).get("ver") if args.device else None
+def _commands(api, args):
     if args.device:
-        print(f"{args.device}: firmware {firmware.entry_for(version)[0]} ({version or 'version unknown; mccontrol refresh reads it'})")
-    for group, items in commands.grouped():
-        print(f"{group}:")
-        for c in items:
-            how = {"none": "", "choice": " <" + "|".join(x or "-" for x in c.choices) + ">",
-                   "multi": " <" + " ".join(c.choices) + " ...>", "text": " <" + (c.examples[0] if c.examples else "text") + ">"}[c.kind]
-            mark = ""
-            if args.device:
-                probe = "get autoreply" if c.text == "get" else ("set txdelay 0.5" if c.text == "set" else c.text + (" x" if c.kind != "none" else ""))
-                if not firmware.admits(version, probe):
-                    mark = f"   -- needs {firmware.needs(probe) or 'a build that admits it'}"
-            print(f"  {c.text}{how}" + ("   (kept)" if c.read else "") + mark)
+        listing = api.device_commands(_device(api, args.device)["node"])
+        version = listing["version"]
+        print(f"{args.device}: firmware {listing['firmware']} ({version or 'version unknown; mccontrol refresh reads it'})")
+    else:
+        listing = api.commands()
+    for group in listing["groups"]:
+        print(f"{group['group']}:")
+        for c in group["commands"]:
+            how = {"none": "", "choice": " <" + "|".join(x or "-" for x in c["choices"]) + ">",
+                   "multi": " <" + " ".join(c["choices"]) + " ...>",
+                   "text": " <" + (c["examples"][0] if c["examples"] else "text") + ">"}[c["kind"]]
+            mark = f"   -- needs {c['needs'] or 'a build that admits it'}" if c["admitted"] is False else ""
+            print(f"  {c['text']}{how}" + ("   (kept)" if c["read"] else "") + mark)
     return 0
 
 
-def _shortcuts(store, args):
+def _shortcuts(api, args):
+    slots = api.shortcuts()["shortcuts"]
     if args.set:
         n, command = args.set
         try:
-            store.set_shortcut(int(n), command)
+            n = int(n)
         except ValueError:
-            raise _store.StoreError("N is 1 to 9") from None
-    for n, command in enumerate(store.shortcuts(), 1):
+            raise ApiError("store", "N is 1 to 9", 0) from None
+        if not 1 <= n <= len(slots):
+            raise ApiError("store", f"a shortcut is Alt+1 to Alt+{len(slots)}", 0)
+        slots[n - 1] = command
+        slots = api.set_shortcuts(slots)["shortcuts"]
+    for n, command in enumerate(slots, 1):
         print(f"Alt+{n}  {command or '-'}")
     return 0
 
 
-def _regions(store, args):
+def _regions(api, args):
     args.all, args.dry_run, args.yes = False, False, True
-    return _send(store, args, command="region")
+    return _send(api, args, command="region")
 
 
-def _test(store, _args):
-    steps = transport.test_connection(store.config(), seed_hex=store.seed() if store.has_key() else None)
-    for step, ok, detail in steps:
-        print(f"{'ok  ' if ok else 'FAIL'} {step:28} {detail}")
-    if store.has_key():
-        print(f"ok   signing key                  public {store.public_key()[:16]}...")
-        reg = store.registration()
+def _test(api, _args):
+    job = _job(api, api.start_test())
+    if job is None:
+        return 130
+    result = job["result"]
+    for s in result["steps"]:
+        print(f"{'ok  ' if s['ok'] else 'FAIL'} {s['step']:28} {s['detail']}")
+    if result["key"]:
+        print(f"ok   signing key                  public {result['key'][:16]}...")
+        reg = result["registered"]
         print(f"{'ok  ' if reg else 'note'} registered with broker       "
               + (f"{reg['broker']} on {reg['at'][:10]}" if reg else "not yet: run 'mccontrol register'"))
     else:
         print("FAIL signing key                  none: run 'mccontrol keygen'")
-    return 0 if all(ok for _s, ok, _d in steps) else 1
+    return 0 if result["ok"] else 1
 
 
-def _discover(store, args):
-    found = actions.discover(store, args.region, wait_secs=args.wait_secs)
+def _discover(api, args):
+    job = _job(api, api.start_discover(args.region, wait_secs=args.wait_secs, add=args.add))
+    if job is None:
+        return 130
+    found = job["result"]["found"]
     if not found:
         print(f"no node in {args.region.upper()} answered a command signed with your key")
         return 0
     for e in found:
         mark = f"known as {e['known_as']}" if e["known_as"] else ("added" if args.add else "")
-        if args.add and not e["known_as"]:
-            actions.adopt(store, e)
         print(f"{e['node'][:8]}  {e['region']:4}  {e['outcome'][:40]:40} {mark}")
     return 0
 
 
-def _help(_store, args):
-    from . import helptext
-    text = helptext.as_text(args.topic)
-    if text is None:
-        print(f"no help topic {args.topic!r}; topics: {', '.join(helptext.topics())}", file=sys.stderr)
+def _help(api, args):
+    try:
+        print(api.help_topic(args.topic)["text"])
+    except ApiError as exc:
+        if exc.status != 404:
+            raise
+        topics = [t["name"] for t in api.help_index()["topics"]]
+        print(f"no help topic {args.topic!r}; topics: {', '.join(topics)}", file=sys.stderr)
         return 1
-    print(text)
     return 0
 
 
-def _history(store, args):
-    device = _device(store, args.device)
-    for line in store.history(device["node"], limit=args.limit):
+def _history(api, args):
+    for line in api.history(_device(api, args.device)["node"], limit=args.limit)["history"]:
         out = line["reply"] if line["code"] == 0 else (f"refused {line['code_name']}" if line["code"] is not None else "no answer")
         print(f"{line['at']}  {line['command']:34} {out}")
     return 0

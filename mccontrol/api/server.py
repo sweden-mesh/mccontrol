@@ -13,6 +13,7 @@ import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .. import store as _store
 from . import errors, jobs, routes
 
 MAX_BODY = 1 << 20
@@ -150,8 +151,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def serve(store, transport=None, port=0):
-    """Start the API on 127.0.0.1 (a free port unless given) in a daemon thread, under an
+def serve(store=None, transport=None, port=0):
+    """Start the API on 127.0.0.1 (a free port unless given) in a daemon thread, over
+    `store`, or with none the one in MCCONTROL_HOME (or the default directory), under an
     unguessable path: `base_url` is `http://127.0.0.1:<port>/<secret>/`, and a request
     outside it, or carrying another page's Origin, is refused.
 
@@ -159,12 +161,20 @@ def serve(store, transport=None, port=0):
     stands in for the broker, as MCCONTROL_FAKE_RESULTS does. Returns `(server, base_url)`."""
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
-    server.ctx = Context(store, transport)
+    server.ctx = Context(store if store is not None else _store.Store(), transport)
     server.secret = secrets.token_urlsafe(32)
     server.origin = f"http://127.0.0.1:{server.server_address[1]}"
     # the page /docs serves may be opened by either name for the loopback; nothing else
     server.origins = (server.origin, f"http://localhost:{server.server_address[1]}")
-    threading.Thread(target=server.serve_forever, name="mccontrol-api", daemon=True).start()
+    # a short poll: stop() waits for it, and a command line starts and stops a server per command
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, name="mccontrol-api", daemon=True)
+    try:
+        thread.start()
+    except BaseException:               # Ctrl+C before the caller has the handle: leave nothing serving
+        if thread.is_alive():
+            server.shutdown()
+        server.server_close()
+        raise
     return server, f"{server.origin}/{server.secret}/"
 
 

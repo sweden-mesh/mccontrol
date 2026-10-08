@@ -327,6 +327,31 @@ def test_nothing_in_the_api_imports_curses_and_the_document_ships_with_the_packa
     assert (here.parents[1] / "docs" / "api" / "openapi.json").samefile(here / "openapi.json")
 
 
+def test_without_a_store_the_server_opens_the_one_in_mccontrol_home(tmp_path, monkeypatch):
+    from mccontrol import store as _store
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    _store.Store().add_device("Home", "4AC61A7F", "JKG")
+    server, url = api_server.serve()
+    try:
+        assert [d["name"] for d in call(url, "GET", "/devices")[1]["devices"]] == ["Home"]
+    finally:
+        api_server.stop(server)
+
+
+def test_devices_can_be_listed_in_the_order_they_were_added(api):
+    _server, url, _store = api
+    listing = call(url, "GET", "/devices?sort=added")[1]
+    assert [d["node"] for d in listing["devices"]] == ["4AC61A7F", "65C1D12C", "FD700369"]
+    assert listing["sort"] == "added" and "added" in listing["sorts"]
+
+
+def test_a_server_stops_at_once():
+    server, _url = api_server.serve(store=object())
+    start = time.monotonic()
+    api_server.stop(server)
+    assert time.monotonic() - start < 0.2
+
+
 def test_the_broker_password_is_written_never_read(api):
     _server, url, _store = api
     assert call(url, "GET", "/config")[1]["password_set"] is False
@@ -380,3 +405,19 @@ def test_another_origin_and_a_body_that_is_not_json_are_refused(api):
                   f"http://127.0.0.1:{port + 1}", "http://localhost"):
         assert raw(url + "jobs", headers={"Origin": other})[0] == 403, other
     assert json.loads(raw(url + "jobs")[1])["jobs"] == []                    # nothing started
+
+
+def test_an_interrupt_while_the_server_starts_leaves_nothing_serving(monkeypatch):
+    import threading
+    started, real = [], threading.Thread.start
+
+    def start(self):
+        real(self)
+        if self.name == "mccontrol-api":
+            started.append(self)
+            raise KeyboardInterrupt
+    monkeypatch.setattr(threading.Thread, "start", start)
+    with pytest.raises(KeyboardInterrupt):
+        api_server.serve(store=object())
+    started[0].join(1)
+    assert not started[0].is_alive()

@@ -30,7 +30,8 @@ def listing(found):
 
 
 def run(store, name=None):
-    """Run the interface `name`, or the last one used; the exit code."""
+    """Run the interface `name`, or the last one used, over `store` (None: the default);
+    the exit code."""
     server, url = serve(store)
     try:
         client = apiclient.Client(url)
