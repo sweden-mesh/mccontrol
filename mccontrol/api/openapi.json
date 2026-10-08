@@ -1418,8 +1418,9 @@
      "username": {
       "type": "string"
      },
-     "password": {
-      "type": "string"
+     "password_set": {
+      "type": "boolean",
+      "description": "whether a broker password is set; the password itself is never returned"
      },
      "tls": {
       "type": "boolean"
@@ -1461,7 +1462,7 @@
      "broker": "mqtt.louie.se",
      "port": 1883,
      "username": "",
-     "password": "",
+     "password_set": false,
      "ttl_secs": 300,
      "wait_secs": 20,
      "beacon_url": "https://beacon.meshat.se/api/v1",
@@ -1479,7 +1480,7 @@
      "broker",
      "port",
      "username",
-     "password",
+     "password_set",
      "ttl_secs",
      "wait_secs",
      "beacon_url",
@@ -1499,7 +1500,9 @@
       "type": "string"
      },
      "password": {
-      "type": "string"
+      "type": "string",
+      "writeOnly": true,
+      "description": "set here, never returned: GET /config says password_set"
      },
      "tls": {
       "type": "boolean"

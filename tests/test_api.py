@@ -277,6 +277,18 @@ def test_nothing_in_the_api_imports_curses_and_the_document_ships_with_the_packa
     assert (here.parents[1] / "docs" / "api" / "openapi.json").samefile(here / "openapi.json")
 
 
+def test_the_broker_password_is_written_never_read(api):
+    _server, url, _store = api
+    assert call(url, "GET", "/config")[1]["password_set"] is False
+    status, body = call(url, "PATCH", "/config", {"username": "mcoar", "password": "hunter2-secret"})
+    assert status == 200 and body["password_set"] is True
+    for path in ("config", "openapi.json", "key", "devices", "jobs"):
+        text = raw(url + path)[1].decode()
+        assert "hunter2-secret" not in text, path
+    assert '"password"' not in raw(url + "config")[1].decode()
+    assert _store.config()["password"] == "hunter2-secret"
+
+
 def raw(url, method="GET", data=None, headers=None):
     req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
     try:

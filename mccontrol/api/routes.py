@@ -92,7 +92,12 @@ def command_list(d):
 
 
 def public_config(store):
-    return {k: v for k, v in store.config().items() if k not in ("sets", "shortcuts")}
+    """The configuration without the broker's password -- only whether one is set -- and
+    without the sets and shortcuts, which have their own routes."""
+    config = store.config()
+    out = {k: v for k, v in config.items() if k not in ("sets", "shortcuts", "password")}
+    out["password_set"] = bool(config.get("password"))
+    return out
 
 
 # -- meta --------------------------------------------------------------------------------
