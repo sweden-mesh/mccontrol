@@ -1,9 +1,8 @@
 History
 
 Every command sent to a device is kept with what came back: the time, the
-command, the topic, the result code in words and the reply. The right
-panel shows the cursor device's history newest first; F3 shows it as a
-window; Enter on a line opens the whole reply.
+command, the topic, the result code in words and the reply. A device's
+history is shown newest first, and any line opens the whole reply.
 
 Broadcasts are kept once per device asked and once under "all" with how
 many answered.

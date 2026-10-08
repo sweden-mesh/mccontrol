@@ -1,7 +1,7 @@
 Commands that take something away
 
 These are sent only after you have been told what they do and have
-pressed [ Send anyway ]:
+said to send them anyway:
 
   region denyf *       stops the repeater forwarding every unscoped
                        message. It may be the only link between two
@@ -23,5 +23,5 @@ firmware refuses them outright, and so does this tool, before signing
 (see [[commands]]).
 
 A broadcast of one of these cannot be undone in one step. The node does
-not second-guess a signed command; this dialog is where the question is
-asked. See [[send]].
+not second-guess a signed command; this question is where it is asked.
+See [[send]].

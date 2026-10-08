@@ -1,0 +1,57 @@
+Can a command be forged, altered or replayed?
+
+The broker is not trusted. Its credentials are shared, so assume anyone
+can read every topic and publish to every topic. What stops them is
+checked on the repeater, and only there.
+
+What the signature covers
+  The repeater verifies an Ed25519 signature over the topic, a newline,
+  and "v1|counter|expiry|command". Every byte of that is covered, so a
+  changed counter, a longer expiry, a different command, a touched
+  signature, or the same payload on another node's topic, another
+  region's topic or the broadcast topic all fail with sig-invalid. Only
+  the one public key the repeater was given over its serial console
+  verifies; the key on this machine never leaves it inside anything but
+  a signature.
+
+Why the counter stops a replay
+  A repeater stores the counter of every command it accepts, before it
+  runs the command, and refuses any counter that is not greater than the
+  stored one. The same envelope published again -- a minute later or a
+  month later, by you or by anyone -- is refused as replay. The store
+  survives a reboot. mccontrol uses unix seconds as the counter, so a
+  new command always carries a higher one.
+
+Why the expiry matters as well
+  A captured envelope the repeater has not seen yet could be held and
+  published later. The expiry limits that to the envelope's life (five
+  minutes by default, an hour at most; the repeater refuses anything
+  further off than that), and the counter still lets it run once at
+  most. The same holds for a broadcast: a repeater that was offline
+  when it was sent will accept it once if it is republished within its
+  life, which is what you asked for anyway. A repeater with no clock
+  refuses rather than guesses.
+
+What this does not give you
+  Secrecy: commands and replies are readable by anyone on the broker.
+  Nothing secret travels in a command; the settings that would be
+  (the signing key, the identity key, erase) are not admitted at all.
+  Delivery: the broker can drop or delay a command. That shows as
+  silence or as expired, never as a wrong command running.
+  Trustworthy results from older firmware: up to ar-10 a result line
+  is not signed, so anyone on the broker can publish "ok" in such a
+  repeater's name. From ar-11 the node signs every result with its own
+  key and the tool checks it: a result marked [signed] is the node's
+  word, a BAD SIGNATURE line is a forgery and is ignored, and an
+  unmarked line is an r1 from older firmware -- confirm those with a
+  read whose answer you can judge.
+  A stolen key: whoever reads key.seed can sign as you. It is kept
+  readable only by you; replacing it (Keys menu) silences every
+  repeater until each is re-provisioned over serial.
+
+How this is checked
+  tests/test_envelope.py builds envelopes and judges them the way the
+  firmware does, in the same order: signature, counter, expiry. Each
+  property above has a test that goes red if the rule is loosened.
+
+See [[signing]], [[protocol]] and [[broker]].

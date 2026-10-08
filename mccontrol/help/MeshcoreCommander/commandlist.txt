@@ -1,0 +1,37 @@
+The command list
+
+Enter on a device opens every command the control plane admits, by
+group: reads, auto-reply, regions, tuning, MQTT, node. Type to narrow
+the list; Up and Down move; Enter runs the one under the cursor; Esc
+closes. The target is the tagged devices, or the cursor device when
+none is tagged, as for F2.
+
+What Enter does depends on what the command needs:
+
+  nothing       it runs at once under a progress box, and the reply
+                opens in a window when it arrives (ver, region, reboot)
+  one value     radio buttons: Up/Down to choose, Enter runs; the
+                command about to be sent is shown on the last line
+                (set autoreply on|off, set autoreply.mode ...)
+  several       checkboxes: Space chooses, Enter runs
+  free text     a field, with examples beside it (region put se-jkp *,
+                set txdelay 0.5); an empty value asks again
+
+Grey entries are commands the device's firmware does not admit: the
+cursor skips them and the note above the hint says how many, what the
+device reports (ar-10, or "unknown", which counts as the oldest) and
+that "n" reads the version. The fleet runs several firmware versions
+for months, so this is how a command slot is never spent on a
+not-allowed. ar-10, the build in the field, admits the auto-reply
+settings, the two triggers and a dozen reads; ar-11 admits everything
+on the deny list's far side (ver, get name, get stats, the region map,
+the tuning writes, reboot...). To make the grey go away, flash.
+
+A command that takes something away still asks first (see [[cautions]]),
+and one the firmware would refuse is stopped before it is signed, with
+the reason (see [[commands]]). F2 is the same send with a free command
+line; F3 is the history window.
+
+The full table, with each command's kind, is "mccontrol commands".
+
+See [[send]], [[reads]] and [[keys]].

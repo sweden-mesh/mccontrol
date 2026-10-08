@@ -1,0 +1,13 @@
+Dialogs
+
+A dialog asks for the one or two values a verb needs. Type into the
+highlighted field; Tab and Shift+Tab move between fields and buttons; Up
+and Down in the command field recall earlier commands; Enter presses the
+default button (the highlighted one) from any field; Esc cancels and
+sends nothing.
+
+A dialog that would take something away from a repeater says so in red
+and offers [ Send anyway ] and [ Cancel ], with Cancel as the default.
+See [[cautions]].
+
+Back to [[index]].

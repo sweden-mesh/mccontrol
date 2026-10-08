@@ -1,27 +1,7 @@
-Keys on the main screen
+Keys
 
-  F1        this help, about the screen or dialog you are on
-  Shift+F1  the help contents;  Alt+F1  the previous help topic
-  F2        send a command to the tagged devices, or the cursor device
-  Enter     the command list for the cursor device: see [[commandlist]]
-  F3        the cursor device's history as a window
-  F4        edit the cursor device: name, region, notes
-  F5        discover: find the repeaters in a region that accept your key
-  F6        read the cursor device's region map (sends "region")
-  F7        send a command to every node in a region
-  F8        forget the cursor device
-  F9 / F10  the menu / quit
-  Alt+1..9  a command per key, no dialog: see [[shortcuts]]
-  s         the cursor device's statistics from Beacon: see [[stats]]
-  r         refresh the Batt and Seen columns from Beacon, tagged or all
-  n         read name and version from the tagged or cursor devices: [[devices]]
-  Ins Space tag the row and move down;  * invert;  + - tag or untag a region
-  Tab       cycle the three panels (devices, history, last answers);
-            Enter on a last-answers line reads it again;  Esc  close
-  Ctrl+L    redraw the screen
-  Mouse     where the terminal has one: a row takes the cursor, a key-bar
-            label presses it, a menu title opens it. Never needed.
+Each interface has keys of its own, and its help lists them under this
+topic: "mccontrol --ui <name>", then its help. Every verb is also on the
+command line, one subcommand each; see [[cli]].
 
-In a dialog: Tab and Shift+Tab move between fields and buttons, Enter
-presses the highlighted default button from anywhere, Esc cancels. See
-[[dialogs]].
+Back to [[index]].

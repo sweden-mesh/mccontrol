@@ -1,25 +1,29 @@
+import re
+
 from mccontrol import helptext
 
 
-def test_every_topic_loads_and_every_link_points_at_a_topic():
-    names = helptext.topics()
-    assert "index" in names and "commands" in names and len(names) >= 12
-    for name in names:
-        topic = helptext.load(name)
-        assert topic.title and topic.lines, name
-        for _line, _s, _e, target in topic.links:
-            assert target in names, f"{name} links to missing {target}"
+def test_every_topic_loads_and_every_link_points_at_a_topic_in_every_interface():
+    for ui in [None] + helptext.interfaces():
+        names = helptext.topics(ui)
+        assert "index" in names and "commands" in names and len(names) >= 12
+        for name in names:
+            topic = helptext.load(name, ui)
+            assert topic.title and topic.lines, (ui, name)
+            for _line, _s, _e, target in topic.links:
+                assert target in names, f"{ui}: {name} links to missing {target}"
 
 
-def test_the_index_reaches_every_topic():
-    seen, todo = set(), ["index"]
-    while todo:
-        name = todo.pop()
-        if name in seen:
-            continue
-        seen.add(name)
-        todo += [t for *_r, t in helptext.load(name).links]
-    assert seen == set(helptext.topics())
+def test_the_index_reaches_every_topic_in_every_interface():
+    for ui in [None] + helptext.interfaces():
+        seen, todo = set(), ["index"]
+        while todo:
+            name = todo.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            todo += [t for *_r, t in helptext.load(name, ui).links]
+        assert seen == set(helptext.topics(ui)), ui
 
 
 def test_links_are_resolved_to_positions_and_the_text_form_shows_them_in_brackets():
@@ -72,3 +76,55 @@ def test_an_interface_that_is_not_there_is_refused_and_cannot_reach_outside_the_
 def test_the_context_is_per_interface():
     assert helptext.context()["main"] == "screen" and helptext.context("IBMi")["main"] == "screen"
     assert helptext.context("Monolith")["main"] == "keys" and helptext.context("Monolith")["send"] == "send"
+
+
+# -- the keys each interface's help names ----------------------------------------------
+
+KEY = re.compile(r"\b(?:(?:Shift|Alt|Ctrl)\+)?(?:F\d{1,2}(?:-F\d{1,2})?|Enter|Esc|Tab|Ins|Del|Space|Backspace|PgUp|PgDn"
+                 r"|Up|Down|Left|Right|Home|End)\b|\b(?:Shift|Alt|Ctrl)\+(?:\d(?:\.\.\d)?|[A-Z])\b|\"([a-z?:])\"")
+MENU = re.compile(r"\b(?:Devices|Send|View|Keys|Options|Help)\s+>\s")
+
+
+def named_keys(text):
+    """The keys a help text names: F-keys, Shift/Alt/Ctrl chords, the named keys (Enter,
+    Esc, Tab, Ins, Del, Space, Backspace, the arrows, PgUp, PgDn, Home, End), and a letter,
+    ? or : in double quotes ("s"). A bare letter in a key table is not seen."""
+    return [m.group(1) or m.group(0) for m in KEY.finditer(text)]
+
+
+def _has(key, names):
+    """Is `key` among `names`, where Alt+1..9 holds every Alt+digit and F13-F21 every key in it."""
+    if key in names:
+        return True
+    if re.fullmatch(r"Alt\+\d", key):
+        return "Alt+1..9" in names
+    m = re.fullmatch(r"F(\d+)", key)
+    return bool(m) and any(re.fullmatch(r"F(\d+)-F(\d+)", r) and int(r.split("-")[0][1:]) <= int(m.group(1)) <= int(r.split("-")[1][1:])
+                           for r in names)
+
+
+def _key_names():
+    from mccontrol.ui.MeshcoreCommander import app as commander
+    return {"MeshcoreCommander": commander.KEY_NAMES}
+
+
+def test_every_key_an_interfaces_help_names_is_a_key_it_has():
+    for ui, names in _key_names().items():
+        paths = sorted((helptext.HERE / ui).glob("*.txt"))
+        assert paths, ui
+        for path in paths:
+            unknown = [k for k in named_keys(path.read_text(encoding="utf-8")) if not _has(k, names)]
+            assert not unknown, (ui, path.name, unknown)
+
+
+def test_the_shared_texts_name_no_interfaces_keys_or_menus():
+    for path in sorted(helptext.HERE.glob("*.txt")):
+        text = path.read_text(encoding="utf-8")
+        assert named_keys(text) == [] and not MENU.search(text), (path.name, named_keys(text), MENU.findall(text))
+
+
+def test_the_key_names_are_found_where_they_are_written():
+    assert named_keys('F1 help; Shift+F1, Alt+1..9, Ctrl+P and F13-F21; "n" reads, "*" is a region; Up') == [
+        "F1", "Shift+F1", "Alt+1..9", "Ctrl+P", "F13-F21", "n", "Up"]
+    assert _has("Alt+4", ["Alt+1..9"]) and _has("F15", ["F13-F21"]) and not _has("F22", ["F13-F21"])
+    assert not _has("F2", ["F1"]) and not _has("Alt+4", ["F1"])

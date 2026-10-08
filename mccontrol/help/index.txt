@@ -1,23 +1,23 @@
 Help: contents
 
 mccontrol signs commands with your key and sends them to the repeaters you
-run, over the control broker. Move the cursor onto a link and press Enter
-to follow it; Alt+F1 goes back; Esc closes help.
+run, over the control broker. Each interface has help of its own; these
+are the texts every one of them shares, and what "mccontrol help" prints.
 
 Getting around
-  [[screen]]      the device directory and the quick view
-  [[keys]]        every key on the main screen
-  [[dialogs]]     how dialogs work: fields, Tab, Enter, Esc
+  [[screen]]      what an interface shows: the directory, history, answers
+  [[keys]]        the keys, and where each verb is
+  [[dialogs]]     how a verb asks for its values
 
 Doing things
-  [[commandlist]] Enter on a device: every command, with its parameter asked for
+  [[commandlist]] every command for a device, its parameter asked for
   [[send]]        send a command to one device, the tagged ones, or a region
-  [[shortcuts]]   Alt+1..9: a command per key, no dialog
+  [[shortcuts]]   a command per slot, no question asked
   [[sets]]        command sets: a rollout as one named list of steps
   [[discover]]    find the repeaters that accept your key
   [[devices]]     add, edit, forget; names and regions
   [[history]]     what was sent and what came back
-  [[reads]]       the lower right panel: what the device last answered to each read
+  [[reads]]       last answers: what the device last answered to each read
   [[stats]]       a device's statistics: battery, airtime, noise floor, from Beacon
 
 Reference

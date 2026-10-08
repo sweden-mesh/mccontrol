@@ -1,0 +1,36 @@
+Statistics
+
+"s" on the device directory (or View > Statistics) shows what the fleet
+knows about the cursor device: battery, uptime, noise floor, transmit
+and receive airtime, packets, errors and free heap -- the block every
+Observer node publishes with its status -- and the last 24 hours of it
+in six-hour steps. View > Last 48 hours and Last 7 days widen the
+history. Enter opens a line in full; moving the cursor returns the
+panel to history.
+
+Where it comes from. First the node itself: "s" sends one signed
+"get stats" (one of the node's command slots this hour), and a node on
+the firmware of 2026-10-08 or later answers its counters at that
+moment, shown as "live, just now" at the top; older firmware answers
+not-allowed and the view says so. Then a Beacon server -- an open-source MeshCore
+observation service that ingests the MQTT brokers and serves a read-
+only API with no credentials. The default is beacon.meshat.se, which
+covers Sweden; Options > Broker has the URL for another region's
+Beacon, and so does
+
+  mccontrol config --beacon-url https://beacon.example/api/v1
+  mccontrol stats loutest [--live] [--range 24h|48h|168h] [--interval 1h|6h|24h]
+
+"r" (View > Refresh Batt/Seen) fills the directory's Batt and Seen
+columns -- battery in volts and the age of the node's last status --
+for the tagged devices, or all of them when none is tagged, from the
+same source; they stay blank until asked for and never refresh by
+themselves. On the command line, "mccontrol fleet" prints the table.
+
+The first line is always the sample's age. A sample Beacon holds is as
+old as the node's last status publish (every mqtt.interval minutes),
+and when Beacon cannot be reached the panel says so and shows no
+number at all, never a stale one as current. Nothing here sends to the
+mesh.
+
+See [[screen]], [[commands]] and [[broker]].

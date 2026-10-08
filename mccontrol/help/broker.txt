@@ -1,12 +1,13 @@
 The control broker
 
 Commands and results travel through one MQTT broker, the one each
-repeater's mqtt.cmd.slot points at. Options > Broker sets its
-host, port, username, password and how long to wait for answers. Options
-> Test the broker connects with those, subscribes to a test topic,
-publishes to it and checks the broker delivers it back; each step is
-reported and the first failure named ("Not authorized" is the broker
-rejecting the username or password).
+repeater's mqtt.cmd.slot points at. The configuration holds its host,
+port, username, password and how long to wait for answers. The broker
+test connects with those, subscribes to a test topic, publishes to it
+and checks the broker delivers it back; each step is reported and the
+first failure named ("Not authorized" is the broker rejecting the
+username or password). "mccontrol config" and "mccontrol test" do the
+same; see [[keys]] for where they are on the screen.
 
 This is not the broker the repeaters' statistics go to; those credentials
 are not used here.

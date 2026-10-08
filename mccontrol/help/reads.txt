@@ -1,18 +1,17 @@
 Last answers: what a repeater has told you
 
-The lower right panel keeps what the cursor device last answered to
-each read -- ver, get name, region, neighbors, every get -- one line
-each: the age of the answer, the command, the reply; newest first. It
-follows the cursor, so moving onto a device shows at once what is known
-about it without sending anything.
+What the current device last answered to each read -- ver, get name,
+region, neighbors, every get -- is kept, one line each: the age of the
+answer, the command, the reply; newest first. It follows the current
+device, so moving onto a device shows at once what is known about it
+without sending anything.
 
 A write (set ...) is not kept there; history has it. A refusal or
 silence stores nothing and clears nothing: the last good answer stays,
 and its age says how old it is. The statistics view leaves a
 "stats (Beacon)" line with the battery, uptime and noise floor.
 
-Tab moves between the three panels; on the lower one, Enter sends that
-read again and the line is replaced when the answer arrives. On the
-command line, "mccontrol reads <device>" prints the same.
+Any line can be read again, and is replaced when the answer arrives. On
+the command line, "mccontrol reads <device>" prints the same.
 
 See [[commandlist]], [[history]] and [[stats]].

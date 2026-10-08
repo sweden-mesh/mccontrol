@@ -1,45 +1,35 @@
-The screen
+What an interface shows
 
-The left panel is the device directory: one row per repeater you manage,
-with its name, node id, region, when you last sent to it, its battery and
-last-seen age once asked for, and what it answered. The row under the cursor bar is the current device; Ins or Space
-tags a row, * inverts the tags, + and - tag or untag a whole region. The
-panel's bottom edge counts the tags.
+Every interface shows the same things, laid out its own way.
 
-The right panel shows what the cursor is on: the device's history, newest
-first. After a send it shows that send's results per device until the
-cursor moves; after a discovery it shows what answered. Tab moves between
-the panels; Enter on a history line opens the whole reply.
+The device directory: one row per repeater you manage, with its name,
+node id, region, when you last sent to it, its battery and last-seen age
+once asked for, its firmware version and what it last answered. One row
+is the current device. Rows can be tagged, one at a time, inverted, or a
+whole region at once; a verb acts on the tagged devices, or on the
+current one when none is tagged. The count of tags is always shown.
 
-The top line is the menu bar (F10 or Alt+letter). The bottom line is the
-key bar: the ten function keys and what each does here. The line above it
-is the message line: the outcome of the last thing you did.
+The current device's history, newest first (see [[history]]), and what it
+last answered to each read, with its age (see [[reads]]). After a send,
+each device's result; after a discovery, what answered.
 
-See [[keys]] for the keys, [[send]] for sending, [[discover]] for finding
-repeaters.
-
-Batt and Seen come from Beacon when you ask (r); see [[stats]].
+Batt and Seen come from Beacon when you ask; see [[stats]].
 
 A name ending in " ?" marks a device something was sent to and nothing
 heard from for seven days -- no result over the control plane and no
 status seen by Beacon. It is a device to look at, not a verdict: the
 control plane may be off, or the node may answer another key now. A
 device never sent to carries no mark, since nothing is known. Nothing
-refreshes by itself; s, r and n ask when you do.
+refreshes by itself; statistics, Batt/Seen and names are read when you
+ask.
 
-Every wait -- a send, a discovery, a set, a read from Beacon -- is a box
-over the work with what is happening, the running count and a bar over
-the wait. Esc stops waiting early and keeps what has come. What the
-action came to -- "1 of 1 answered", the replies, a refusal, a saved
-setting -- is a window too, closed with Enter; the right panel keeps
-the results. There is no message row: nothing is said where it can be
-missed.
+Every wait -- a send, a discovery, a set, a read from Beacon -- shows what
+is happening and the running count, and can be stopped early; what has
+come is kept.
 
-The right side is two panels: the history (or a send's results) above,
-and "Last answers" below -- what the cursor device last said to each read,
-with its age (see [[reads]]).
+On a narrow terminal not every column fits: the directory columns are
+chosen from Reg, Sent, Batt, Seen, Ver and Result, after the name and
+node ("mccontrol config --columns ver,result" does the same).
 
-On an 80-column terminal the directory is 38 wide, so not every column
-fits: Options > Directory columns picks which of Reg, Sent, Batt, Seen,
-Ver and Result show after the name and node ("mccontrol config
---columns ver,result" does the same).
+See [[keys]] for the keys, [[send]] for sending, [[discover]] for finding
+repeaters.

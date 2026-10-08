@@ -1,17 +1,17 @@
 Discovering repeaters
 
-F5 asks for a region, then sends one harmless read ("get autoreply"),
-signed with your key, to that region's broadcast topic, and listens for
-answers. Only a node that verified your signature publishes a result, so
-every node in the list is yours; a node with another key, or none, says
-nothing. Several regions go in one run -- "JKG, GOT" -- and "*" asks
-every region your directory spans, one signed read per region.
+A discovery asks for a region, then sends one harmless read ("get
+autoreply"), signed with your key, to that region's broadcast topic, and
+listens for answers. Only a node that verified your signature publishes
+a result, so every node in the list is yours; a node with another key,
+or none, says nothing. Several regions go in one run -- "JKG, GOT" --
+and "*" asks every region your directory spans, one signed read per
+region.
 
-The found nodes appear in the right panel with what each answered and
-"= name" where it is already in your directory. Ins tags rows; F5 adds
-the tagged ones, asking for a name where the fleet gave none; F7 adds
-them all without asking, unnamed, to be named later with F4. Esc returns
-the right panel to history.
+The found nodes are listed with what each answered and "= name" where it
+is already in your directory. Any of them, or all, are added to the
+directory; a node the fleet gave no name is asked for one, or added
+unnamed, to be named later.
 
 A second read, "get name", fills in names on firmware that admits it;
 older firmware refuses it and those nodes stay unnamed.

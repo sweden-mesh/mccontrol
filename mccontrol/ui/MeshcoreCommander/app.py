@@ -15,7 +15,14 @@ from .menu import Menu, MenuBar, MenuItem
 from .widgets import KeyBar, ListView, Panel
 from .screen import KEY_ENTER, run as _run
 
+UI = "MeshcoreCommander"                # the name the API's help is asked for
 KEYS = ["Help", "Send", "Hist", "Edit", "Disco", "Regns", "All", "Del", "Menu", "Quit"]
+# Every key the screens answer, by the name the help texts give it; tests/test_help.py
+# checks this interface's help against it. Alt+D/S/V/K/O/H open the menus by their titles.
+KEY_NAMES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "Shift+F1", "Alt+F1", "Alt+1..9",
+             "Alt+D", "Alt+S", "Alt+V", "Alt+K", "Alt+O", "Alt+H", "Ctrl+L", "Enter", "Esc", "Tab", "Shift+Tab",
+             "Up", "Down", "Left", "Right", "PgUp", "PgDn", "Ins", "Space", "Backspace",
+             "s", "r", "n", "c", "*", "+", "-")
 
 
 class Topic:
@@ -135,7 +142,7 @@ class App:
     def topic(self, name):
         """A help topic for the help window, or None when there is no such topic."""
         try:
-            return Topic(self.client.help_topic(name))
+            return Topic(self.client.help_topic(name, ui=UI))
         except ApiError:
             return None
 
@@ -986,7 +993,7 @@ class App:
     def help(self):
         """F1: the topic for where the cursor is -- the found list, a dialog's subject, or the screen."""
         context = "found" if self.right_mode == "found" else self.context
-        self.helpwin.run(self.screen, self.client.help_index()["context"].get(context, "screen"), self.draw)
+        self.helpwin.run(self.screen, self.client.help_index(ui=UI)["context"].get(context, "screen"), self.draw)
 
 
 def run(client):

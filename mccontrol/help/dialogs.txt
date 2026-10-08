@@ -1,13 +1,12 @@
-Dialogs
+Questions
 
-A dialog asks for the one or two values a verb needs. Type into the
-highlighted field; Tab and Shift+Tab move between fields and buttons; Up
-and Down in the command field recall earlier commands; Enter presses the
-default button (the highlighted one) from any field; Esc cancels and
-sends nothing.
+A verb that needs values asks for them -- the one or two it needs, such
+as a region, a command, a name -- and sends nothing until you answer.
+Backing out of the question sends nothing. Earlier commands can be
+recalled where a command is typed.
 
-A dialog that would take something away from a repeater says so in red
-and offers [ Send anyway ] and [ Cancel ], with Cancel as the default.
-See [[cautions]].
+A question about a command that takes something away from a repeater
+says so, and answering it is the only way that command is sent. See
+[[cautions]].
 
 Back to [[index]].

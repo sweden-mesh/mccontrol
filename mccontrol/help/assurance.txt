@@ -46,7 +46,7 @@ What this does not give you
   unmarked line is an r1 from older firmware -- confirm those with a
   read whose answer you can judge.
   A stolen key: whoever reads key.seed can sign as you. It is kept
-  readable only by you; replacing it (Keys menu) silences every
+  readable only by you; replacing it (see [[signing]]) silences every
   repeater until each is re-provisioned over serial.
 
 How this is checked
