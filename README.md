@@ -112,6 +112,15 @@ mccontrol history loutest
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```
 
+## Signing in
+
+With no username configured, the tool signs in to the broker the way a node does: the
+username is `v1_` plus its public key, the password a token signed by its key
+(`mccontrol/token.py`, the firmware's own JWT shape byte for byte), renewed each session.
+Nothing is handed out or typed; the key is the identity, and that is how the default broker
+`mqtt.louie.se` knows who publishes. A region running its own broker with a username and
+password sets them, and those are used instead.
+
 ## The configuration is the control broker
 
 The only thing configured is the control broker: host (default `mqtt.louie.se`, the broker a

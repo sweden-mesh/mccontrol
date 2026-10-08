@@ -121,12 +121,13 @@ class _FakeClient:
     """Enough of paho: connect fires on_connect; a publish to all/cmd draws the scripted answers."""
 
     answers = []          # (node, code, reply) published on .../{node}/res with the request's counter
+    logins = []           # (username, password) each client was given
 
-    def __init__(self, _config):
+    def __init__(self, _config, seed_hex=None):
         self.on_connect = self.on_message = None
 
-    def username_pw_set(self, *_a):
-        pass
+    def username_pw_set(self, user, password):
+        _FakeClient.logins.append((user, password))
 
     def connect(self, *_a, **_k):
         pass
@@ -387,3 +388,19 @@ def test_discovery_learns_a_known_devices_key_from_its_whole_key_topic(store, mo
     found = actions.discover(store, "JKG")
     assert found[0]["node"] == "4AC61A7F" and found[0]["key"] == KEY and found[0]["known_as"] == "Old"
     assert store.device("old")["key"] == KEY                  # learned, so the next command uses it
+
+
+def test_a_send_to_the_default_broker_signs_in_with_the_tools_own_key(store, monkeypatch):
+    from mccontrol import token, transport
+    store.create_key()
+    store.add_device("LOUTEST", NODE, "JKG")
+    _FakeClient.logins.clear()
+    _FakeClient.answers = []
+    monkeypatch.setattr(transport, "_client", _FakeClient)
+    monkeypatch.setattr(transport, "_wait", lambda *a, **k: None)
+    actions.send(store, "ver", device=store.device("loutest"))
+    user, password = _FakeClient.logins[-1]
+    assert user == token.username(store.seed()) and token.verify(password, "mqtt.louie.se")[0]
+    store.save_config(username="mcoar", password="pw")              # a region's own broker
+    actions.send(store, "ver", device=store.device("loutest"))
+    assert _FakeClient.logins[-1] == ("mcoar", "pw")

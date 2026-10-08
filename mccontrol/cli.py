@@ -303,7 +303,7 @@ def _regions(store, args):
 
 
 def _test(store, _args):
-    steps = transport.test_connection(store.config())
+    steps = transport.test_connection(store.config(), seed_hex=store.seed() if store.has_key() else None)
     for step, ok, detail in steps:
         print(f"{'ok  ' if ok else 'FAIL'} {step:28} {detail}")
     if store.has_key():

@@ -16,4 +16,7 @@ The seed is never shown and never leaves the machine inside anything but
 a signature. "refused: sig-invalid" from a node means it holds a
 different public key than this one.
 
+The same key signs you in to the default broker (see [[broker]]); the
+broker learns your public key from that, not from a registration form.
+
 See [[protocol]] for what the signature covers.

@@ -9,21 +9,37 @@ import os
 import threading
 import time
 
-from . import envelope
+from . import envelope, token
 
 
 class BrokerError(Exception):
     pass
 
 
-def _client(config):
+def login(config, seed_hex=None):
+    """`(username, password)` for the broker: the configured pair when a username is set (a
+    region's own broker), else the tool's own key as a token the way a node signs in --
+    nothing to hand out, the key is the identity."""
+    if config.get("username"):
+        return config["username"], config.get("password", "")
+    if not seed_hex:
+        return "", ""
+    return token.username(seed_hex), token.make(seed_hex, config["broker"])
+
+
+def _client(config, seed_hex=None):
     import paho.mqtt.client as mqtt
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.username_pw_set(config["username"], config["password"])
+    if config.get("tls"):
+        client.tls_set()
     return client
 
 
-def _connect(client, config, timeout=10.0):
+def _connect(client, config, timeout=10.0, seed_hex=None):
+    """Sign in and connect. The credentials are set here, not in the factory, so a test's
+    stand-in client sees the same login a real one gets."""
+    user, password = login(config, seed_hex)
+    client.username_pw_set(user, password)
     done = threading.Event()
     verdict = {}
 
@@ -117,9 +133,9 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
             if wanted and wanted <= set(answers):
                 all_in.set()
 
-    client = _client(config)
+    client = _client(config, seed_hex)
     client.on_message = on_message
-    _connect(client, config)
+    _connect(client, config, seed_hex=seed_hex)
     try:
         for node in wanted:
             client.subscribe(envelope.result_topic(config["region"], node, keys.get(node)), qos=1)
@@ -173,9 +189,9 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
             found[node] = {"node": node, "region": region.upper(), "code": result.code,
                            "reply": result.reply, "key": leaf if len(leaf) == envelope.KEY_HEX_LEN else None}
 
-    client = (client_factory or _client)(config)
+    client = (client_factory or _client)(config, seed_hex)
     client.on_message = on_message
-    _connect(client, config)
+    _connect(client, config, seed_hex=seed_hex)
     try:
         client.subscribe(f"{envelope.TOPIC_PREFIX}{region.upper()}/+/res", qos=1)
         info = client.publish(topic, payload, qos=1)
@@ -187,7 +203,7 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
     return sorted(found.values(), key=lambda d: d["node"])
 
 
-def test_connection(config, client_factory=None, timeout=10.0):
+def test_connection(config, client_factory=None, timeout=10.0, seed_hex=None):
     """Can we reach the control broker, sign in, subscribe to a result topic and publish?
 
     Returns a list of `(step, ok, detail)` in the order tried, stopping at the first failure.
@@ -195,14 +211,16 @@ def test_connection(config, client_factory=None, timeout=10.0):
     nothing a repeater listens on is touched.
     """
     steps = []
-    client = (client_factory or _client)(config)
+    client = (client_factory or _client)(config, seed_hex)
+    user, _pw = login(config, seed_hex)
+    how = (f"as {user}" if config.get("username") else
+           (f"token login as {user[:12]}... (your key is the identity)" if user else "with no credentials"))
     try:
-        _connect(client, config, timeout=timeout)
+        _connect(client, config, timeout=timeout, seed_hex=seed_hex)
     except BrokerError as exc:
         steps.append(("connect and sign in", False, str(exc)))
         return steps
-    steps.append(("connect and sign in", True,
-                  f"{config['broker']}:{config['port']} as {config.get('username') or '(no username)'}"))
+    steps.append(("connect and sign in", True, f"{config['broker']}:{config['port']} {how}"))
     try:
         topic = f"{envelope.TOPIC_PREFIX}TEST/mccontrol-test/res"
         got = threading.Event()

@@ -431,7 +431,7 @@ class App:
         cfg = self.store.config()
         self.message.say(f"Trying {cfg.get('broker')}:{cfg.get('port')} as {cfg.get('username') or '(no username)'}...")
         self.draw()
-        steps = transport.test_connection(cfg)
+        steps = transport.test_connection(cfg, seed_hex=self.store.seed() if self.store.has_key() else None)
         lines = [f"{'ok  ' if ok else 'FAIL'}  {step:28} {detail}" for step, ok, detail in steps]
         lines.append(f"{'ok  ' if self.store.has_key() else 'FAIL'}  {'signing key':28} {'present' if self.store.has_key() else 'none: see Keys'}")
         notice(self.screen, "Broker test", lines, self.draw)
