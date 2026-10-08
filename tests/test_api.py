@@ -9,7 +9,7 @@ import urllib.request
 import pytest
 
 from conftest import BEACON_FAKE, SPEC, resolve, validate
-from mccontrol import transport
+from mccontrol import envelope, transport
 from mccontrol.api import server as api_server
 
 METHODS = ("get", "post", "put", "patch", "delete")
@@ -93,9 +93,13 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert 'url: "openapi.json"' in call(url, "GET", "/docs")[1]
     assert call(url, "GET", "/config")[1]["broker"] == "127.0.0.1"
     assert call(url, "PATCH", "/config", {"wait_secs": 5, "columns": ["ver", "reg"]})[1]["columns"] == ["reg", "ver"]
+    assert call(url, "PATCH", "/config", {"ui": "MeshcoreCommander"})[1]["ui"] == "MeshcoreCommander"
+    assert call(url, "PATCH", "/config", {"ui": 1})[0] == 400
     assert call(url, "GET", "/key")[1]["exists"] is True
     assert call(url, "POST", "/key", {})[0] == 409
     assert call(url, "POST", "/key", {"overwrite": True, "seed": "22" * 32})[0] == 201
+    assert call(url, "POST", "/key", {"overwrite": True, "seed": ""})[0] == 400     # an empty import makes no key
+    assert call(url, "GET", "/key")[1]["public"] == envelope.public_key_hex("22" * 32)
     listing = call(url, "GET", "/devices?sort=region&width=60")[1]
     assert [d["node"] for d in listing["devices"]] == ["FD700369", "4AC61A7F", "65C1D12C"]
     assert listing["footer"] == "3 devices" and len(listing["devices"][0]["row"]) <= 59
@@ -112,11 +116,17 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert call(url, "GET", "/history?limit=5")[1]["node"] is None
     assert call(url, "GET", "/devices/gisebo/reads")[1]["reads"] == []
     table = call(url, "GET", "/devices/gisebo/commands")[1]
-    assert table["firmware"] == "ar-10" and table["greyed"] > 0           # no version read yet: the oldest
+    assert table["firmware"] == "ar-10" and table["greyed"] > 0 and table["revision"] is None   # no version read yet: the oldest
+    _store.update_device("FD700369", ver="esp32s3-v1.17.1-ar-11-observer-2c079ed7")
+    assert call(url, "GET", "/devices/far/commands")[1]["revision"] == 11
     assert call(url, "GET", "/commands")[1]["node"] is None
     check = call(url, "GET", "/commands/check?command=set+prv.key+00&device=gisebo")[1]
     assert check["refusal"].startswith("denied") and check["admitted"] is False
     assert call(url, "GET", "/commands/check")[0] == 400
+    assert call(url, "POST", "/commands/build", {"command": "region put", "values": ["se-jkp *"]})[1] == {"command": "region put se-jkp *"}
+    assert call(url, "POST", "/commands/build", {"command": "set autoreply", "values": ["", "off"]})[1]["command"] == "set autoreply off"
+    assert call(url, "POST", "/commands/build", {"command": "nothing", "values": []})[0] == 404
+    assert call(url, "POST", "/commands/build", {"command": "ver"})[0] == 400
     assert call(url, "POST", "/tags", {"region": "JKG"})[1]["footer"] == "3 of 4 tagged"
     assert call(url, "DELETE", "/tags?devices=gisebo")[1]["tagged"] == ["65C1D12C", "AB6B9285"]
     assert call(url, "POST", "/tags/invert", {})[1]["tagged"] == ["4AC61A7F", "FD700369"]
@@ -124,7 +134,16 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert call(url, "DELETE", "/tags")[1]["tagged"] == []
     assert call(url, "GET", "/tags")[1]["footer"] == "4 devices"
     assert call(url, "GET", "/regions")[1]["regions"] == ["JKG", "GOT"]
+    assert call(url, "GET", "/regions/resolve?text=jkg;+got,JKG")[1]["regions"] == ["JKG", "GOT"]
+    assert call(url, "GET", "/regions/resolve?text=*")[1]["regions"] == ["JKG", "GOT"]
+    assert call(url, "GET", "/regions/resolve?text=")[1]["regions"] == []
+    assert call(url, "GET", "/regions/resolve")[0] == 400
     assert "add-scope" in call(url, "GET", "/sets")[1]["sets"]
+    filled = call(url, "GET", "/sets/add-scope?arg=se-jkp")[1]
+    assert filled["name"] == "add-scope" and filled["steps"][0] == "region put se-jkp *" and "{arg}" not in str(filled)
+    status, body = call(url, "GET", "/sets/add-scope")
+    assert status == 400 and body["error"]["message"] == "this set needs a value for {arg}"
+    assert call(url, "GET", "/sets/nothing")[0] == 404
     assert call(url, "PUT", "/sets/reads", {"steps": ["ver", " get name "]})[1]["steps"] == ["ver", "get name"]
     assert call(url, "DELETE", "/sets/add-scope")[1] == {"removed": "add-scope"}
     assert call(url, "DELETE", "/sets/add-scope")[0] == 404
@@ -256,6 +275,7 @@ def test_discovery_finds_names_and_adopts_with_add(api):
     job = run(url, "discover", {"region": "JKG", "add": True})
     found = {e["node"]: e for e in job["result"]["found"]}
     assert found["4AC61A7F"]["known_as"] == "Gisebo" and not found["4AC61A7F"]["added"]
+    assert {"4AC61A7F", "AB6B9285"} <= set(job["progress"]["heard"])     # who answered, during the wait
     assert found["AB6B9285"]["added"] and found["AB6B9285"]["name"] == "SE-JKG-UGORptr"
     assert call(url, "GET", "/devices/AB6B9285")[1]["name"] == "SE-JKG-UGORptr"
     assert call(url, "POST", "/jobs/discover", {"region": " "})[0] == 400
@@ -305,6 +325,31 @@ def test_nothing_in_the_api_imports_curses_and_the_document_ships_with_the_packa
     assert not [p.name for p in here.glob("*.py") if re.search(r"^\s*(import|from) +[\w.]*curses", p.read_text(encoding="utf-8"), re.M)]
     assert '"api/*.json"' in (here.parents[1] / "pyproject.toml").read_text(encoding="utf-8")
     assert (here.parents[1] / "docs" / "api" / "openapi.json").samefile(here / "openapi.json")
+
+
+def test_without_a_store_the_server_opens_the_one_in_mccontrol_home(tmp_path, monkeypatch):
+    from mccontrol import store as _store
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    _store.Store().add_device("Home", "4AC61A7F", "JKG")
+    server, url = api_server.serve()
+    try:
+        assert [d["name"] for d in call(url, "GET", "/devices")[1]["devices"]] == ["Home"]
+    finally:
+        api_server.stop(server)
+
+
+def test_devices_can_be_listed_in_the_order_they_were_added(api):
+    _server, url, _store = api
+    listing = call(url, "GET", "/devices?sort=added")[1]
+    assert [d["node"] for d in listing["devices"]] == ["4AC61A7F", "65C1D12C", "FD700369"]
+    assert listing["sort"] == "added" and "added" in listing["sorts"]
+
+
+def test_a_server_stops_at_once():
+    server, _url = api_server.serve(store=object())
+    start = time.monotonic()
+    api_server.stop(server)
+    assert time.monotonic() - start < 0.2
 
 
 def test_the_broker_password_is_written_never_read(api):
@@ -360,3 +405,19 @@ def test_another_origin_and_a_body_that_is_not_json_are_refused(api):
                   f"http://127.0.0.1:{port + 1}", "http://localhost"):
         assert raw(url + "jobs", headers={"Origin": other})[0] == 403, other
     assert json.loads(raw(url + "jobs")[1])["jobs"] == []                    # nothing started
+
+
+def test_an_interrupt_while_the_server_starts_leaves_nothing_serving(monkeypatch):
+    import threading
+    started, real = [], threading.Thread.start
+
+    def start(self):
+        real(self)
+        if self.name == "mccontrol-api":
+            started.append(self)
+            raise KeyboardInterrupt
+    monkeypatch.setattr(threading.Thread, "start", start)
+    with pytest.raises(KeyboardInterrupt):
+        api_server.serve(store=object())
+    started[0].join(1)
+    assert not started[0].is_alive()

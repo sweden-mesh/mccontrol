@@ -274,8 +274,8 @@ def is_exit(key):
     return key in EXIT_KEYS
 
 
-def run(main, store):
-    """Open the terminal, run `main(screen, store)`, and say why when it cannot."""
+def run(main, client):
+    """Open the terminal, run `main(screen, client)`, and say why when it cannot."""
     import sys
 
     if not sys.stdout.isatty():
@@ -292,7 +292,7 @@ def run(main, store):
                              f"{w}x{h}. Make it larger and start again, or use the command line.")
             win.getch()
             return 2
-        return main(screen, store)
+        return main(screen, client)
 
     try:
         return curses.wrapper(_main)

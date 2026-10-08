@@ -2,26 +2,40 @@
 
 Left, the device directory; right, what the cursor is on. Every verb is a function key and
 acts on the tagged devices, or the cursor device when nothing is tagged. All state that
-matters is in the store; the screen is redrawn from it after every key.
+matters is behind the API; the screen is redrawn from it after every key, and every verb is
+a request through the client.
 """
 
 import curses
 
-from . import actions, beacon, commands, denylist, directory, envelope, firmware, helptext, store as _store, transport
-from .ui import (Button, ChoiceBox, Dialog, Field, HelpWindow, KeyBar, ListBox, ListView, Menu, MenuBar, MenuItem, Progress, waiting,
-                 Panel, confirm, notice)
-from .ui.screen import KEY_ENTER, run as _run
+from ...apiclient import ApiError
+from .dialogs import Button, ChoiceBox, Dialog, Field, ListBox, Progress, confirm, notice
+from .help import HelpWindow
+from .menu import Menu, MenuBar, MenuItem
+from .widgets import KeyBar, ListView, Panel
+from .screen import KEY_ENTER, run as _run
 
 KEYS = ["Help", "Send", "Hist", "Edit", "Disco", "Regns", "All", "Del", "Menu", "Quit"]
 
 
+class Topic:
+    """A help topic as the API gives it, in the shape the help window reads."""
+
+    def __init__(self, page):
+        self.name, self.title, self.lines = page["name"], page["title"], page["lines"]
+        self.links = [(l["line"], l["start"], l["end"], l["target"]) for l in page["links"]]
+
+
 class App:
-    def __init__(self, screen, store):
+    def __init__(self, screen, client):
         self.screen = screen
-        self.store = store
+        self.client = client
         self.keybar = KeyBar(KEYS)
         self.sort = "name"
         self.devices = []
+        self.tagged = set()                  # the tagged nodes, as the API holds them
+        self.header = ""                     # the directory's column heads, from the last reload
+        self.columns, self.all_columns = [], []
         w, h = screen.size
         split = w // 2
         total = h - 2                                # the menu bar above, the key bar below
@@ -38,7 +52,7 @@ class App:
         self.right_rows = []                 # (line, full_text) pairs behind the right panel
         self.right_mode = "history"          # "history" | "results" | "found" | "regions"
         self.right_node = None               # whose history the panel shows
-        self.helpwin = HelpWindow(helptext.load)
+        self.helpwin = HelpWindow(self.topic)
         self.context = "main"                # which help topic F1 opens
         self.menu = MenuBar([
             Menu("Devices", [MenuItem("Discover", "discover", "F5"), MenuItem("Edit", "edit", "F4"),
@@ -65,51 +79,72 @@ class App:
         items = [MenuItem("To tagged or cursor", "send", "F2"), MenuItem("To all in a region", "all", "F7"),
                  MenuItem("Read regions", "regions", "F6"), MenuItem("Command set", "runset")]
         items += [MenuItem(cmd[:28], f"alt:{n}", f"Alt+{n}")
-                  for n, cmd in enumerate(self.store.shortcuts(), 1) if cmd]
+                  for n, cmd in enumerate(self.client.shortcuts()["shortcuts"], 1) if cmd]
         return Menu("Send", items)
 
     def shortcut(self, n):
         """Alt+n: the slot's command to the tagged or cursor device, no dialog."""
-        command = self.store.shortcuts()[n - 1]
+        command = self.client.shortcuts()["shortcuts"][n - 1]
         if not command:
             self.refuse(f"Alt+{n} is not set; Options > Shortcuts.")
             return
         self.send(initial=command, immediate=True)
 
     def shortcuts_dialog(self):
-        slots = self.store.shortcuts()
+        slots = self.client.shortcuts()["shortcuts"]
         fields = [Field(f"Alt+{n}", slots[n - 1], width=40, hotkey=str(n)) for n in range(1, len(slots) + 1)]
         d = Dialog("Shortcuts", fields=fields, width=60,
                    body=["A command per key, sent to the tagged or cursor device without a dialog.",
                          "Leave a slot empty to free it."])
         if d.run(self.screen, self.draw) is None:
             return
-        self.store.save_config(shortcuts=[f.value.strip() for f in fields])
+        self.client.set_shortcuts([f.value.strip() for f in fields])
         self.menu.menus[1] = self.send_menu()
         self.outcome("Shortcuts", "Shortcuts saved.")
 
     def reload(self):
-        """Rows from the store, keeping the cursor on the same device and tags on the same nodes."""
-        tagged = {self.devices[i]["node"] for i in self.list.tags if i < len(self.devices)}
+        """Rows from the API, keeping the cursor on the same device; the tags are the API's."""
         cursor_node = self.devices[self.list.cursor]["node"] if self.devices and self.list.cursor < len(self.devices) else None
-        self.devices = directory.sorted_devices(self.store.devices(), self.sort)
-        width = self.left.inner[2] - 1
-        columns = self.store.config().get("columns")
-        self.list.set_rows([directory.row(d, width, columns=columns) for d in self.devices], keep=False)
-        self.list.tags = {i for i, d in enumerate(self.devices) if d["node"] in tagged}
+        width = self.left.inner[2]
+        listing = self.client.devices(sort=self.sort, width=width)
+        self.devices = listing["devices"]
+        self.header, self.columns, self.all_columns = listing["header"], listing["columns"], listing["all_columns"]
+        # a row laid out for the width is cut one short of it: the tag mark takes a column
+        self.list.set_rows([d["row"][: width - 2] for d in self.devices], keep=False)
+        self.tagged = set(listing["tagged"])
+        self.list.tags = {i for i, d in enumerate(self.devices) if d["node"] in self.tagged}
         if cursor_node:
             for i, d in enumerate(self.devices):
                 if d["node"] == cursor_node:
                     self.list.cursor = i
-        self.left.footer = directory.tag_footer(len(self.list.tags), len(self.devices))
+        self.left.footer = listing["footer"]
         self.show_reads(self.cursor_device)
+
+    def sync_tags(self):
+        """After Ins, Space or *: the rows tagged here become the API's tags."""
+        nodes = {self.devices[i]["node"] for i in self.list.tags if i < len(self.devices)}
+        if nodes != self.tagged:
+            self.show_tags(self.client.set_tags(sorted(nodes)))
+
+    def show_tags(self, tags):
+        """The API's tags (`GET /tags` shape) on the rows and the footer."""
+        self.tagged = set(tags["tagged"])
+        self.list.tags = {i for i, d in enumerate(self.devices) if d["node"] in self.tagged}
+        self.left.footer = tags["footer"]
+
+    def topic(self, name):
+        """A help topic for the help window, or None when there is no such topic."""
+        try:
+            return Topic(self.client.help_topic(name))
+        except ApiError:
+            return None
 
     def show_history(self, device):
         """The right panel follows the cursor: the device's history, newest first."""
         self.right_mode, self.right_node = "history", device["node"] if device else None
         self.right.title = f"History: {(device.get('name') or device['node']) if device else '-'}"
         rows = []
-        for line in reversed(self.store.history(device["node"], limit=200)) if device else []:
+        for line in reversed(self.client.history(device["node"], limit=200)["history"]) if device else []:
             out = (line["reply"] or "OK") if line["code"] == 0 else (
                 f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
             short = f"{line['at'][5:16]} {line['command'][:14]:14} {out}"
@@ -124,12 +159,12 @@ class App:
     def show_reads(self, device):
         """The lower right panel: what this device last answered to each read, newest first."""
         self.reads_node = (device or {}).get("node")
-        self.reads_rows = self.store.reads(device) if device else []
+        reads = self.client.reads(device["node"])["reads"] if device else []
+        self.reads_rows = [(r["command"], r["reply"], r["at"]) for r in reads]
         width = self.lower.inner[2] - 1
         rows = []
-        for command, reply, at in self.reads_rows:
-            age = directory.relative(at)
-            rows.append(f"{age:>5} {command[:12]:12} {reply}"[:width])
+        for r in reads:
+            rows.append(f"{r['age']:>5} {r['command'][:12]:12} {r['reply']}"[:width])
         self.reads_view.set_rows(rows or ["(nothing read yet)"], keep=False)
 
     def reread(self):
@@ -179,7 +214,7 @@ class App:
         self.right.draw(s)
         self.lower.draw(s)
         y, x, w, _h = self.left.inner
-        s.put(y, x + 1, directory.header(w, self.store.config().get("columns")), s.colors.desktop | curses.A_UNDERLINE)
+        s.put(y, x + 1, self.header, s.colors.desktop | curses.A_UNDERLINE)
         self.list.draw(s)
         self.view.draw(s)
         self.reads_view.draw(s)
@@ -255,7 +290,7 @@ class App:
             elif key < 0 and chr(-key) in "123456789":          # Alt+digit
                 self.shortcut(int(chr(-key)))
             elif self.left.active and self.list.handle(key):
-                self.left.footer = directory.tag_footer(len(self.list.tags), len(self.devices))
+                self.sync_tags()
                 if self.right_mode != "history":
                     self.right_mode = "history"        # a moved cursor ends a result view
                 self.show_history(self.cursor_device)
@@ -319,6 +354,7 @@ class App:
             d = self.cursor_device
             if d:
                 self.list.tags = set()
+                self.sync_tags()
                 self.send(initial="region", immediate=True)
         elif action == "forget":
             self.forget()
@@ -364,7 +400,7 @@ class App:
         if not d:
             return
         lines = []
-        for line in reversed(self.store.history(d["node"], limit=200)):
+        for line in reversed(self.client.history(d["node"], limit=200)["history"]):
             out = (line["reply"] or "OK") if line["code"] == 0 else (
                 f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
             lines.append(f"{line['at'][:16]}  {line['command'][:28]:28} {out[:30]}")
@@ -372,31 +408,30 @@ class App:
 
     def keys_dialog(self):
         """The public key on one line, the provisioning commands, create or import."""
-        if self.store.has_key():
-            try:
-                public = self.store.public_key()
-            except _store.StoreError as exc:
-                notice(self.screen, "Signing key", [str(exc)], self.draw)
-                return
-            reg = self.store.registration()
+        try:
+            key = self.client.key()
+        except ApiError as exc:
+            notice(self.screen, "Signing key", [exc.message], self.draw)
+            return
+        if key["exists"]:
+            public = key["public"]
+            reg = key["registered"]
             body = ["Provision each repeater over its serial console with:", "",
                     f"  set mqtt.cmd.pubkey {public}", "  set mqtt.cmd on", "",
-                    f"The private seed is in {self.store.key_path}", "and never leaves this machine inside anything but a signature.", "",
+                    f"The private seed is in {key['path']}", "and never leaves this machine inside anything but a signature.", "",
                     (f"Registered with {reg['broker']} on {reg['at'][:10]}." if reg else
                      "Not registered with the broker yet: it cannot check your commands before they fan out.")]
             d = Dialog("Signing key", body=body, width=min(92, self.screen.size[0] - 4),
                        buttons=[Button("OK", None, default=True), Button("Register", "register"), Button("Replace key", "replace")])
             choice = d.run(self.screen, self.draw)
             if choice == "register":
-                progress, box = self.waiting("Registering", f"Publishing your public key to {self.store.config()['broker']}",
-                                             lambda nodes: "waiting for the broker's acknowledgement")
-                box.tick("waiting for the broker's acknowledgement", 0.0)
                 try:
-                    ok, detail = actions.register(self.store)
-                except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
-                    ok, detail = False, str(exc)
-                finally:
-                    box.close()
+                    job, _box = self.job("Registering", f"Publishing your public key to {self.client.config()['broker']}",
+                                         lambda j: "waiting for the broker's acknowledgement", self.client.start_register,
+                                         first="waiting for the broker's acknowledgement")
+                    ok, detail = job["result"]["ok"], job["result"]["detail"]
+                except ApiError as exc:
+                    ok, detail = False, exc.message
                 if ok:
                     self.outcome("Register", "Registered: " + detail)
                 else:
@@ -405,7 +440,11 @@ class App:
             if choice == "replace":
                 if confirm(self.screen, "Replace key", ["Every repeater provisioned with the current key will stop accepting commands."],
                            "silences every node until each is re-provisioned over serial.", yes="Replace", redraw_under=self.draw):
-                    self.store.create_key(overwrite=True)
+                    try:
+                        self.client.create_key(overwrite=True)
+                    except ApiError as exc:
+                        self.refuse(exc.message)
+                        return
                     self.outcome("Signing key", "Key replaced. Re-provision every repeater with the new public key.")
             return
         d = Dialog("Signing key", body=["No signing key yet."], width=50,
@@ -413,50 +452,58 @@ class App:
         choice = d.run(self.screen, self.draw)
         try:
             if choice == "create":
-                self.store.create_key()
+                self.client.create_key()
                 self.outcome("Signing key", "Key created; open Keys again for the provisioning command.")
             elif choice == "import":
                 f = Field("Seed", "", width=64, secret=True)
                 d2 = Dialog("Import a seed", fields=[f], body=["Paste the 64-hex private seed."], width=76)
                 if d2.run(self.screen, self.draw):
-                    self.store.import_key(f.value)
+                    self.client.create_key(seed=f.value.strip())
                     self.outcome("Signing key", "Key imported.")
-        except (_store.StoreError, envelope.EnvelopeError) as exc:
-            self.refuse(str(exc))
+        except ApiError as exc:
+            self.refuse(exc.message)
 
     def setup_dialog(self):
-        cfg = self.store.config()
+        cfg = self.client.config()
         fields = [Field("Broker", cfg.get("broker", ""), width=40), Field("Port", str(cfg.get("port", 1883)), width=6),
-                  Field("Username", cfg.get("username", ""), width=30), Field("Password", cfg.get("password", ""), width=30, secret=True),
+                  Field("Username", cfg.get("username", ""), width=30), Field("Password", "", width=30, secret=True),
                   Field("Wait seconds", str(cfg.get("wait_secs", 20)), width=4),
                   Field("Statistics URL", cfg.get("beacon_url", ""), width=44, hotkey="t")]
         d = Dialog("Control broker", fields=fields, width=70,
                    body=["The broker a node's mqtt.cmd.slot points at, and its credentials.",
-                         "Statistics come from a Beacon server, read-only, no credentials."])
+                         "Statistics come from a Beacon server, read-only, no credentials.",
+                         f"Password {'(set)' if cfg.get('password_set') else '(not set)'}: an empty field keeps it."])
         if d.run(self.screen, self.draw) is None:
             return
         try:
-            self.store.save_config(broker=fields[0].value.strip(), port=int(fields[1].value), username=fields[2].value.strip(),
-                                   password=fields[3].value, wait_secs=int(fields[4].value),
-                                   beacon_url=fields[5].value.strip())
+            changes = dict(broker=fields[0].value.strip(), port=int(fields[1].value), username=fields[2].value.strip(),
+                           wait_secs=int(fields[4].value), beacon_url=fields[5].value.strip())
+            if fields[3].value:                     # the API never shows the password: send it only when typed
+                changes["password"] = fields[3].value
+            self.client.set_config(**changes)
             self.outcome("Control broker", "Saved.")
         except ValueError:
             self.refuse("Port and wait seconds must be numbers.")
+        except ApiError as exc:
+            self.refuse(exc.message)
 
     def test_dialog(self):
-        cfg = self.store.config()
-        box = Progress(self.screen, "Broker test", f"Trying {cfg.get('broker')}:{cfg.get('port')}", self.draw)
-        box.tick("connecting, signing in, subscribing, publishing", 0.0)
+        cfg = self.client.config()
         try:
-            steps = transport.test_connection(cfg, seed_hex=self.store.seed() if self.store.has_key() else None)
-        finally:
-            box.close()
-        lines = [f"{'ok  ' if ok else 'FAIL'}  {step:28} {detail}" for step, ok, detail in steps]
-        lines.append(f"{'ok  ' if self.store.has_key() else 'FAIL'}  {'signing key':28} {'present' if self.store.has_key() else 'none: see Keys'}")
-        reg = self.store.registration()
+            job, _box = self.job("Broker test", f"Trying {cfg.get('broker')}:{cfg.get('port')}",
+                                 lambda j: "connecting, signing in, subscribing, publishing", self.client.start_test,
+                                 first="connecting, signing in, subscribing, publishing")
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
+        result = job["result"]
+        lines = [f"{'ok  ' if s['ok'] else 'FAIL'}  {s['step']:28} {s['detail']}" for s in result["steps"]]
+        has_key = result["key"] is not None
+        lines.append(f"{'ok  ' if has_key else 'FAIL'}  {'signing key':28} {'present' if has_key else 'none: see Keys'}")
+        reg = result["registered"]
         lines.append(f"{'ok  ' if reg else 'note'}  {'registered with broker':28} "
                      + (f"{reg['broker']} on {reg['at'][:10]}" if reg else "not yet: Keys > Register"))
-        passed = all(ok for _s, ok, _d in steps)
+        passed = result["ok"]
         self.outcome("Broker test", "Broker test passed." if passed else "Broker test failed.", lines)
 
     def edit(self):
@@ -470,10 +517,10 @@ class App:
         if dialog.run(self.screen, self.draw) is None:
             return
         try:
-            self.store.update_device(d["node"], name=name.value.strip(), region=region.value.strip().upper(),
-                                     notes=notes.value.strip())
-        except _store.StoreError as exc:
-            self.refuse(str(exc))
+            self.client.edit_device(d["node"], name=name.value.strip(), region=region.value.strip().upper(),
+                                    notes=notes.value.strip())
+        except ApiError as exc:
+            self.refuse(exc.message)
             return
         self.reload()
         self.show_history(self.cursor_device)
@@ -488,7 +535,11 @@ class App:
                                                        "Nothing is sent to it; its history file stays."],
                        "removes it from your list.", yes="Forget", redraw_under=self.draw):
             return
-        self.store.remove_device(d["node"])
+        try:
+            self.client.forget(d["node"])
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
         self.reload()
         self.show_history(self.cursor_device)
         self.outcome("Forget", "Forgotten.")
@@ -503,9 +554,27 @@ class App:
         """Why nothing was done, as a window: a precondition that failed or an error raised."""
         notice(self.screen, title, [why], self.draw)
 
-    def waiting(self, title, line, describe):
-        """A Progress box over the work, as the transport's progress callback."""
-        return waiting(self.screen, title, line, self.draw, describe)
+    def job(self, title, line, describe, start, *args, first=None, **kwargs):
+        """Start a job and wait for it under a Progress box: `describe(job)` is the status
+        line while the API reports a wait, `first` a line drawn before anything is reported.
+        Esc cancels the job (what landed is kept). Returns `(job, box)`; a job that failed is
+        raised as an ApiError, as a refusal to start is."""
+        box = Progress(self.screen, title, line, self.draw)
+        if first is not None:
+            box.tick(first, 0.0)
+
+        def tick(job):
+            p = job["progress"]
+            if not p["wait"]:
+                return False                        # nothing to draw until the wait starts
+            return box.tick(describe(job), p["elapsed"] / p["wait"], p["elapsed"], p["wait"])
+        try:
+            job = self.client.wait_job(start(*args, **kwargs)["id"], on_progress=tick)
+        finally:
+            box.close()
+        if job["status"] == "failed":
+            raise ApiError(job["error"]["code"], job["error"]["message"], 0)
+        return job, box
 
     def aim(self, region=None):
         """Where a send goes: `(targets, target_line)`, or None with the reason said."""
@@ -530,7 +599,7 @@ class App:
         if not aimed:
             return
         targets, target_line = aimed
-        sets = self.store.sets()
+        sets = self.client.sets()["sets"]
         if not sets:
             self.refuse("No command sets; Options > Command sets.")
             return
@@ -544,48 +613,44 @@ class App:
         while True:
             if not d.run(self.screen, self.draw):
                 return
-            steps = sets.get(name.value.strip().lower())
-            if not steps:
+            if name.value.strip().lower() not in sets:
                 d.message = "No set of that name."
                 continue
             try:
-                steps = actions.fill(steps, arg.value)
-            except envelope.EnvelopeError as exc:
-                d.message = str(exc)
+                steps = self.client.filled_set(name.value.strip(), arg=arg.value)["steps"]
+            except ApiError as exc:
+                d.message = exc.message
                 continue
             break
-        cautions = [f"{s}: {actions.caution(s)}" for s in steps if actions.caution(s)]
-        if cautions and not confirm(self.screen, "Confirm", [f"Set: {name.value.strip()}", f"To: {target_line}"] + cautions[:3],
-                                    "One or more steps take something away.", redraw_under=self.draw):
-            return
-        lines, stopped = [], None
         setname = name.value.strip()
         try:
+            cautions = [f"{s}: {c}" for s in steps for c in [self.client.check_command(s)["caution"]] if c]
+            if cautions and not confirm(self.screen, "Confirm", [f"Set: {setname}", f"To: {target_line}"] + cautions[:3],
+                                        "One or more steps take something away.", redraw_under=self.draw):
+                return
+            lines, stopped = [], None
             if region:
-                progress, box = self.waiting(f"Running {setname}", f"Every node in {region}, {len(steps)} steps",
-                                             lambda nodes: f"{len(nodes)} answered this step")
-                try:
-                    lines, stopped = actions.run_set(self.store, steps, region=region, progress=progress)
-                finally:
-                    box.close()
+                job, _box = self.job(f"Running {setname}", f"Every node in {region}, {len(steps)} steps",
+                                     lambda j: f"{len(j['progress']['heard'])} answered this step",
+                                     self.client.start_run_set, setname, arg=arg.value, region=region, confirm=True)
+                lines, stopped = job["result"]["lines"], job["result"]["runs"][0]["stopped_at"]
             else:
                 for dev in targets:
-                    progress, box = self.waiting(f"Running {setname}", f"{dev.get('name') or dev['node']}, {len(steps)} steps",
-                                                 lambda nodes: "answered" if nodes else "waiting for the answer")
-                    try:
-                        l, s = actions.run_set(self.store, steps, device=dev, progress=progress)
-                    finally:
-                        box.close()
-                    lines += l
+                    job, box = self.job(f"Running {setname}", f"{dev.get('name') or dev['node']}, {len(steps)} steps",
+                                        lambda j: "answered" if j["progress"]["heard"] else "waiting for the answer",
+                                        self.client.start_run_set, setname, arg=arg.value, devices=[dev["node"]], confirm=True)
+                    lines += job["result"]["lines"][1:]          # without the job's "== name" line
+                    runs = job["result"]["runs"]
+                    s = runs[0]["stopped_at"] if runs else None
                     stopped = s if stopped is None else stopped
                     if box.cancelled:
                         break
-        except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
-            self.refuse(str(exc))
+        except ApiError as exc:
+            self.refuse(exc.message)
             return
         self.reload()
-        self.show_results(f"Set: {name.value.strip()[:28]}", lines)
-        self.outcome(f"Set: {name.value.strip()[:28]}",
+        self.show_results(f"Set: {setname[:28]}", lines)
+        self.outcome(f"Set: {setname[:28]}",
                      "Every step answered ok." if stopped is None else f"Stopped at step {stopped + 1}.", lines)
 
     def statistics(self, range_="24h", interval="6h"):
@@ -595,22 +660,18 @@ class App:
             self.refuse("No device under the cursor.")
             return
         name = d.get("name") or d["node"]
-        progress, box = self.waiting("Statistics", f"get stats to {name}, then Beacon",
-                                     lambda nodes: "answered" if nodes else "waiting for the live sample")
         try:
-            lines = actions.statistics(self.store, d, range_, interval, live=True, progress=progress)
-        except beacon.BeaconError as exc:
-            box.close()
-            self.show_results(f"Stats: {name[:28]}", [f"no statistics: {exc}"])
-            self.refuse(f"No statistics: {exc}", title=f"Stats: {name[:28]}")
+            job, _box = self.job("Statistics", f"get stats to {name}, then Beacon",
+                                 lambda j: "answered" if j["progress"]["heard"] else "waiting for the live sample",
+                                 self.client.start_statistics, d["node"], range=range_, interval=interval, live=True)
+        except ApiError as exc:
+            if exc.code != "beacon":
+                self.refuse(exc.message)
+                return
+            self.show_results(f"Stats: {name[:28]}", [f"no statistics: {exc.message}"])
+            self.refuse(f"No statistics: {exc.message}", title=f"Stats: {name[:28]}")
             return
-        box.close()
-        if not lines[0].startswith("live"):                 # a live answer is kept by send() itself
-            summary = ", ".join(l.split(None, 1)[1].strip() if " " in l else l for l in lines[1:4] if l)
-            try:
-                self.store.remember_read(d["node"], "stats (Beacon)", summary[:60])
-            except _store.StoreError:
-                pass
+        lines = job["result"]["lines"]
         self.reload()
         self.show_results(f"Stats: {name[:28]}", lines)
         self.outcome(f"Stats: {name[:28]}", lines[0], lines[1:])
@@ -622,12 +683,14 @@ class App:
         if not devices:
             self.refuse("No devices to refresh.")
             return
-        box = Progress(self.screen, "Batt and Seen", f"Asking Beacon about {len(devices)} device(s)", self.draw)
-        box.tick("one read each, a few seconds", 0.0)
         try:
-            updated, failed = actions.refresh_fleet(self.store, devices)
-        finally:
-            box.close()
+            job, _box = self.job("Batt and Seen", f"Asking Beacon about {len(devices)} device(s)",
+                                 lambda j: "one read each, a few seconds", self.client.start_refresh_fleet,
+                                 devices=[d["node"] for d in devices], first="one read each, a few seconds")
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
+        updated, failed = job["result"]["updated"], job["result"]["failed"]
         self.reload()
         self.outcome("Batt and Seen", f"Refreshed {updated} of {len(devices)} from Beacon"
                      + (f"; {failed} without statistics." if failed else "."))
@@ -642,12 +705,14 @@ class App:
         if len(devices) > 3 and not confirm(self.screen, "Confirm", [f"{len(devices)} devices, two signed reads each."],
                                             "Each read spends one of the node's command slots this hour.", redraw_under=self.draw):
             return
-        progress, box = self.waiting("Names and versions", f"get name and ver to {len(devices)} device(s)",
-                                     lambda nodes: "answered" if nodes else "waiting for the answer")
         try:
-            named, versioned, lines = actions.refresh_names(self.store, devices, progress=progress)
-        finally:
-            box.close()
+            job, _box = self.job("Names and versions", f"get name and ver to {len(devices)} device(s)",
+                                 lambda j: "answered" if j["progress"]["heard"] else "waiting for the answer",
+                                 self.client.start_refresh_names, devices=[d["node"] for d in devices])
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
+        named, versioned, lines = job["result"]["named"], job["result"]["versioned"], job["result"]["lines"]
         self.reload()
         self.show_results("Names and versions", lines)
         self.outcome("Names and versions", f"{versioned} of {len(devices)} gave a version; {named} named.", lines)
@@ -664,52 +729,59 @@ class App:
         targets, target_line = aimed
         # What the targets' firmware admits: a command any of them would refuse is greyed
         # out and not selectable, so no command slot is spent to be told not-allowed.
-        versions = [d.get("ver") for d in targets]
-        tags = sorted({firmware.entry_for(v)[0] for v in versions})
+        try:
+            lists = [self.client.device_commands(d["node"]) for d in targets]
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
         items = []
         greyed = 0
-        for group, cs in commands.grouped():
+        for g, group in enumerate(lists[0]["groups"]):
             rows = []
-            for c in cs:
-                probe = commands.build(c, [c.choices[-1]] if c.kind in ("choice", "multi") and c.choices
-                                       else ([c.examples[0]] if c.kind == "text" and c.examples and not c.examples[0].startswith("<") else []))
-                if c.text in ("get", "set"):
-                    probe = "get autoreply" if c.text == "get" else "set txdelay 0.5"
-                label = c.text + {"none": "", "choice": "  <" + "|".join(x or "-" for x in c.choices) + ">",
-                                  "multi": "  <...>", "text": "  <...>"}[c.kind]
-                if all(firmware.admits(v, probe) for v in versions):
+            for i, c in enumerate(group["commands"]):
+                label = c["text"] + {"none": "", "choice": "  <" + "|".join(x or "-" for x in c["choices"]) + ">",
+                                     "multi": "  <...>", "text": "  <...>"}[c["kind"]]
+                if all(l["groups"][g]["commands"][i]["admitted"] for l in lists):
                     rows.append((label, c))
                 else:
                     greyed += 1
-                    needs = firmware.needs(probe) or "no build"
+                    needs = c["needs"] or "no build"
                     rows.append((f"{label}  (needs {needs})", c, needs))      # the mark survives monochrome
-            items.append((group, rows))
+            items.append((group["group"], rows))
         box = ListBox(f"Commands  to {target_line[:40]}", items, width=66, height=min(22, self.screen.size[1] - 2))
         if greyed:
-            reported = ", ".join(firmware.revision(v) and f"ar-{firmware.revision(v)}" or "unknown" for v in versions[:3])
+            reported = ", ".join(f"ar-{l['revision']}" if l["revision"] else "unknown" for l in lists[:3])
             box.note = f"{greyed} greyed: need a newer build; this device reports {reported} (n reads the version)"
         picked = box.run(self.screen, self.draw)
         if picked is None:
             return
-        command = self.parameters(picked)
+        try:
+            command = self.parameters(picked)
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
         if command is None:
             return
         self.send(initial=command, immediate=True)
 
+    def build(self, c, values):
+        """The command text the table builds for an entry and its values."""
+        return self.client.build_command(c["text"], values)["command"]
+
     def parameters(self, c):
         """The command text for a table entry, asking for its parameter: none, one choice,
         several, or free text with examples. None when the person backs out."""
-        if c.kind == "none":
-            return c.text
-        if c.kind == "choice":
-            value = ChoiceBox(c.text, c.choices).run(self.screen, self.draw)
-            return None if value is None else commands.build(c, [value])
-        if c.kind == "multi":
-            values = ChoiceBox(c.text, c.choices, multi=True).run(self.screen, self.draw)
-            return None if values is None else commands.build(c, values)
+        if c["kind"] == "none":
+            return c["text"]
+        if c["kind"] == "choice":
+            value = ChoiceBox(c["text"], c["choices"]).run(self.screen, self.draw)
+            return None if value is None else self.build(c, [value])
+        if c["kind"] == "multi":
+            values = ChoiceBox(c["text"], c["choices"], multi=True).run(self.screen, self.draw)
+            return None if values is None else self.build(c, values)
         field = Field("Value", "", width=44)
-        body = [f"{c.text} <value>"] + (["Examples: " + "   ".join(c.examples)] if c.examples else [])
-        d = Dialog(c.text, fields=[field], body=body, width=66,
+        body = [f"{c['text']} <value>"] + (["Examples: " + "   ".join(c["examples"])] if c["examples"] else [])
+        d = Dialog(c["text"], fields=[field], body=body, width=66,
                    buttons=[Button("Run", True, default=True), Button("Cancel", None)])
         while True:
             if not d.run(self.screen, self.draw):
@@ -718,27 +790,28 @@ class App:
             if not value:
                 d.message = "Type a value, or Esc."
                 continue
-            return commands.build(c, [value])
+            return self.build(c, [value])
 
     def columns_dialog(self):
         """Options > Directory columns: which optional columns the directory shows."""
-        box = ChoiceBox("columns", list(directory.COLUMNS), multi=True)
-        box.chosen = set(directory.chosen(self.store.config().get("columns")))
+        box = ChoiceBox("columns", list(self.all_columns), multi=True)
+        box.chosen = set(self.columns)
         picked = box.run(self.screen, self.draw)
         if picked is None:
             return
-        self.store.save_config(columns=picked or list(directory.COLUMNS))
+        columns = self.client.set_config(columns=picked or list(self.all_columns))["columns"]
         self.reload()
-        self.outcome("Directory columns", "Columns: " + ", ".join(directory.chosen(picked)) + ".")
+        self.outcome("Directory columns", "Columns: " + ", ".join(columns) + ".")
 
     def sets_dialog(self):
         """Options > Command sets: one set at a time, by name; empty steps are dropped."""
-        sets = self.store.sets()
+        listing = self.client.sets()
+        sets = listing["sets"]
         first = sorted(sets)[0] if sets else ""
         current = sets.get(first, [])
         name = Field("Name", first, width=20)
         steps = [Field(f"Step {i + 1}", current[i] if i < len(current) else "", width=44, hotkey=str(i + 1))
-                 for i in range(_store.SET_STEPS)]
+                 for i in range(listing["max_steps"])]
         d = Dialog("Command Sets", fields=[name] + steps, width=66,
                    body=["Sets: " + (", ".join(sorted(sets)) or "none"), "{arg} in a step is asked for when the set runs."],
                    buttons=[Button("Save", True, default=True), Button("Remove", "remove"), Button("Cancel", None)])
@@ -747,13 +820,13 @@ class App:
             return
         try:
             if choice == "remove":
-                self.store.remove_set(name.value.strip().lower())
+                self.client.remove_set(name.value.strip().lower())
                 self.outcome("Command sets", f"Removed {name.value.strip()}.")
             else:
-                self.store.save_set(name.value, [f.value for f in steps])
-                self.outcome("Command sets", f"Saved {name.value.strip().lower()}.")
-        except _store.StoreError as exc:
-            self.refuse(str(exc))
+                saved = self.client.save_set(name.value, [f.value for f in steps])
+                self.outcome("Command sets", f"Saved {saved['name']}.")
+        except ApiError as exc:
+            self.refuse(exc.message)
 
     def send(self, region=None, initial="", immediate=False):
         """F2: one dialog, then the signed publish, then the results in the right panel."""
@@ -761,9 +834,9 @@ class App:
         if not aimed:
             return
         targets, target_line = aimed
-        history = list(dict.fromkeys(l["command"] for l in reversed(self.store.history(None, 50))))
+        history = list(dict.fromkeys(l["command"] for l in reversed(self.client.broadcast_history(50)["history"])))
         for d in targets[:1]:
-            history = list(dict.fromkeys(history + [l["command"] for l in reversed(self.store.history(d["node"], 50))]))
+            history = list(dict.fromkeys(history + [l["command"] for l in reversed(self.client.history(d["node"], 50)["history"])]))
         field = Field("Command", initial, width=48, history=list(reversed(history)))
         dialog = Dialog("Send a Command", fields=[field], width=66,
                         body=[f"To: {target_line}", "",
@@ -781,45 +854,43 @@ class App:
                 dialog.message = "Type a command."
                 continue
             break
-        refused = denylist.refusal(command)
-        if refused:
-            self.refuse(f"Not sent: the node would refuse it ({refused}).", title="Not sent")
+        try:
+            check = self.client.check_command(command)
+        except ApiError as exc:
+            self.refuse(exc.message)
             return
-        why = actions.caution(command)
+        if check["refusal"]:
+            self.refuse(f"Not sent: the node would refuse it ({check['refusal']}).", title="Not sent")
+            return
+        why = check["caution"]
         if why and not confirm(self.screen, "Confirm", [f"Command: {command}", f"To: {target_line}"],
                                f"It {why}", redraw_under=self.draw):
             return
         try:
             if region:
-                expected = [d["node"] for d in self.store.devices() if (d.get("region") or "").upper() == region]
-                progress, box = self.waiting("Sending", f"{command[:40]}  to every node in {region}",
-                                             lambda nodes: f"{len(nodes)} of {len(expected)} known answered")
-                try:
-                    _t, _p, answers, lines = actions.send(self.store, command, region=region, progress=progress)
-                finally:
-                    box.close()
-                asked = len(expected)
+                expected = [d["node"] for d in self.devices if (d.get("region") or "").upper() == region]
+                job, _box = self.job("Sending", f"{command[:40]}  to every node in {region}",
+                                     lambda j: f"{len(j['progress']['heard'])} of {len(expected)} known answered",
+                                     self.client.start_send, command, region=region, confirm=True)
+                answered, lines, asked = job["result"]["answered"], job["result"]["lines"], len(expected)
             else:
-                answers, lines, asked = {}, [], 0
+                answered, lines, asked = 0, [], 0
                 for i, d in enumerate(targets):        # one signed publish per device, each to its own topic
                     label = d.get("name") or d["node"]
-                    progress, box = self.waiting("Sending", f"{command[:40]}  to {label} ({i + 1} of {len(targets)})",
-                                                 lambda nodes: "answered" if nodes else "waiting for the answer")
-                    try:
-                        _t, _p, a, l = actions.send(self.store, command, device=d, progress=progress)
-                    finally:
-                        box.close()
-                    answers.update(a)
-                    lines += l
+                    job, box = self.job("Sending", f"{command[:40]}  to {label} ({i + 1} of {len(targets)})",
+                                        lambda j: "answered" if j["progress"]["heard"] else "waiting for the answer",
+                                        self.client.start_send, command, devices=[d["node"]], confirm=True)
+                    answered += job["result"]["answered"]
+                    lines += job["result"]["lines"]
                     asked += 1
                     if box.cancelled:
                         break
-        except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
-            self.refuse(str(exc))
+        except ApiError as exc:
+            self.refuse(exc.message)
             return
         self.reload()
         self.show_results(f"Results: {command[:30]}", lines)
-        self.outcome(f"Sent: {command[:40]}", f"{len(answers)} of {asked} answered.", lines)
+        self.outcome(f"Sent: {command[:40]}", f"{answered} of {asked} answered.", lines)
 
     def discover(self):
         """F5: ask a region which nodes accept the key; the found list lands in the right panel.
@@ -831,22 +902,24 @@ class App:
                                  hint="One IATA code, several with commas, or * for every region you have.")
         if not region:
             return
-        asked = ", ".join(actions.regions_asked(region, self.store)) or region
+        try:
+            asked = ", ".join(self.client.resolve_regions(region)["regions"]) or region
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
         known = {d["node"] for d in self.devices}
 
-        def describe(nodes):
+        def describe(job):
+            nodes = job["progress"]["heard"]
             new = sum(1 for n in nodes if n not in known)
             return f"Found {new} new, {len(nodes) - new} old"
-        progress, box = self.waiting("Discovering", f"Asking every node in {asked} with one signed read per region",
-                                     describe)
         try:
-            found = actions.discover(self.store, region, progress=progress)
-        except (envelope.EnvelopeError, transport.BrokerError, _store.StoreError) as exc:
-            box.close()
-            self.refuse(str(exc))
+            job, _box = self.job("Discovering", f"Asking every node in {asked} with one signed read per region",
+                                 describe, self.client.start_discover, region)
+        except ApiError as exc:
+            self.refuse(exc.message)
             return
-        finally:
-            box.close()
+        found = job["result"]["found"]
         self.found = found
         lines = [self.found_line(e) for e in found]
         self.show_results(f"Found in {asked}: {len(found)}", lines or ["(no node answered)"])
@@ -883,7 +956,11 @@ class App:
                 if d.run(self.screen, self.draw) is None:
                     continue
                 name = f.value
-            entry = actions.adopt(self.store, e, name)
+            try:
+                entry = self.client.adopt(e["node"], e["region"], key=e.get("key"), name=name)
+            except ApiError as exc:
+                self.refuse(exc.message)
+                break
             e["known_as"] = entry["name"] or entry["node"]
             added += 1
         self.reload()
@@ -896,12 +973,10 @@ class App:
         region = self.ask_region("Tag every device in which region?" if on else "Untag which region?")
         if not region:
             return
-        rows = set(directory.by_region(self.devices, region))
-        self.list.tags = (self.list.tags | rows) if on else (self.list.tags - rows)
-        self.left.footer = directory.tag_footer(len(self.list.tags), len(self.devices))
+        self.show_tags(self.client.tag(region=region) if on else self.client.untag(region=region))
 
     def ask_region(self, question, hint=None):
-        first = (self.cursor_device or {}).get("region") or (self.store.regions() or [""])[0]
+        first = (self.cursor_device or {}).get("region") or (self.client.regions()["regions"] or [""])[0]
         f = Field("Region", first, width=20 if hint else 8)
         d = Dialog("Region", fields=[f], body=[question] + ([hint] if hint else []), width=70 if hint else 50)
         if d.run(self.screen, self.draw) is None:
@@ -911,8 +986,9 @@ class App:
     def help(self):
         """F1: the topic for where the cursor is -- the found list, a dialog's subject, or the screen."""
         context = "found" if self.right_mode == "found" else self.context
-        self.helpwin.run(self.screen, helptext.CONTEXT.get(context, "screen"), self.draw)
+        self.helpwin.run(self.screen, self.client.help_index()["context"].get(context, "screen"), self.draw)
 
 
-def run(store):
-    return _run(lambda screen, st: App(screen, st).run(), store)
+def run(client):
+    """The screens over the API at `client`; returns the exit code."""
+    return _run(lambda screen, c: App(screen, c).run(), client)

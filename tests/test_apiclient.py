@@ -32,12 +32,15 @@ def test_the_client_round_trips_against_the_live_server(api):
     assert c.reads("gisebo")["reads"] == []
     assert c.device_commands("gisebo")["groups"] and c.commands()["groups"]
     assert c.check_command("region denyf *")["caution"]
+    assert c.build_command("ver", [])["command"] == "ver"
     assert c.tag(region="JKG")["footer"] == "4 of 5 tagged"
     assert c.untag(devices=["gisebo", "A1A1A1A1"])["tagged"] == ["65C1D12C", "B2B2B2B2"]
     assert len(c.invert_tags()["tagged"]) == 3 and c.set_tags(["far"])["tagged"] == ["FD700369"]
     assert c.untag()["tagged"] == [] and c.tags()["tagged"] == []
     assert c.regions()["regions"] == ["JKG", "GOT"]
+    assert c.resolve_regions(" got ")["regions"] == ["GOT"]
     assert c.save_set("x", ["ver"])["steps"] == ["ver"] and "x" in c.sets()["sets"]
+    assert c.filled_set("x")["steps"] == ["ver"]
     assert c.remove_set("x") == {"removed": "x"}
     assert c.set_shortcuts(["ver", "region"])["shortcuts"][:2] == c.shortcuts()["shortcuts"][:2]
     assert c.help_topic(c.help_index()["topics"][0]["name"])["lines"]
@@ -62,6 +65,9 @@ def test_failures_are_api_errors_with_code_and_status(api):
     with pytest.raises(apiclient.ApiError) as exc:
         c.start_send("region denyf *", devices=["gisebo"])
     assert (exc.value.code, exc.value.status) == ("confirm_required", 409)
+    with pytest.raises(apiclient.ApiError) as exc:
+        c.create_key(overwrite=True, seed="")             # an empty import is refused, not a new key
+    assert exc.value.status == 400 and exc.value.message.startswith("not a seed")
     with pytest.raises(apiclient.ApiError) as exc:
         c.start_statistics("gisebo", range="1y")
     assert exc.value.status == 400

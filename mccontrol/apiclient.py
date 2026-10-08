@@ -71,7 +71,7 @@ class Client:
 
     def create_key(self, overwrite=False, seed=None):
         body = {"overwrite": overwrite}
-        if seed:
+        if seed is not None:
             body["seed"] = seed
         return self.call("POST", "/key", body=body)
 
@@ -113,6 +113,9 @@ class Client:
     def check_command(self, command, device=None):
         return self.call("GET", "/commands/check", {"command": command, "device": device})
 
+    def build_command(self, command, values):
+        return self.call("POST", "/commands/build", body={"command": command, "values": list(values)})
+
     # -- tags and regions ----------------------------------------------------------------
 
     def tags(self):
@@ -133,10 +136,16 @@ class Client:
     def regions(self):
         return self.call("GET", "/regions")
 
+    def resolve_regions(self, text):
+        return self.call("GET", "/regions/resolve", {"text": text})
+
     # -- sets and shortcuts --------------------------------------------------------------
 
     def sets(self):
         return self.call("GET", "/sets")
+
+    def filled_set(self, name, arg=None):
+        return self.call("GET", f"/sets/{_q(name)}", {"arg": arg})
 
     def save_set(self, name, steps):
         return self.call("PUT", f"/sets/{_q(name)}", body={"steps": list(steps)})
