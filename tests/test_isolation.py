@@ -3,10 +3,18 @@ the tree) imports the standard library, mccontrol.apiclient and its own package,
 backend or another interface. The backend (everything else under mccontrol but cli.py and
 launch.py) imports neither curses nor an interface. The command line and the launcher import
 the standard library, the client and the server that starts the backend; the launcher finds
-the interfaces by name, and cli.py imports it only to open the screens."""
+the interfaces by name, and cli.py imports it only to open the screens. mccontrol/ui holds
+its docstring `__init__.py` and the interface packages, nothing else.
+
+The import checks read the source; a name built at run time (`importlib.import_module("mc" +
+"control.store")`) escapes them, so each interface and the backend are also imported in a
+fresh interpreter and `sys.modules` is looked at afterwards. That sees what importing a
+module does; an import inside a function body runs only when the function is called, and
+stays out of reach of both checks."""
 import ast
 import pathlib
 import re
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).parents[1] / "mccontrol"
@@ -16,8 +24,15 @@ BACKEND_NAMES = ("store", "actions", "transport", "beacon", "envelope", "firmwar
                  "helptext", "nodestats", "token", "api")
 
 
-def interfaces():
-    return sorted(p for p in UI.iterdir() if (p / "__init__.py").is_file() and not p.name.startswith(("_", ".")))
+def interfaces(ui=UI):
+    return sorted(p for p in ui.iterdir() if (p / "__init__.py").is_file() and not p.name.startswith(("_", ".")))
+
+
+def strays(ui=UI):
+    """What lies in mccontrol/ui besides its `__init__.py`, the interface packages and the
+    interpreter's cache: a loose module there is neither an interface nor the backend."""
+    kept = {ui / "__init__.py", ui / "__pycache__"} | set(interfaces(ui))
+    return sorted(str(p.relative_to(ui.parent)) for p in ui.iterdir() if p not in kept)
 
 
 def backend():
@@ -95,6 +110,10 @@ def test_every_interface_imports_only_the_client_and_its_own_package():
     assert bad == {}
 
 
+def test_the_interfaces_directory_holds_only_the_interfaces():
+    assert strays() == []
+
+
 def test_the_interfaces_package_is_a_docstring():
     body = ast.parse((UI / "__init__.py").read_text(encoding="utf-8")).body
     assert len(body) == 1 and isinstance(body[0], ast.Expr) and isinstance(body[0].value.value, str)
@@ -149,3 +168,63 @@ def test_the_front_check_sees_the_backend(tmp_path):
         assert front_violations(bad, "mccontrol"), line
     bad.write_text("import sys\nfrom . import apiclient\nfrom .apiclient import Client\nfrom .api.server import serve, stop\n")
     assert front_violations(bad, "mccontrol") == []
+
+
+def test_the_stray_check_sees_a_loose_module(tmp_path):
+    ui = tmp_path / "ui"
+    (ui / "IBMi").mkdir(parents=True)
+    (ui / "IBMi" / "__init__.py").write_text("")
+    (ui / "__init__.py").write_text('"""The interfaces."""\n')
+    (ui / "__pycache__").mkdir()
+    assert strays(ui) == []
+    (ui / "stray.py").write_text("from .. import store\nfrom .IBMi import fmt\n")
+    (ui / "notes").mkdir()
+    assert strays(ui) == ["ui/notes", "ui/stray.py"]
+
+
+# -- the same at run time ------------------------------------------------------------
+
+BACKEND_MODULES = ["mccontrol." + n for n in BACKEND_NAMES]
+
+
+def loaded_after(code):
+    """The module names in `sys.modules` after running `code` in a fresh interpreter."""
+    out = subprocess.run([sys.executable, "-c", code + "\nimport sys\nprint('\\n'.join(sys.modules))"],
+                         cwd=ROOT.parent, capture_output=True, text=True, check=True).stdout
+    return set(out.split())
+
+
+def interface_code(name):
+    """Import the interface and every module in it."""
+    return (f"import importlib, pkgutil, mccontrol.ui.{name} as p\n"
+            f"for m in pkgutil.walk_packages(p.__path__, p.__name__ + '.'):\n"
+            f"    importlib.import_module(m.name)")
+
+
+def loaded_backend(modules):
+    return sorted(m for m in modules if m in BACKEND_MODULES or m.startswith("mccontrol.api."))
+
+
+def test_importing_an_interface_loads_no_backend_and_no_other_interface():
+    names = [p.name for p in interfaces()]
+    for name in names:
+        modules = loaded_after(interface_code(name))
+        assert f"mccontrol.ui.{name}" in modules, name
+        others = sorted(m for m in modules if any(m == f"mccontrol.ui.{o}" or m.startswith(f"mccontrol.ui.{o}.")
+                                                 for o in names if o != name))
+        assert (name, loaded_backend(modules), others) == (name, [], [])
+
+
+def test_importing_the_backend_loads_no_curses():
+    modules = loaded_after("import importlib, pkgutil, mccontrol, mccontrol.api\n"
+                           + "\n".join(f"import {m}" for m in BACKEND_MODULES) + "\n"
+                           "for m in pkgutil.walk_packages(mccontrol.api.__path__, 'mccontrol.api.'):\n"
+                           "    importlib.import_module(m.name)")
+    assert set(BACKEND_MODULES) <= modules
+    assert not {m for m in modules if m.split(".")[0] in ("curses", "_curses")}
+    assert not {m for m in modules if m.startswith("mccontrol.ui")}
+
+
+def test_the_run_time_checks_see_a_name_built_at_run_time():
+    assert "mccontrol.store" in loaded_backend(loaded_after("import importlib; importlib.import_module('mccontrol' + '.store')"))
+    assert "curses" in loaded_after("import importlib; importlib.import_module('cur' + 'ses')")
