@@ -17,7 +17,7 @@ from . import art
 
 TICK_SECS = 2.0                         # how often the tiles ask the API again
 TOAST_SECS = 4.0
-UI = "Monolith"                         # the name its preferences are kept under in ui_settings
+UI = "Monolith"                         # the name its preferences are kept under in ui_settings, and its help asked for
 HINTS = [(":", "menu"), ("↵", "cmds"), ("␣", "tag"), ("c", "send"), ("a", "all"), ("s", "stat"), ("d", "find"),
          ("k", "keys"), ("Del", "forget"), ("?", "help"), ("q", "quit"), ("n", "names"), ("r", "fleet"), ("h", "history"), ("e", "edit"),
          ("o", "sort"), ("p", "phosphor")]
@@ -1164,8 +1164,6 @@ class Board:
 # One key per verb on the board; the palette has every one of them by name.
 KEYS = {"c": "send", "a": "region", "s": "stats", "n": "names", "r": "fleet", "d": "discover", "h": "history",
         "e": "edit", "k": "keys", "o": "sortnext", "*": "invert", "+": "tagregion", "-": "tagregion", "p": "phosphor"}
-
-UI = "Monolith"                         # the name the API's help is asked for
 
 # Every key the board answers, by the name the help texts give it; tests/test_help.py checks
 # this interface's help against it. "y" answers a confirmation, "g" and "r" the key sheet.
