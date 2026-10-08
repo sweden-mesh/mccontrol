@@ -281,6 +281,13 @@ def test_a_set_runs_from_the_send_menu_and_stops_where_a_node_refuses(tmp_path):
     assert "region put se-jkp *" in hist and "region allowf se-jkp" in hist and "region save" not in hist
 
 
+def test_a_set_that_needs_a_value_asks_again_and_sends_nothing(tmp_path):
+    # Alt+S, "c": the set field holds add-scope, the value is left empty; Enter is refused in the dialog
+    text, home = walk(tmp_path, [(b"\x1bs", 0.5), (b"c", 0.5), (b"\r", 0.8)])
+    assert "this set needs a value for {arg}" in text and "Run a Command Set" in text
+    assert not (home / "history" / "FD700369.jsonl").exists()
+
+
 def test_options_defines_a_set(tmp_path):
     # Alt+O opens Options; "c" picks "Command sets"; the name field holds add-scope: rename it and change step 1
     text, home = walk(tmp_path, [(b"\x1bo", 0.5), (b"c", 0.6), (b"\x08" * 12 + b"reads", 0.3), (b"\t", 0.2),

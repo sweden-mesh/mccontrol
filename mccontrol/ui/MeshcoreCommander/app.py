@@ -613,15 +613,14 @@ class App:
         while True:
             if not d.run(self.screen, self.draw):
                 return
-            steps = sets.get(name.value.strip().lower())
-            if not steps:
+            if name.value.strip().lower() not in sets:
                 d.message = "No set of that name."
                 continue
-            value = arg.value.strip()                  # {arg} is filled in at run time, as the API documents
-            if any("{arg}" in s for s in steps) and not value:
-                d.message = "this set needs a value for {arg}"
+            try:
+                steps = self.client.filled_set(name.value.strip(), arg=arg.value)["steps"]
+            except ApiError as exc:
+                d.message = exc.message
                 continue
-            steps = [s.replace("{arg}", value) for s in steps]
             break
         setname = name.value.strip()
         try:
@@ -756,15 +755,18 @@ class App:
         picked = box.run(self.screen, self.draw)
         if picked is None:
             return
-        command = self.parameters(picked)
+        try:
+            command = self.parameters(picked)
+        except ApiError as exc:
+            self.refuse(exc.message)
+            return
         if command is None:
             return
         self.send(initial=command, immediate=True)
 
-    @staticmethod
-    def build(c, values):
-        """The command text with the chosen values appended (a `multi` joins them by spaces)."""
-        return f"{c['text']} {' '.join(v for v in values if v)}".strip()
+    def build(self, c, values):
+        """The command text the table builds for an entry and its values."""
+        return self.client.build_command(c["text"], values)["command"]
 
     def parameters(self, c):
         """The command text for a table entry, asking for its parameter: none, one choice,
@@ -890,18 +892,6 @@ class App:
         self.show_results(f"Results: {command[:30]}", lines)
         self.outcome(f"Sent: {command[:40]}", f"{answered} of {asked} answered.", lines)
 
-    def regions_asked(self, text):
-        """`JKG`, `JKG, GOT` or `*` (every region the directory spans), as the progress box names them."""
-        text = (text or "").strip()
-        if text == "*":
-            return self.client.regions()["regions"]
-        seen = []
-        for part in text.replace(";", ",").replace(" ", ",").split(","):
-            code = part.strip().upper()
-            if code and code not in seen:
-                seen.append(code)
-        return seen
-
     def discover(self):
         """F5: ask a region which nodes accept the key; the found list lands in the right panel.
         There, Ins tags, F5 adds the tagged (asking for a name where none came back), F7 adds all."""
@@ -912,7 +902,7 @@ class App:
                                  hint="One IATA code, several with commas, or * for every region you have.")
         if not region:
             return
-        asked = ", ".join(self.regions_asked(region)) or region
+        asked = ", ".join(self.client.resolve_regions(region)["regions"]) or region
         known = {d["node"] for d in self.devices}
 
         def describe(job):
