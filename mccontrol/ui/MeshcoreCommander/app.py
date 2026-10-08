@@ -7,10 +7,12 @@ matters is in the store; the screen is redrawn from it after every key.
 
 import curses
 
-from . import actions, beacon, commands, denylist, directory, envelope, firmware, helptext, store as _store, transport
-from .ui import (Button, ChoiceBox, Dialog, Field, HelpWindow, KeyBar, ListBox, ListView, Menu, MenuBar, MenuItem, Progress, waiting,
-                 Panel, confirm, notice)
-from .ui.screen import KEY_ENTER, run as _run
+from ... import actions, beacon, commands, denylist, directory, envelope, firmware, helptext, store as _store, transport
+from .dialogs import Button, ChoiceBox, Dialog, Field, ListBox, Progress, confirm, notice, waiting
+from .help import HelpWindow
+from .menu import Menu, MenuBar, MenuItem
+from .widgets import KeyBar, ListView, Panel
+from .screen import KEY_ENTER, run as _run
 
 KEYS = ["Help", "Send", "Hist", "Edit", "Disco", "Regns", "All", "Del", "Menu", "Quit"]
 

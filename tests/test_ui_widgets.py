@@ -6,7 +6,7 @@ import select
 import sys
 import time
 
-from mccontrol.ui import widgets
+from mccontrol.ui.MeshcoreCommander import widgets
 
 
 class _FakePanel:
@@ -104,7 +104,7 @@ def test_every_widget_draws_on_a_terminal():
     script = """
 import sys; sys.path.insert(0, %r)
 import curses
-from mccontrol.ui import Screen, Panel, ListView, KeyBar
+from mccontrol.ui.MeshcoreCommander import Screen, Panel, ListView, KeyBar
 def main(win):
     s = Screen(win)
     left = Panel(1, 0, 40, 20, "Devices"); left.active = True; left.footer = "2 of 3 tagged"
@@ -126,7 +126,7 @@ curses.wrapper(main)
 
 # ---- dialogs ---------------------------------------------------------------------
 
-from mccontrol.ui import dialogs
+from mccontrol.ui.MeshcoreCommander import dialogs
 
 
 def test_a_field_edits_and_recalls_history():
@@ -150,7 +150,7 @@ def test_a_dialog_runs_on_a_terminal_enter_takes_the_default_and_esc_cancels():
     script = """
 import sys; sys.path.insert(0, %r)
 import curses, json
-from mccontrol.ui import Screen, Dialog, Field, Button, confirm
+from mccontrol.ui.MeshcoreCommander import Screen, Dialog, Field, Button, confirm
 def main(win):
     s = Screen(win)
     d = Dialog("Send a Command", fields=[Field("Command", width=30), Field("Note", width=20)],
@@ -197,7 +197,7 @@ def test_the_menu_bar_opens_on_f10_or_alt_letter_and_runs_an_item():
     script = """
 import os, sys; sys.path.insert(0, %r); os.environ["ESCDELAY"] = "150"
 import curses, json
-from mccontrol.ui import Screen, MenuBar, Menu, MenuItem
+from mccontrol.ui.MeshcoreCommander import Screen, MenuBar, Menu, MenuItem
 def main(win):
     s = Screen(win)
     bar = MenuBar([Menu("Devices", [MenuItem("Discover", "disco", "F5"), MenuItem("Forget", "forget", "F8")]),
@@ -244,7 +244,7 @@ curses.wrapper(main)
 # ---- the Turbo Pascal scheme ----------------------------------------------------------
 
 def test_the_scheme_is_black_and_red_at_the_edges_and_blue_in_the_middle():
-    from mccontrol.ui.screen import Colors
+    from mccontrol.ui.MeshcoreCommander.screen import Colors
     pairs = {n: (fg, bg) for n, fg, bg in Colors.PAIRS}
     assert pairs[2] == (curses.COLOR_WHITE, curses.COLOR_BLACK)     # menu bar, key bar
     assert pairs[7] == (curses.COLOR_RED, curses.COLOR_BLACK)       # hot letters, key numbers
@@ -253,7 +253,7 @@ def test_the_scheme_is_black_and_red_at_the_edges_and_blue_in_the_middle():
 
 
 def test_monochrome_degrades_to_bold_and_reverse(monkeypatch):
-    from mccontrol.ui.screen import Colors
+    from mccontrol.ui.MeshcoreCommander.screen import Colors
     monkeypatch.setattr(curses, "has_colors", lambda: False)
     c = Colors()
     assert not c.ok
@@ -268,8 +268,8 @@ def test_the_menu_bar_paints_the_hot_letter_red_and_the_key_bar_its_numbers():
     script = """
 import sys; sys.path.insert(0, %r)
 import curses
-from mccontrol.ui import Screen, KeyBar
-from mccontrol.ui.menu import MenuBar, Menu, MenuItem
+from mccontrol.ui.MeshcoreCommander import Screen, KeyBar
+from mccontrol.ui.MeshcoreCommander.menu import MenuBar, Menu, MenuItem
 def main(win):
     s = Screen(win)
     MenuBar([Menu("Devices", [MenuItem("Forget", "f", "F8")], hotkey="v")]).draw(s)
@@ -315,7 +315,7 @@ def _pty_run_raw(script, cols=80, rows=24, seconds=2.0):
 # ---- the list box -------------------------------------------------------------------
 
 def test_the_list_box_filters_and_the_cursor_skips_headers():
-    from mccontrol.ui.dialogs import ListBox
+    from mccontrol.ui.MeshcoreCommander.dialogs import ListBox
     box = ListBox("x", [("reads", [("ver", 1), ("get name", 2)]), ("node", [("reboot", 3)])])
     assert [r[0] for r in box.rows] == ["head", "item", "item", "head", "item"]
     assert box.rows[box.cursor][1] == "ver"               # settled past the first header
@@ -329,7 +329,7 @@ def test_the_list_box_filters_and_the_cursor_skips_headers():
 
 
 def test_the_choice_box_previews_and_the_multi_box_joins():
-    from mccontrol.ui.dialogs import ChoiceBox
+    from mccontrol.ui.MeshcoreCommander.dialogs import ChoiceBox
     one = ChoiceBox("set autoreply", ["on", "off"])
     assert one.preview() == "set autoreply on"
     one.cursor = 1
@@ -342,7 +342,7 @@ def test_the_choice_box_previews_and_the_multi_box_joins():
 
 
 def test_notice_wraps_at_the_width_with_words_whole():
-    from mccontrol.ui.dialogs import wrap_lines
+    from mccontrol.ui.MeshcoreCommander.dialogs import wrap_lines
     long = "Far          refused: not-allowed [the table says ar-11 admits this: the table or the version is wrong] -- The command is not on the node's allowlist."
     out = wrap_lines([long, "", "short"], 70)
     assert all(len(l) <= 70 for l in out) and out[-1] == "short" and "" in out
