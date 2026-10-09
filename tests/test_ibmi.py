@@ -426,7 +426,7 @@ def test_8_shows_the_key_registers_it_and_replaces_it_after_a_confirm(api, monke
 def test_9_changes_the_configuration_and_f10_tests_the_broker(api):
     _server, _url, store = api
     port = store.config()["port"]
-    text = walk(api, [(b"9\r", 0.6), (TAB * 2, 0.2), (b"mcoar", 0.2), (TAB, 0.2), (b"pw", 0.2), (F[10], 2.0)])
+    text = walk(api, [(b"9\r", 0.6), (TAB * 3, 0.2), (b"mcoar", 0.2), (TAB, 0.2), (b"pw", 0.2), (F[10], 2.0)])
     assert "Change Configuration" in text and "Statistics come from a Beacon server" in text
     assert "Broker Test" in text and "Broker test failed." in text and f"cannot reach 127.0.0.1:{port}" in text
     assert "registered with broker" in text
@@ -436,8 +436,20 @@ def test_9_changes_the_configuration_and_f10_tests_the_broker(api):
     assert "Password (set)" in text and "pw" not in text.replace("pwd", "")
     assert "Port and wait seconds must be numbers." in text and "Saved." in text
     assert store.config()["password"] == "pw"                     # an untouched password is not sent
-    walk(api, [(b"9\r", 0.6), (TAB * 3, 0.2), (b"*none\r", 0.6)])
+    walk(api, [(b"9\r", 0.6), (TAB * 4, 0.2), (b"*none\r", 0.6)])
     assert store.config()["password"] == ""
+
+
+def test_9_turns_tls_off_and_on_and_refuses_anything_else(api):
+    from mccontrol import apiclient
+    _server, url, _store = api
+    tls = [(b"9\r", 0.6), (TAB * 2 + b"\x08" * 5, 0.2)]
+    text = walk(api, tls + [(b"maybe\r", 0.6), (b"\x08" * 5 + b"off\r", 0.6)])
+    assert "TLS on 8883 is the command plane; plain 1883 takes no commands." in text
+    assert "TLS must be on or off." in text and "Saved." in text
+    assert apiclient.Client(url).config()["tls"] is False
+    walk(api, tls + [(b"Yes\r", 0.6)])
+    assert apiclient.Client(url).config()["tls"] is True
 
 
 def test_11_picks_the_directory_columns(api):

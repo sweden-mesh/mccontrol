@@ -10,6 +10,7 @@ from .panels import OptList, confirm, form, show
 from .terminal import ENTER, EXIT, fkey
 
 UI = "IBMi"                              # the name the API's help is asked for
+ONOFF = {"on": True, "yes": True, "true": True, "1": True, "off": False, "no": False, "false": False, "0": False}
 # Every key the screens answer, by the name the help texts give it; tests/test_help.py
 # checks this interface's help against it. Shift+F1-F9 arrive as F13-F21, as on a 5250.
 KEY_NAMES = ("F1", "F3", "F4", "F5", "F6", "F7", "F9", "F10", "F11", "F12", "F13-F21", "Shift+F1-F9", "Alt+1..9",
@@ -764,14 +765,17 @@ class App:
         cfg = self.call(self.c.config)
         if cfg is None:
             return
-        spec = [("Broker", "broker", 40, False), ("Port", "port", 6, False), ("Username", "username", 30, False),
+        spec = [("Broker", "broker", 40, False), ("Port", "port", 6, False), ("TLS (on, off)", "tls", 5, False),
+                ("Username", "username", 30, False),
                 (f"Password ({'set' if cfg.get('password_set') else 'not set'})", "password", 30, True),
                 ("Wait seconds", "wait_secs", 4, False), ("Statistics URL", "beacon_url", 44, False)]
         fields = [{"label": label, "value": cfg.get(k, ""), "width": wd, "secret": s} for label, k, wd, s in spec]
+        fields[2]["value"] = "on" if cfg.get("tls") else "off"
         at = 0
         while True:
             key, values = form(self.t, "Change Configuration", fields,
                                head=["The broker a node's mqtt.cmd.slot points at, and its credentials.",
+                                     "TLS on 8883 is the command plane; plain 1883 takes no commands.",
                                      "Statistics come from a Beacon server, read-only, no credentials.",
                                      "The password is never shown: type one to change it, *NONE to remove it."],
                                keys=["F1=Help   F3=Exit   F10=Test   F12=Cancel"], context="setup", at=at)
@@ -779,16 +783,21 @@ class App:
                 return
             for f, v in zip(fields, values):
                 f["value"] = v
+            tls = ONOFF.get(values[2].strip().lower())
+            if tls is None:
+                self.t.message = "TLS must be on or off."
+                at = 2
+                continue
             try:
-                wait = float(values[4])
-                changes = {"broker": values[0].strip(), "port": int(values[1]), "username": values[2].strip(),
-                           "wait_secs": int(wait) if wait.is_integer() else wait, "beacon_url": values[5].strip()}
+                wait = float(values[5])
+                changes = {"broker": values[0].strip(), "port": int(values[1]), "tls": tls, "username": values[3].strip(),
+                           "wait_secs": int(wait) if wait.is_integer() else wait, "beacon_url": values[6].strip()}
             except ValueError:
                 self.t.message = "Port and wait seconds must be numbers."
-                at = 4 if values[1].strip().isdigit() else 1
+                at = 5 if values[1].strip().isdigit() else 1
                 continue
-            if values[3]:                   # sent only when changed
-                changes["password"] = "" if values[3].strip().upper() == "*NONE" else values[3]
+            if values[4]:                   # sent only when changed
+                changes["password"] = "" if values[4].strip().upper() == "*NONE" else values[4]
             if self.call(self.c.set_config, **changes):
                 self.t.message = "Saved."
                 if key == fkey(10):

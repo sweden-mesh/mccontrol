@@ -117,7 +117,8 @@ The IBM i (AS/400, 5250) green screen: a numbered main menu, lists with an Opt c
  F1=Help   F3=Exit   F5=Refresh   F12=Cancel
 ```
 
-- **Selection.** A number on `===>` opens that screen; `90`, `signoff` or `quit` signs off.
+- **Selection.** A number on `===>` opens that screen (`9` the broker, its port and TLS on or off);
+  `90`, `signoff` or `quit` signs off.
 - **Opt.** On Work with Devices, type an option on a row and press Enter: `1` tag, `2` change,
   `4` forget, `5` display, `6` statistics, `7` commands, `8` last answers, `9` send, `10`
   regions, `11` name and version. Other lists show their own options above the header.

@@ -6,6 +6,9 @@ before. Enter does it; F3 or F12 leaves and sends nothing; F1 explains.
 In a command field Up and Down recall earlier commands instead, and on
 Send a Command F4 prompts one from the list (see [[commandlist]]).
 
+On Change Configuration, TLS takes on or off: TLS on 8883 is the command
+plane; plain 1883 takes no commands.
+
 A command that takes something away from a repeater first shows a
 Confirm screen saying what it does: Enter sends it, F12 sends nothing.
 See [[cautions]].
