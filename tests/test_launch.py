@@ -45,6 +45,12 @@ def test_the_name_used_is_kept_and_is_the_default_next_time(home, ran):
     assert exc.value.code == "unreachable"
 
 
+def test_the_name_is_matched_without_regard_to_case_and_kept_in_its_own_spelling(home, ran):
+    assert cli.main(["--ui", "meshcorecommander"]) == 0
+    assert json.loads((home / "config.json").read_text())["ui"] == "MeshcoreCommander"
+    assert len(ran) == 1
+
+
 def test_an_unknown_name_lists_the_interfaces_and_exits_2(home, ran, capsys):
     assert cli.main(["--ui", "Nothing"]) == 2
     err = capsys.readouterr().err

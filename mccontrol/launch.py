@@ -37,14 +37,17 @@ def run(store, name=None, api=None):
     try:
         client = apiclient.Client(url)
         found = interfaces()
-        chosen = name or client.config().get("ui")
-        if chosen not in found:
-            print(listing(found), file=sys.stdout if chosen is None else sys.stderr)
-            if chosen is not None:
-                print(f"mccontrol: no interface named {chosen!r}", file=sys.stderr)
-            return 0 if chosen is None else 2
+        asked = name or client.config().get("ui")
+        # the name is matched without regard to case (`--ui ibmi`), and the interface's own
+        # spelling is what is run and kept
+        chosen = next((n for n in found if asked is not None and n.lower() == asked.lower()), None)
+        if chosen is None:
+            print(listing(found), file=sys.stdout if asked is None else sys.stderr)
+            if asked is not None:
+                print(f"mccontrol: no interface named {asked!r}", file=sys.stderr)
+            return 0 if asked is None else 2
         if name:
-            client.set_config(ui=name)
+            client.set_config(ui=chosen)
         return importlib.import_module(f"mccontrol.ui.{chosen}").run(client)
     finally:
         if server is not None:
