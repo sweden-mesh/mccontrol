@@ -240,3 +240,11 @@ def test_ctrl_c_outside_a_job_exits_130_and_stops_the_server(tmp_path, monkeypat
     monkeypatch.setattr(apiclient.Client, "call", interrupted)
     assert cli.main(["devices"]) == 130
     assert capsys.readouterr().err == "interrupted\n" and len(stopped) == 1
+
+
+def test_config_sets_tls_on_and_off(capsys):
+    assert cli.main(["config", "--port", "8883", "--tls", "on"]) == 0
+    out = capsys.readouterr().out
+    assert "tls          True" in out and "port         8883" in out
+    assert cli.main(["config", "--tls", "off"]) == 0
+    assert "tls          False" in capsys.readouterr().out

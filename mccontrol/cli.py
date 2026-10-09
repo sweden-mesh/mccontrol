@@ -39,6 +39,7 @@ def build_parser():
     for name in ("broker", "username", "password", "beacon-url"):
         c.add_argument(f"--{name}")
     c.add_argument("--port", type=int)
+    c.add_argument("--tls", choices=("on", "off"), help="TLS to the broker (the command plane is TLS on 8883)")
     c.add_argument("--wait-secs", type=int)
     c.add_argument("--columns", help="the directory's optional columns, comma-separated: reg,sent,batt,seen,ver,result")
     a = sub.add_parser("add", help="remember a device")
@@ -188,6 +189,7 @@ def _register(api, _args):
 
 def _config(api, args):
     changes = {k: getattr(args, k) for k in ("broker", "username", "password", "port")}
+    changes["tls"] = {"on": True, "off": False}.get(args.tls)
     changes["wait_secs"] = args.wait_secs
     changes["beacon_url"] = args.beacon_url
     changes["columns"] = args.columns.split(",") if args.columns else None
