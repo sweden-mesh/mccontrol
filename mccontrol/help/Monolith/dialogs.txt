@@ -10,6 +10,9 @@ anywhere saves. A list to pick from: type to filter, Up and Down move,
 Enter picks; where several may be chosen, Space toggles and Enter takes
 them. Esc closes any of them and sends nothing.
 
+The broker form's tls field takes on or off: TLS on 8883 is the command
+plane; plain 1883 takes no commands.
+
 A command that takes something away from a repeater asks in an overlay
 of its own, in the alert colour: "y" goes ahead, any other key sends
 nothing. See [[cautions]].

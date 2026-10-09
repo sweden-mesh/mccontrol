@@ -166,7 +166,7 @@ key, a clock. Jobs are drawn as bars. At 80x24:
 - **Single keys.** Enter the command list (or read again, or open a result, by tile), Space or
   Ins tag, `*` invert, `+`/`-` tag or untag a region, `c` send, `a` every node in a region,
   `s` statistics, `n` names and versions, `r` Batt/Seen from Beacon, `d` discover, `h` history,
-  `e` edit, `k` keys, `o` the next sort, `p` amber or green, Del forget, Alt+1..9 the
+  `e` edit, `k` keys, `S` setup (the broker, TLS on or off), `o` the next sort, `p` amber or green, Del forget, Alt+1..9 the
   shortcuts, Tab the next tile, `?` or F1 help, `q` or F10 quit. The mouse picks a tile, a row or a key-bar label; the wheel scrolls.
 
 ## Install

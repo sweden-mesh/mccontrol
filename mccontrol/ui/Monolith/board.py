@@ -17,10 +17,11 @@ from . import art
 
 TICK_SECS = 2.0                         # how often the tiles ask the API again
 TOAST_SECS = 4.0
+ONOFF = {"on": True, "yes": True, "true": True, "1": True, "off": False, "no": False, "false": False, "0": False}
 UI = "Monolith"                         # the name its preferences are kept under in ui_settings, and its help asked for
 HINTS = [(":", "menu"), ("↵", "cmds"), ("␣", "tag"), ("c", "send"), ("a", "all"), ("s", "stat"), ("d", "find"),
          ("k", "keys"), ("Del", "forget"), ("?", "help"), ("q", "quit"), ("n", "names"), ("r", "fleet"), ("h", "history"), ("e", "edit"),
-         ("o", "sort"), ("p", "phosphor")]
+         ("o", "sort"), ("p", "phosphor"), ("S", "setup")]
 CTRL_P, CTRL_L, TAB, ESC, BACKSPACES = 16, 12, 9, 27, (curses.KEY_BACKSPACE, 127, 8)
 ENTERS = (curses.KEY_ENTER, 10, 13)
 TILES = ("devices", "device", "feed")   # what Tab cycles
@@ -1086,21 +1087,29 @@ class Board:
 
     def v_setup(self, _arg):
         c = self.client.config()
-        fields = [["broker", c["broker"], False], ["port", str(c["port"]), False], ["username", c["username"], False],
-                  ["password", "", True], ["wait seconds", str(c["wait_secs"]), False],
+        fields = [["broker", c["broker"], False], ["port", str(c["port"]), False], ["tls", "on" if c["tls"] else "off", False],
+                  ["username", c["username"], False], ["password", "", True], ["wait seconds", str(c["wait_secs"]), False],
                   ["statistics URL", c["beacon_url"], False]]
-        values = self.form("Control broker", fields, body=["The broker a node's mqtt.cmd.slot points at, and its credentials "
-                                                           f"(the password is {'set; empty keeps it' if c['password_set'] else 'not set'}). "
-                                                           "Statistics come from a Beacon server, read-only."])
+        while True:
+            values = self.form("Control broker", fields, body=["The broker a node's mqtt.cmd.slot points at, and its credentials "
+                                                               f"(the password is {'set; empty keeps it' if c['password_set'] else 'not set'}). "
+                                                               "TLS on 8883 is the command plane; plain 1883 takes no commands. "
+                                                               "Statistics come from a Beacon server, read-only."])
+            tls = ONOFF.get(values[2].strip().lower())
+            if tls is not None:
+                break
+            for f, v in zip(fields, values):           # the form opens again as it was left
+                f[1] = v
+            self.toast("tls is on or off", "alert")
         try:
-            port, wait = int(values[1]), float(values[4])
+            port, wait = int(values[1]), float(values[5])
         except ValueError:
             self.toast("port and wait seconds are numbers", "alert")
             return
-        change = dict(broker=values[0].strip(), port=port, username=values[2].strip(), wait_secs=wait,
-                      beacon_url=values[5].strip())
-        if values[3]:                                      # the password travels only when typed
-            change["password"] = values[3]
+        change = dict(broker=values[0].strip(), port=port, tls=tls, username=values[3].strip(), wait_secs=wait,
+                      beacon_url=values[6].strip())
+        if values[4]:                                      # the password travels only when typed
+            change["password"] = values[4]
         self.client.set_config(**change)
         self.toast("broker saved: : test the broker")
 
@@ -1163,7 +1172,8 @@ class Board:
 
 # One key per verb on the board; the palette has every one of them by name.
 KEYS = {"c": "send", "a": "region", "s": "stats", "n": "names", "r": "fleet", "d": "discover", "h": "history",
-        "e": "edit", "k": "keys", "o": "sortnext", "*": "invert", "+": "tagregion", "-": "tagregion", "p": "phosphor"}
+        "e": "edit", "k": "keys", "o": "sortnext", "*": "invert", "+": "tagregion", "-": "tagregion", "p": "phosphor",
+        "S": "setup"}
 
 # Every key the board answers, by the name the help texts give it; tests/test_help.py checks
 # this interface's help against it. "y" answers a confirmation, "g" and "r" the key sheet.

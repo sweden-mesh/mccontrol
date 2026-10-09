@@ -440,6 +440,26 @@ def test_setup_saves_the_broker_and_the_test_shows_each_step(tmp_path):
     assert "TEST" in text and "FAIL connect and sign in" in text and re.search(r"LINK\s+FAIL", text)
 
 
+def test_s_opens_setup_and_tls_goes_off_and_on_and_anything_else_is_refused(tmp_path):
+    from mccontrol import apiclient, store as _store
+    from mccontrol.api import serve, stop
+
+    def api_tls(home):
+        server, url = serve(_store.Store(home))
+        try:
+            return apiclient.Client(url).config()["tls"]
+        finally:
+            stop(server)
+    f2, erase = curses_key("KEY_F2"), b"\x7f" * 5
+    tls = [(b"S", 0.6), (b"\t\t" + erase, 0.3)]
+    text, home = walk(tmp_path / "a", tls + [(b"maybe", 0.3), (f2, 0.6), (b"\t\t" + erase + b"off", 0.3), (f2, 0.8)])
+    assert "CONTROL BROKER" in text and "TLS on 8883 is the command plane" in text
+    assert "tls is on or off" in text and "broker saved" in text and api_tls(home) is False
+    text, home = walk(tmp_path / "b", tls + [(b"TRUE", 0.3), (f2, 0.8)],
+                      prepare=lambda home: _store.Store(home).save_config(port=1883, tls=False))
+    assert "broker saved" in text and api_tls(home) is True
+
+
 def curses_key(name):
     return {"KEY_F2": b"\x1bOQ"}[name]
 
