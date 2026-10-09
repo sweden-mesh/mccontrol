@@ -136,7 +136,7 @@ key, a clock. Jobs are drawn as bars. At 80x24:
 ```
  ▞▚ M O N O L I T H ▚▞  mccontrol  amber                              00:15:57
 ╭─ ◉ DEVICES ──────────────────────────────╮╭─ ● STATUS ───────────────────────╮
-│   Name               Node     Reg  Sent  ││ BROKER  mqtt.louie.se:1883       │
+│   Name               Node     Reg  Sent  ││ BROKER  mqtt.louie.se:8883       │
 │   Far                FD700369 GOT  -     ││ KEY     2A6A1C1E…                │
 │   Gisebo             4AC61A7F JKG  -     ││ REG     no  :register            │
 │   (unnamed)          65C1D12C JKG  -     ││ LINK    untested  :test          │

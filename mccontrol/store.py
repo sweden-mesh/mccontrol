@@ -23,7 +23,10 @@ from . import envelope
 # property of each device, since one person may run repeaters in several.
 DEFAULT_CONFIG = {
     "broker": "mqtt.louie.se",
-    "port": 1883,
+    # The command plane is TLS on 8883: the broker's plugin refuses commands and registration
+    # on the plain listener, where a token could be copied off the wire.
+    "port": 8883,
+    "tls": True,
     "username": "",
     "password": "",
     "ttl_secs": envelope.DEFAULT_TTL_SECS,
