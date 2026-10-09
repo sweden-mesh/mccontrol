@@ -72,6 +72,7 @@ region. Dialogs take the one or two values a verb needs; Esc always cancels.
 | F7 | send a command to every node in a region |
 | F8 | forget the cursor device |
 | F9 / F10 | the menu / quit |
+| Options > Broker | the control broker: host, port, TLS on or off, credentials |
 | Alt+1..9 | a command per key to the tagged or cursor device, no dialog: `region`, `ver`, `get name`, `get autoreply`, `get radio`, `get repeat` as shipped; Options > Shortcuts edits them |
 | Ins, Space, `*`, `+`, `-` | tag a row, invert, tag or untag a region |
 | Tab | cycle the three panels: devices, history, last answers (Enter there reads it again) |

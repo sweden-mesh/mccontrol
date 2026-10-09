@@ -16,6 +16,7 @@ from .widgets import KeyBar, ListView, Panel
 from .screen import KEY_ENTER, run as _run
 
 UI = "MeshcoreCommander"                # the name the API's help is asked for
+ONOFF = {"on": True, "yes": True, "true": True, "1": True, "off": False, "no": False, "false": False, "0": False}
 KEYS = ["Help", "Send", "Hist", "Edit", "Disco", "Regns", "All", "Del", "Menu", "Quit"]
 # Every key the screens answer, by the name the help texts give it; tests/test_help.py
 # checks this interface's help against it. Alt+D/S/V/K/O/H open the menus by their titles.
@@ -473,26 +474,33 @@ class App:
     def setup_dialog(self):
         cfg = self.client.config()
         fields = [Field("Broker", cfg.get("broker", ""), width=40), Field("Port", str(cfg.get("port", 1883)), width=6),
+                  Field("TLS", "on" if cfg.get("tls") else "off", width=5),
                   Field("Username", cfg.get("username", ""), width=30), Field("Password", "", width=30, secret=True),
                   Field("Wait seconds", str(cfg.get("wait_secs", 20)), width=4),
                   Field("Statistics URL", cfg.get("beacon_url", ""), width=44, hotkey="t")]
         d = Dialog("Control broker", fields=fields, width=70,
                    body=["The broker a node's mqtt.cmd.slot points at, and its credentials.",
+                         "TLS on 8883 is the command plane; plain 1883 takes no commands.",
                          "Statistics come from a Beacon server, read-only, no credentials.",
                          f"Password {'(set)' if cfg.get('password_set') else '(not set)'}: an empty field keeps it."])
-        if d.run(self.screen, self.draw) is None:
+        while d.run(self.screen, self.draw) is not None:
+            tls = ONOFF.get(fields[2].value.strip().lower())
+            if tls is None:
+                d.message = "TLS is on or off."
+                continue
+            try:
+                changes = dict(broker=fields[0].value.strip(), port=int(fields[1].value), tls=tls,
+                               username=fields[3].value.strip(), wait_secs=int(fields[5].value),
+                               beacon_url=fields[6].value.strip())
+                if fields[4].value:                 # the API never shows the password: send it only when typed
+                    changes["password"] = fields[4].value
+                self.client.set_config(**changes)
+                self.outcome("Control broker", "Saved.")
+            except ValueError:
+                self.refuse("Port and wait seconds must be numbers.")
+            except ApiError as exc:
+                self.refuse(exc.message)
             return
-        try:
-            changes = dict(broker=fields[0].value.strip(), port=int(fields[1].value), username=fields[2].value.strip(),
-                           wait_secs=int(fields[4].value), beacon_url=fields[5].value.strip())
-            if fields[3].value:                     # the API never shows the password: send it only when typed
-                changes["password"] = fields[3].value
-            self.client.set_config(**changes)
-            self.outcome("Control broker", "Saved.")
-        except ValueError:
-            self.refuse("Port and wait seconds must be numbers.")
-        except ApiError as exc:
-            self.refuse(exc.message)
 
     def test_dialog(self):
         cfg = self.client.config()

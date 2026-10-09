@@ -6,6 +6,9 @@ and Down in the command field recall earlier commands; Enter presses the
 default button (the highlighted one) from any field; Esc cancels and
 sends nothing.
 
+Options > Broker has a TLS field, on or off: TLS on 8883 is the command
+plane; plain 1883 takes no commands.
+
 A dialog that would take something away from a repeater says so in red
 and offers [ Send anyway ] and [ Cancel ], with Cancel as the default.
 See [[cautions]].

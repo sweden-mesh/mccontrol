@@ -188,11 +188,33 @@ def test_the_keys_dialog_shows_the_provisioning_command_on_one_line(tmp_path):
 
 
 def test_setup_saves_the_control_broker(tmp_path):
-    text, home = walk(tmp_path, [(b"\x1bo", 0.5), (b"\r", 0.5), (b"\x08" * 20 + b"mqtt.example", 0.3), (b"\t", 0.2), (b"\t", 0.2),
+    text, home = walk(tmp_path, [(b"\x1bo", 0.5), (b"\r", 0.5), (b"\x08" * 20 + b"mqtt.example", 0.3), (b"\t" * 3, 0.2),
                                  (b"mcoar", 0.3), (b"\t", 0.2), (b"pw", 0.3), (b"\r", 0.8)])
     cfg = json.loads((home / "config.json").read_text())
     assert cfg["broker"] == "mqtt.example" and cfg["username"] == "mcoar" and cfg["password"] == "pw"
     assert "Saved." in text
+
+
+def api_tls(home):
+    """`tls` as the API reports it over the walk's store."""
+    from mccontrol import apiclient, store as _store
+    from mccontrol.api import serve, stop
+    server, url = serve(_store.Store(home))
+    try:
+        return apiclient.Client(url).config()["tls"]
+    finally:
+        stop(server)
+
+
+def test_setup_turns_tls_off_and_on_and_refuses_anything_else(tmp_path):
+    def plain(home):
+        (home / "config.json").write_text(json.dumps({"port": 1883, "tls": False}))
+    tls = [(b"\x1bo", 0.5), (b"\r", 0.5), (b"\t\t" + b"\x08" * 5, 0.3)]
+    text, home = walk(tmp_path / "a", tls + [(b"maybe\r", 0.5), (b"\x08" * 5 + b"off\r", 0.8)])
+    assert "TLS on 8883 is the command plane; plain 1883 takes no commands." in text
+    assert "TLS is on or off." in text and "Saved." in text and api_tls(home) is False
+    text, home = walk(tmp_path / "b", tls + [(b"ON\r", 0.8)], prepare=plain)
+    assert "Saved." in text and api_tls(home) is True
 
 
 def test_setup_says_whether_a_password_is_set_and_an_empty_field_keeps_it(tmp_path):
