@@ -200,6 +200,7 @@ def test_the_connection_test_reports_each_step_and_stops_at_the_first_failure(mo
     class _Echo(_FakeClient):
         def subscribe(self, topic, qos=0):
             self._topic = topic
+            self.on_subscribe(self, None, 1, [0], None)          # SUBACK: granted QoS 0
         def publish(self, topic, payload, qos=0):
             import types
             self.on_message(self, None, types.SimpleNamespace(topic=topic, payload=payload.encode()))
@@ -212,6 +213,21 @@ def test_the_connection_test_reports_each_step_and_stops_at_the_first_failure(mo
                                                 ("publish", True),
                                                 ("receive what we published", True)]
     assert "TEST/mccontrol-test/res" in steps[1][2]
+
+    # a token login stands in for a node under its own key, the one /res a strict ACL allows
+    _FakeClient.logins.clear()
+    steps = transport.test_connection({"broker": "b", "port": 1, "username": "", "password": ""},
+                                      client_factory=_Echo, timeout=0.2, seed_hex="11" * 32)
+    assert steps[1][2].endswith("/res") and _FakeClient.logins[-1][0][3:] in steps[1][2]
+
+    class _RefuseSub(_Echo):
+        def subscribe(self, topic, qos=0):
+            self.on_subscribe(self, None, 1, [0x87], None)       # SUBACK: not authorized
+
+    steps = transport.test_connection({"broker": "b", "port": 1, "username": "u", "password": "p"},
+                                      client_factory=_RefuseSub, timeout=0.2)
+    assert [(s, ok) for s, ok, _d in steps] == [("connect and sign in", True), ("subscribe to a result topic", False)]
+    assert "refused the subscription" in steps[1][2]
 
     class _Refuse(_FakeClient):
         def loop_start(self):

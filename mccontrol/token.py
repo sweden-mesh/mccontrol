@@ -36,8 +36,11 @@ def _compact(obj):
     return json.dumps(obj, separators=(",", ":"))
 
 
+USERNAME_PREFIX = "v1_"
+
+
 def username(seed_hex):
-    return "v1_" + envelope.public_key_hex(seed_hex)
+    return USERNAME_PREFIX + envelope.public_key_hex(seed_hex)
 
 
 def make(seed_hex, audience, now=None, lifetime=LIFETIME_SECS):

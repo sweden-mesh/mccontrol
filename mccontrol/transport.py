@@ -260,10 +260,30 @@ def test_connection(config, client_factory=None, timeout=10.0, seed_hex=None):
         return steps
     steps.append(("connect and sign in", True, f"{config['broker']}:{config['port']} {how}"))
     try:
-        topic = f"{envelope.TOPIC_PREFIX}TEST/mccontrol-test/res"
-        got = threading.Event()
+        # With a token login the tool stands in for a node whose key is its own: the plane's
+        # broker lets a key write only its own /res, and anyone read any /res, so this is the
+        # one topic a stranger's ACL cannot refuse. A region's own broker gets the old name.
+        own = user[len(token.USERNAME_PREFIX):] if user.startswith(token.USERNAME_PREFIX) else "mccontrol-test"
+        topic = f"{envelope.TOPIC_PREFIX}TEST/{own}/res"
+        got, subscribed, verdict = threading.Event(), threading.Event(), {}
         client.on_message = lambda _c, _u, msg: got.set() if msg.topic == topic else None
-        info = client.subscribe(topic, qos=1)
+
+        def on_subscribe(_c, _u, _mid, codes, _props=None):
+            # paho v2 hands reason codes; a refused subscription is 0x80 and up, and the
+            # broker's SUBACK is the only place it says so
+            verdict["refused"] = [str(c) for c in codes
+                                  if (c.is_failure if hasattr(c, "is_failure") else int(c) >= 128)]
+            subscribed.set()
+
+        client.on_subscribe = on_subscribe
+        client.subscribe(topic, qos=1)
+        if not subscribed.wait(timeout):
+            steps.append(("subscribe to a result topic", False, f"no answer to the subscription in {timeout:.0f} s"))
+            return steps
+        if verdict["refused"]:
+            steps.append(("subscribe to a result topic", False,
+                          f"the broker refused the subscription to {topic}: {', '.join(verdict['refused'])}"))
+            return steps
         steps.append(("subscribe to a result topic", True, topic))
         info = client.publish(topic, "mccontrol connection test", qos=1)
         info.wait_for_publish(timeout=timeout)
