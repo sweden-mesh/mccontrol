@@ -8,6 +8,7 @@ On the API only: the client is the one module of the package it imports.
 import os
 import sys
 
+ESCDELAY_MS = 25
 DESCRIPTION = "Monolith: a retro-futuristic board of live tiles, a command palette, phosphor on black"
 
 
@@ -20,7 +21,11 @@ def run(client):
     if not sys.stdout.isatty():
         print("mccontrol: Monolith needs a terminal; use the subcommands instead (mccontrol --help)", file=sys.stderr)
         return 2
-    os.environ.setdefault("ESCDELAY", "60")
+    # How long curses waits after Esc for the rest of a key's sequence. 25 ms is ample on a
+    # local terminal, where a sequence arrives in one write; over a slow ssh link a sequence
+    # split across packets may be read as Esc and the rest. Set unconditionally: an inherited
+    # ESCDELAY (often 1000) is what made Esc feel caught late.
+    os.environ["ESCDELAY"] = str(ESCDELAY_MS)
     try:
         return curses.wrapper(lambda win: Board(win, client).run())
     except curses.error as exc:

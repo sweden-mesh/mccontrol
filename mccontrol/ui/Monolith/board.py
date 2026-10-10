@@ -441,7 +441,9 @@ class Board:
             return -1
         if key != ESC:
             return key
-        self.win.timeout(30)
+        # curses has already waited ESCDELAY for a sequence: what follows Esc at once (Alt+x)
+        # is in its buffer now, so the peek does not wait
+        self.win.timeout(0)
         nxt = self.win.getch()
         if nxt == -1:
             return ESC
@@ -475,6 +477,8 @@ class Board:
             self.toast(exc.message, "alert")
             done = None
         if done not in ("quit", "nav"):
+            self.draw()                 # what the board holds, at once: a closed overlay is gone
+            curses.doupdate()           # before the six requests of the refresh
             self.tick(force=True)
         return done
 

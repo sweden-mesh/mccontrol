@@ -6,6 +6,7 @@ import json
 import os
 import pty
 import re
+import select
 import sys
 import time
 
@@ -228,12 +229,14 @@ class Terminal:
 EXITED = []
 
 
-def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, settle=1.2, env=None):
+def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, settle=1.2, env=None, timed=None):
     """Start Monolith in a pty against a fresh API, send `keys` as `(bytes, delay)` pairs,
     and return every screen it showed (one after the other, as text) with the home
     directory. The last screen is `walk.screen`, and every byte it wrote, colours too,
     `walk.raw`. A key of `(cols, rows)` resizes the
-    terminal, as a window manager would."""
+    terminal, as a window manager would. `timed` -- `(bytes, text)` -- types the bytes after
+    the keys and times, into `walk.latency` (seconds), how long until `text` is gone from the
+    screen."""
     import codecs, fcntl, signal, struct, termios
     home = _home(tmp_path, prepare)
     pid, fd = pty.fork()
@@ -267,6 +270,20 @@ def walk(tmp_path, keys, cols=80, rows=24, script=None, wait=0.3, prepare=None, 
             open_ = ptywalk.settle(fd, pid, delay, sink, since)
         else:
             open_ = ptywalk.key(fd, pid, k, delay, sink)
+    if timed and open_:
+        data, gone = timed
+        assert gone in term.text(), f"{gone!r} is not on the screen to time"
+        since, started = ptywalk.switches(pid), time.perf_counter()
+        os.write(fd, data)
+        walk.latency = None
+        while time.perf_counter() - started < 2.0:
+            r, _, _ = select.select([fd], [], [], 0.001)
+            if r:
+                sink(os.read(fd, 65536))
+                if gone not in term.text():
+                    walk.latency = time.perf_counter() - started
+                    break
+        open_ = ptywalk.settle(fd, pid, 1.0, sink, since)
     # Ctrl+L: the whole last frame is drawn again
     open_ = ptywalk.key(fd, pid, b"\x0c", 1.0, sink) if open_ else False
     end = time.time() + (1.0 if not open_ else 0)        # the pty closed: give the exit its time
@@ -651,3 +668,17 @@ def test_the_launcher_lists_monolith_and_starts_it_on_a_live_api(tmp_path, monke
     seen = []
     monkeypatch.setattr(Monolith, "run", lambda client: seen.append(client.devices()["devices"]) or 0)
     assert cli.main([]) == 0 and seen == [[]]                   # kept as the default, run over the API
+
+
+def test_esc_closes_a_window_at_once(tmp_path):
+    """Key to redraw: Esc written to the pty until the overlay's title is gone from the
+    screen, five times, under an inherited ESCDELAY of a second (which must not win). The aim
+    is under 30 ms (measured 25.7, of which 25 is ESCDELAY; 97 before). The best of five must
+    be under 50 ms -- the old 97 fails it -- and every one under 250 ms, room for a loaded
+    machine."""
+    times = []
+    for i in range(5):
+        walk(tmp_path / str(i), [(DOWN, 0.3), (b"h", 0.6)], timed=(ESC, "HISTORY GISEBO"), env={"ESCDELAY": "1000"})
+        times.append(walk.latency)
+    print(f"Esc to the overlay gone: {', '.join(f'{t * 1000:.1f}' if t else '-' for t in times)} ms")
+    assert all(t is not None and t < 0.250 for t in times) and min(times) < 0.050

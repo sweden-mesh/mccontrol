@@ -169,6 +169,10 @@ key, a clock. Jobs are drawn as bars. At 80x24:
   `s` statistics, `n` names and versions, `r` Batt/Seen from Beacon, `d` discover, `h` history,
   `e` edit, `k` keys, `S` setup (the broker, TLS on or off), `o` the next sort, `p` amber or green, Del forget, Alt+1..9 the
   shortcuts, Tab the next tile, `?` or F1 help, `q` or F10 quit. The mouse picks a tile, a row or a key-bar label; the wheel scrolls.
+- **Esc closes a window at once** (25 ms, measured key to redraw in `tests/test_monolith.py`): the
+  board waits 25 ms after Esc for the rest of a key's sequence, whatever `ESCDELAY` the shell sets,
+  and redraws without the window before it asks the API again. Over a slow ssh link an arrow key
+  split across packets can arrive as Esc and the rest.
 
 ## Install
 

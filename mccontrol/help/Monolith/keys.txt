@@ -19,13 +19,18 @@ Monolith keys
                PgDn, Home and End move in it
   Mouse        a click focuses a tile, a row takes the cursor, a hint at
                the bottom presses its key; the wheel scrolls
-  Esc          closes an overlay, cancels a running job
+  Esc          closes an overlay at once, cancels a running job
   F1 "?"       this help;  "q" F10  quit;  Ctrl+L  redraw
 
 The rest is in the palette, by name: "test the broker", "run a command
 set", "save a command set", "remove a command set", "shortcuts
 Alt+1..9", "generate key", "import a seed", "register key", "directory
 columns", "clear tags", "statistics 48 h" and "statistics 7 d".
+
+Esc is told from the start of an arrow key's sequence by a 25 ms wait,
+whatever ESCDELAY the shell sets: ample on a local terminal. Over a slow
+ssh link a sequence split across packets can arrive as Esc and the rest;
+Ctrl+L redraws if that happens.
 
 In help: Tab to a link, Enter follows it, Backspace goes back, Esc
 closes. See [[screen]] for the tiles, [[dialogs]] for the overlays.
