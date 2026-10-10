@@ -30,7 +30,9 @@ drawn above it.
 HISTORY is what was sent and what came back, one block per device, newest
 block first: the device's short id once on the left, then "> command" and
 "< reply" for each of its last commands. A send to a whole region is a
-block of its own ("JKG*"), its reply the count that answered. It is under
+block of its own ("JKG*"), its reply the count that answered. A reply
+whose signature failed is drawn in the alert colour as "BAD SIGNATURE";
+an unsigned one (older firmware) is dim; a cut line ends in "…". It is under
 STATUS on a wide terminal and under DEVICES at 80x24; Tab to it and Up,
 Down, PgUp and PgDn scroll it. "h" opens the cursor device's full history.
 

@@ -169,7 +169,8 @@ column under a status no taller than its six lines:
   delay, autoreply and its hops, mode, channel, slots or delay, regions, firmware, name, and
   every other `get` it has answered -- parsed from the last answer to each read and from every
   command's reply (`set txdelay 0.7` answered OK is a tx delay of 0.7), so it changes the moment
-  a result lands. A read it cannot parse is listed raw. Nothing is sent to show it; Enter on a row
+  a result lands. A reply with a bad signature teaches nothing; an unsigned one (older firmware)
+  counts but is drawn dim and marked unsigned. A read it cannot parse is listed raw. Nothing is sent to show it; Enter on a row
   reads it again. The API serves the same as `GET /devices/{ref}/facts`.
 - **The command line** is the bottom row of RESULTS: Tab to it (or click it), type a command,
   Enter sends it to the tagged devices or the cursor device -- the same target and caution

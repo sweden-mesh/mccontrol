@@ -2161,6 +2161,11 @@
      },
      "note": {
       "type": "string"
+     },
+     "verified": {
+      "type": "boolean",
+      "nullable": true,
+      "description": "true: signed by the node; false: BAD SIGNATURE; null: unsigned, no answer, or a line from before this was kept"
      }
     },
     "required": [
@@ -2169,7 +2174,8 @@
      "topic",
      "code",
      "code_name",
-     "reply"
+     "reply",
+     "verified"
     ]
    },
    "History": {
@@ -2275,6 +2281,11 @@
      "read": {
       "type": "string",
       "description": "the command that reads it again"
+     },
+     "verified": {
+      "type": "boolean",
+      "nullable": true,
+      "description": "true: the node signed the answer; null: unsigned (an r1 from older firmware, or kept before signatures were); a bad signature teaches nothing"
      }
     },
     "required": [
@@ -2284,7 +2295,8 @@
      "at",
      "age",
      "source",
-     "read"
+     "read",
+     "verified"
     ]
    },
    "Facts": {

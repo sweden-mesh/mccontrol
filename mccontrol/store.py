@@ -232,17 +232,19 @@ class Store:
 
     # -- history -----------------------------------------------------------------------
 
-    def remember_read(self, node, command, reply):
-        """Keep what a node answered to a read, keyed by the command text, with the time.
-        A refusal or silence is never stored and clears nothing: the last good answer
-        stays, with its age showing how old it is."""
+    def remember_read(self, node, command, reply, verified=None):
+        """Keep what a node answered to a read, keyed by the command text, with the time and
+        whether the node signed it (True; None for an unsigned r1 from older firmware). A
+        refusal, a bad signature or silence is never stored and clears nothing: the last good
+        answer stays, with its age showing how old it is."""
         key = " ".join(command.split())
         devices = self.devices()
         for entry in devices:
             if entry["node"] == node:
                 reads = dict(entry.get("reads") or {})
                 seq = 1 + max((v.get("seq", 0) for v in reads.values()), default=0)
-                reads[key] = {"reply": reply, "at": _now(), "seq": seq}     # seq orders same-second reads
+                reads[key] = {"reply": reply, "at": _now(), "seq": seq,     # seq orders same-second reads
+                              "verified": verified}
                 entry["reads"] = reads
                 self._write_json(self.root / "devices.json", devices)
                 return reads[key]
@@ -260,7 +262,8 @@ class Store:
         line = {"at": _now(), "command": command, "topic": topic,
                 "code": None if result is None else result.code,
                 "code_name": None if result is None else result.code_name,
-                "reply": None if result is None else result.reply, "note": note}
+                "reply": None if result is None else result.reply,
+                "verified": None if result is None else result.verified, "note": note}
         path = self.root / "history" / f"{node or 'all'}.jsonl"
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(line) + "\n")
@@ -278,9 +281,11 @@ class Store:
         lines = []
         for raw in path.read_text(encoding="utf-8").splitlines():
             try:
-                lines.append(json.loads(raw))
+                line = json.loads(raw)
             except ValueError:
                 continue
+            line.setdefault("verified", None)       # a line from before signatures were kept: unknown
+            lines.append(line)
         return lines[-limit:] if limit else lines          # None: every line
 
     # -- files -------------------------------------------------------------------------

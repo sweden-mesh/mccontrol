@@ -272,10 +272,12 @@ def reads(ctx, params, _q, _b):
 
 def device_facts(ctx, params, _q, _b):
     d = device_of(ctx, params["ref"])
-    known, raw = facts.derive(ctx.store.reads(d), ctx.store.history(d["node"], limit=None))
+    reads = [(c, v["reply"], v["at"], v.get("verified")) for c, v in (d.get("reads") or {}).items()]
+    known, raw = facts.derive(reads, ctx.store.history(d["node"], limit=None))
     return 200, {"node": d["node"],
                  "facts": [{"key": k, "label": facts.LABELS.get(k, k), "value": v["value"], "at": v["at"],
-                            "age": directory.relative(v["at"]), "source": v["source"], "read": facts.reader(k)}
+                            "age": directory.relative(v["at"]), "source": v["source"], "read": facts.reader(k),
+                            "verified": v["verified"]}
                            for k, v in sorted(known.items(), key=lambda kv: facts.order(kv[0]))],
                  "raw": [{"command": c, "reply": v["reply"], "at": v["at"], "age": directory.relative(v["at"])}
                          for c, v in sorted(raw.items(), key=lambda kv: kv[1]["at"], reverse=True)]}

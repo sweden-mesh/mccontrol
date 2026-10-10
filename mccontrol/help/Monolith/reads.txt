@@ -13,6 +13,12 @@ parsed into settings, each with the age of the answer that carried it:
   regions                   "region": the region map
   anything else             every "get <setting>" is a fact by its name
 
+An answer whose signature failed (BAD SIGNATURE) teaches nothing. An
+unsigned one -- from firmware older than ar-11, or kept before the tool
+recorded signatures -- still counts, drawn dim and marked "unsigned"
+where the tile has room ("dim: unsigned" at its foot says so where it has
+not). A value too long for the tile ends in "…".
+
 A write teaches as much as a read: "set txdelay 0.7" answered OK makes
 the tx delay 0.7, as of then. The newest answer wins; a refusal or
 silence teaches nothing and clears nothing, so an old value stays with

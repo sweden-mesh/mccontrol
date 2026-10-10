@@ -99,7 +99,7 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
         result = answers.get(node)
         store.record(node, command, topic, result, note="broadcast" if broadcast else "")
         if result is not None and result.ok and commands.is_read(command) and node in names:
-            store.remember_read(node, command, result.reply or "OK")
+            store.remember_read(node, command, result.reply or "OK", result.verified)
         lines.append(f"{names.get(node, node[:8])[:12]:12} {outcome_line(result, versions.get(node))}")
     if broadcast:
         store.record(None, command, topic, None,

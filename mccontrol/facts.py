@@ -81,23 +81,27 @@ def reader(key):
 
 
 def derive(reads, history):
-    """`(facts, raw)` from `reads` -- `[(command, reply, at)]` -- and `history` lines:
-    `facts` is `{key: {"value", "at", "source"}}`, `raw` `{command: {"reply", "at"}}` for
-    the reads this table does not know. Only answers that succeeded count (a read is kept
-    only when it did); the newest answer for a key wins."""
-    answers = [(at, command, reply, True) for command, reply, at in reads]
-    answers += [(line["at"], line["command"], line.get("reply") or "OK", False) for line in history
-                if line.get("code") == 0 and line.get("command")]
+    """`(facts, raw)` from `reads` -- `[(command, reply, at, verified)]` -- and `history`
+    lines: `facts` is `{key: {"value", "at", "source", "verified"}}`, `raw` `{command:
+    {"reply", "at", "verified"}}` for the reads this table does not know. Only answers that
+    succeeded count, and nothing is taken from one whose signature failed (`verified`
+    False); an unsigned answer (None: an r1 from older firmware, or a line from before the
+    signature was kept) still counts and says so. The newest answer for a key wins."""
+    answers = [(at, command, reply, verified, True) for command, reply, at, verified in reads]
+    answers += [(line["at"], line["command"], line.get("reply") or "OK", line.get("verified"), False)
+                for line in history if line.get("code") == 0 and line.get("command")]
     facts, raw = {}, {}
-    for at, command, reply, kept in sorted(answers, key=lambda a: a[0]):   # stable: history after reads
+    for at, command, reply, verified, kept in sorted(answers, key=lambda a: a[0]):   # stable: history after reads
+        if verified is False:
+            continue
         command = " ".join(command.split())
         parsed = parse(command, reply)
         if parsed is None:
             if kept:
-                raw[command] = {"reply": reply, "at": at}
+                raw[command] = {"reply": reply, "at": at, "verified": verified}
             continue
         for key, value in parsed.items():
-            facts[key] = {"value": value, "at": at, "source": command}
+            facts[key] = {"value": value, "at": at, "source": command, "verified": verified}
     return facts, raw
 
 

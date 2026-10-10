@@ -208,6 +208,13 @@ def ranked(query, items, key=lambda x: x):
     return [item for s, i, item in sorted((s for s in scored if s[0] is not None), key=lambda s: (-s[0], s[1]))]
 
 
+def cut(text, width):
+    """`text` in `width` cells: whole when it fits, else ending in `…` where it was cut
+    (the ASCII fold draws it `~`)."""
+    width = max(0, width)
+    return text if len(text) <= width else (text[:width - 1] + "…" if width else "")
+
+
 def wrap(text, width):
     """Plain word wrap; a word longer than the width is cut."""
     width = max(1, width)

@@ -609,7 +609,7 @@ def test_the_stats_tile_shows_what_is_known_with_its_age_and_a_new_answer_lands_
         assert re.search(rf"{label}\s+{value}\s+.*\d+ d", screen), label
     assert screen.index("tx delay") < screen.index("autoreply hops") < screen.index("regions") < screen.index("neighbors")
     text, home = walk(tmp_path / "ver", [(DOWN, 0.3), (b"c", 0.5), (b"ver", 0.3), (b"\r", 1.5)], cols=120, rows=40)
-    assert re.search(r"firmware\s+esp32s3-v1\.17\.1-ar-11\S*\s+now", walk.screen)      # the reply lands as a fact
+    assert re.search(r"firmware\s+esp32s3-v1\.17\S*…\s+unsigned now", walk.screen)  # the reply lands as a fact, cut
 
 
 def test_q_while_a_job_runs_cancels_it_and_quits(tmp_path):
@@ -771,9 +771,9 @@ def test_the_history_tile_has_a_block_per_device_newest_first_in_the_sketch_form
                     "       │ < 0.5", "JKG*   │ > get name", "       │ < 2 of 2 answered"]
     walk(tmp_path / "b", [(DOWN, 0.3), (b"c", 0.5), (b"ver", 0.3), (ENTER, 1.5)], prepare=_histories)
     rows = [line[2:42].rstrip() for line in walk.screen.splitlines()[16:22]]
-    assert rows[:4] == ["4ac61a │ > region", "       │ < * F", "       │ > ver", "       │ < esp32s3-v1.17.1-ar-11-observe"]
+    assert rows[:4] == ["4ac61a │ > region", "       │ < * F", "       │ > ver", "       │ < esp32s3-v1.17.1-ar-11-observ…"]
     walk(tmp_path / "c", [], cols=120, rows=40, prepare=_histories)          # the third column: all of it
-    assert re.search(r"fd7003 │ > set txdelay 9\s+│\n.*│ < refused not-allow", walk.screen)      # a refusal, cut to the tile
+    assert re.search(r"fd7003 │ > set txdelay 9\s+│\n.*│ < refused not-allo…", walk.screen)      # a refusal, cut to the tile
 
 
 def test_the_history_tile_scrolls_and_the_status_is_no_taller_than_its_lines(tmp_path):
@@ -786,3 +786,37 @@ def test_the_history_tile_scrolls_and_the_status_is_no_taller_than_its_lines(tmp
     status = next(i for i, line in enumerate(screen) if "STATUS" in line)
     assert "JOBS" in screen[status + art.STATUS_ROWS] and "╰" in screen[status + art.STATUS_ROWS + 1]
     assert "HISTORY" in screen[status + art.STATUS_ROWS + 2]
+
+
+def _forged(home):
+    """A prepare hook: Gisebo answered ver twice, once signed and once forged, and get
+    rxdelay unsigned (an r1)."""
+    with (home / "history" / "4AC61A7F.jsonl").open("a") as f:
+        for at, command, reply, verified in (("2026-10-09 10:00:00", "ver", "> real-fw", True),
+                                             ("2026-10-09 11:00:00", "ver", "> forged-fw", False),
+                                             ("2026-10-09 12:00:00", "get rxdelay", "> 0.3", None)):
+            f.write(json.dumps({"at": at, "command": command, "topic": "t", "code": 0, "code_name": "ok",
+                                "reply": reply, "verified": verified, "note": ""}) + "\n")
+
+
+def test_a_forged_answer_is_no_fact_and_history_says_bad_signature_and_an_unsigned_fact_is_marked(tmp_path):
+    walk(tmp_path, [(DOWN, 0.3)], cols=200, rows=60, prepare=_forged)
+    screen = walk.screen
+    assert re.search(r"firmware\s+real-fw\s+\d+ d", screen) and "forged-fw  " not in screen.split("HISTORY")[0]
+    assert re.search(r"rx delay\s+0\.3\s+unsigned \d+ h", screen) and "dim: unsigned" in screen
+    assert "│ < BAD SIGNATURE forged-fw" in screen
+    raw = walk.raw.decode("utf-8", "replace")
+    assert "BAD SIGNATURE" in raw
+    walk(tmp_path / "narrow", [(DOWN, 0.3)], prepare=_forged)                  # 80x24: no room, the footer says it
+    assert "dim: unsigned" in walk.screen and "unsigned 2" not in walk.screen
+
+
+def test_a_value_cut_to_its_tile_ends_in_an_ellipsis(tmp_path):
+    from mccontrol.ui.Monolith import art as _art
+    assert _art.cut("louie-magic-fw-1.2", 18) == "louie-magic-fw-1.2" and _art.cut("louie-magic-fw-1.2", 17) == "louie-magic-fw-1…"
+    walk(tmp_path, [], prepare=_histories)
+    assert "│ < louie-magic-fw-1.2" in walk.screen                                  # it fits at 80x24
+    walk(tmp_path / "c", [], cols=120, rows=40, prepare=_histories)
+    assert "< refused not-allo…" in walk.screen
+    walk(tmp_path / "ascii", [], cols=120, rows=40, prepare=_histories, env={"LANG": "C", "LC_ALL": "C"})
+    assert "< refused not-allo~" in walk.screen

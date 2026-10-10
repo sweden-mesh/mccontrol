@@ -74,7 +74,7 @@ class Board:
         self.notes = []                     # (after job id, text, role): what the command line refused, inline
         self.blocks, self.hist_top, self.last_hist = [], 0, 0.0   # the history tile: (id, lines), newest first
         self.jobs, self.cfg, self.key_info = [], {}, {}
-        self.stats, self.history, self.shown_node = [], [], None    # stats: (label, value, age, read)
+        self.stats, self.history, self.shown_node = [], [], None    # stats: (label, value, age, read, verified)
         self.read_cursor = 0
         self.toasts = []
         self.running = None                 # (title, job) while a job is waited on
@@ -160,8 +160,8 @@ class Board:
             self.read_cursor = 0
         self.shown_node = node
         known = self.client.facts(node) if node else {"facts": [], "raw": []}
-        self.stats = ([(f["label"], f["value"], f["age"], f["read"]) for f in known["facts"]]
-                      + [(r["command"], r["reply"], r["age"], r["command"]) for r in known["raw"]])
+        self.stats = ([(f["label"], f["value"], f["age"], f["read"], f["verified"]) for f in known["facts"]]
+                      + [(r["command"], r["reply"], r["age"], r["command"], True) for r in known["raw"]])
         self.history = self.client.history(node, limit=50)["history"] if node else []
 
     def load_history(self, force=False):
@@ -192,7 +192,13 @@ class Board:
                 reply = self.history_out(line)
                 reply = reply[1:].strip() if line["code"] == 0 and reply.startswith(">") else reply
                 rows.append((ident, f"> {line['command']}", "bright"))
-                rows.append(("", "< " + " ".join(reply.split()), "base" if line["code"] in (0, None) else "alert"))
+                if line.get("verified") is False:          # a forged answer: never shown as a clean one
+                    reply, role = f"BAD SIGNATURE {reply}", "alert"
+                elif line["code"] == 0:
+                    role = "base" if line.get("verified") else "dim"     # unsigned: an r1, or an old line
+                else:
+                    role = "base" if line["code"] is None else "alert"
+                rows.append(("", "< " + " ".join(reply.split()), role))
                 ident = ""
         return rows
 
@@ -362,8 +368,9 @@ class Board:
 
     def draw_device(self, rect):
         d = self.device
+        unsigned = any(s[4] is None for s in self.stats)
         y, x, w, h = self.frame(rect, f"Stats {(d['name'] or d['node']) if d else '-'}"[:30], self.focus == "device",
-                                "↵ reads again  s statistics")
+                                "dim: unsigned  ↵ reads again" if unsigned else "↵ reads again  s statistics")
         if not d:
             return
         fleet = d.get("fleet") or {}
@@ -394,16 +401,17 @@ class Board:
         rows = y + h - row
         top = max(0, self.read_cursor - rows + 1)
         label_w = min(17, max(len(s[0]) for s in self.stats))
-        for i, (label, value, age, _read) in enumerate(self.stats[top:top + rows]):
+        for i, (label, value, age, _read, verified) in enumerate(self.stats[top:top + rows]):
             here = self.focus == "device" and top + i == self.read_cursor
-            value = " ".join(value.split())
-            room = w - label_w - 1 - len(age) - 1
-            line = f"{label[:label_w]:{label_w}} {value[:max(0, room)]:{max(0, room)}} {age}"[:w]
+            if verified is None and w - label_w - len(age) - 12 >= 12:   # an r1, or kept before signatures were
+                age = f"unsigned {age}"                 # said where there is room; dim, and the footer, always
+            room = max(0, w - label_w - 1 - len(age) - 1)
+            line = f"{art.cut(label, label_w):{label_w}} {art.cut(' '.join(value.split()), room):{room}} {age}"[:w]
             if here:
                 self.put(row + i, x, line.ljust(w), "cursor")
             else:
                 self.put(row + i, x, line[:label_w], "dim")
-                self.put(row + i, x + label_w + 1, line[label_w + 1:w - len(age)], "base")
+                self.put(row + i, x + label_w + 1, line[label_w + 1:w - len(age)], "dim" if verified is None else "base")
                 self.put(row + i, x + w - len(age), age, "dim")
 
     @staticmethod
@@ -487,7 +495,7 @@ class Board:
             if i == 0 and not ident:                    # scrolled into a block: say whose it is
                 ident = next(r[0] for r in reversed(rows[:self.hist_top + 1]) if r[0])
             self.put(y + i, x, f"{ident:6} {self.g['v']}", "accent" if ident else "dim")
-            self.put(y + i, x + 9, text[:w - 9], role)
+            self.put(y + i, x + 9, art.cut(text, w - 9), role)
         if not rows:
             self.put(y, x, "Nothing sent yet."[:w], "dim")
 
