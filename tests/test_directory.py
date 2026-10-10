@@ -92,7 +92,8 @@ def test_two_nodes_on_ar_10_and_ar_11_differ_in_the_ver_column_at_every_width():
     old = {"name": "Old", "node": "AAAA0001", "region": "JKG", "ver": "esp32s3-v1.17.1-ar-10-observer-42f48ce9"}
     new = dict(old, name="New", ver="esp32s3-v1.17.1-ar-11-observer-90e86c88")
     plain = dict(old, ver="MeshCore v1.16.0.37-observer-9670035")
-    for width, columns, cell in ((111, None, "ar-1"), (57, None, " 1"), (38, ["ver"], "ar-1"), (44, ["ver"], "ar-1")):
+    for width, columns, cell in ((111, None, "ar-1"), (58, None, " 1"), (57, None, " 1"), (38, ["ver"], "ar-1"),
+                                 (38, ["ver", "result"], "ar-1"), (44, ["ver"], "ar-1")):
         a, b = directory.row(old, width, columns=columns), directory.row(new, width, columns=columns)
         assert a[19:] != b[19:], (width, a, b)                      # the names aside, the rows differ
         assert (cell + "0") in a and (cell + "1") in b, (width, a, b)
