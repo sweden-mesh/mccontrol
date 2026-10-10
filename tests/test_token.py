@@ -48,5 +48,5 @@ def test_the_client_logs_in_with_the_token_when_no_username_is_configured():
     user, pw = transport.login({"broker": "mqtt.louie.se", "username": "", "password": ""}, SEED)
     assert user == "v1_" + PUB and token.verify(pw, "mqtt.louie.se")[0]
     user, pw = transport.login({"broker": "mqtt.louie.se", "username": "mcoar", "password": "x"}, SEED)
-    assert (user, pw) == ("mcoar", "x")                       # a region's own broker keeps its pair
+    assert (user, pw) == ("mcoar", "x")                       # a password login keeps its pair
     assert transport.login({"broker": "b", "username": ""}, None) == ("", "")

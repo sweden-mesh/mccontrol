@@ -18,7 +18,7 @@ class BrokerError(Exception):
 
 def login(config, seed_hex=None):
     """`(username, password)` for the broker: the configured pair when a username is set (a
-    region's own broker), else the tool's own key as a token the way a node signs in --
+    login from the broker's password file), else the tool's own key as a token the way a node signs in --
     nothing to hand out, the key is the identity."""
     if config.get("username"):
         return config["username"], config.get("password", "")
@@ -209,8 +209,7 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
 
 def register(config, seed_hex, wait_secs=10.0, client_factory=None, now=None):
     """Publish the signed registration line and wait for the broker's acknowledgement:
-    `(ok, detail)`. `ok` only on an explicit `ok`; silence is "no acknowledgement", which
-    may mean a broker without the hook (a region's own) -- said, never assumed."""
+    `(ok, detail)`. `ok` only on an explicit `ok`; silence is "no acknowledgement", said as such."""
     public = envelope.public_key_hex(seed_hex)
     payload = envelope.register_payload(seed_hex, now=now)
     fake = os.environ.get("MCCONTROL_FAKE_REGISTER")
@@ -237,7 +236,7 @@ def register(config, seed_hex, wait_secs=10.0, client_factory=None, now=None):
         client.disconnect()
     text = answer.get("text")
     if text is None:
-        return False, "no acknowledgement: the broker may not register keys (a region's own without the hook)"
+        return False, f"no acknowledgement in {wait_secs:.0f} s"
     return text == "ok", text
 
 
@@ -262,7 +261,8 @@ def test_connection(config, client_factory=None, timeout=10.0, seed_hex=None):
     try:
         # With a token login the tool stands in for a node whose key is its own: the plane's
         # broker lets a key write only its own /res, and anyone read any /res, so this is the
-        # one topic a stranger's ACL cannot refuse. A region's own broker gets the old name.
+        # one topic a stranger's ACL cannot refuse. A password login, which the broker's acl
+        # file governs, uses a fixed name.
         own = user[len(token.USERNAME_PREFIX):] if user.startswith(token.USERNAME_PREFIX) else "mccontrol-test"
         topic = f"{envelope.TOPIC_PREFIX}TEST/{own}/res"
         got, subscribed, verdict = threading.Event(), threading.Event(), {}

@@ -14,7 +14,7 @@ slot (3-6), points it at the default broker mqtt.louie.se with the
 built-in "mccontrol" preset, and says "reboot to apply". A board without
 PSRAM runs two slots at once; if both are its analyzer uplinks, the node
 says so and asks you to turn one off (set mqtt2.preset none) -- it never
-does that for you. A region running its own broker sets the slot by
+does that for you. A slot for a different command broker is set by
 hand (set mqttN.preset custom, server, audience; set mqtt.cmd.slot N).
 
 Each interface shows that command on one line, creates a key when there
