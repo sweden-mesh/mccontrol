@@ -27,12 +27,14 @@ def ran(monkeypatch):
     return clients
 
 
-def test_with_no_name_and_none_kept_the_interfaces_are_listed(home, ran, capsys):
+def test_with_no_name_and_none_kept_monolith_starts_and_nothing_is_kept(home, ran, monkeypatch, capsys):
+    from mccontrol.ui import Monolith
+    started = []
+    monkeypatch.setattr(Monolith, "run", lambda client: started.append(client.devices()["devices"]) or 0)
     assert cli.main([]) == 0
-    out = capsys.readouterr().out
-    assert "MeshcoreCommander" in out and MeshcoreCommander.DESCRIPTION in out
+    assert started == [[]] and ran == [] and capsys.readouterr().out == ""
+    assert not (home / "config.json").exists() or "ui" not in json.loads((home / "config.json").read_text())
     assert launch.interfaces()["MeshcoreCommander"] == MeshcoreCommander.DESCRIPTION
-    assert ran == []
 
 
 def test_the_name_used_is_kept_and_is_the_default_next_time(home, ran):

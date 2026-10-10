@@ -18,9 +18,10 @@ subcommand to a server already running instead of starting one of its own.
 ## The interfaces
 
 `mccontrol --ui <name>` starts one (`ibmi` and `IBMi` are the same name). The name is kept in the configuration, so plain
-`mccontrol` starts the last one used; with none used yet, or a name that is not there, it
-lists them and exits. `--api <url>` runs it on a server already running instead of starting
-one of its own, and that server's configuration keeps the name:
+`mccontrol` starts the last one asked for; with none asked for yet it starts Monolith (and keeps
+nothing). A name that is not there lists them and exits 2. `--api <url>` runs it on a server
+already running instead of starting one of its own, and that server's configuration keeps the
+name:
 
 ```
 interfaces (mccontrol --ui <name>):
@@ -177,7 +178,7 @@ mccontrol keygen                                  # once; prints the two serial 
 mccontrol config --username <user> --password <pass>   # the control broker's credentials
 mccontrol test                                    # connect, sign in, subscribe, publish, receive
 mccontrol discover JKG --add                      # every node in JKG that accepts your key
-mccontrol --ui MeshcoreCommander                  # the screens; plain mccontrol is the last used
+mccontrol --ui MeshcoreCommander                  # the screens; plain mccontrol is the last asked for, or Monolith
 ```
 
 Python 3.10 or newer; `pycryptodome` (Ed25519) and `paho-mqtt`; `curses` from the standard

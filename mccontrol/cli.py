@@ -29,7 +29,7 @@ from .api.server import serve, stop
 
 def build_parser():
     p = argparse.ArgumentParser(prog="mccontrol", description=__doc__.split("\n")[0])
-    p.add_argument("--ui", metavar="NAME", help="the interface to start; the last one used when not given")
+    p.add_argument("--ui", metavar="NAME", help="the interface to start; the last one asked for when not given, else Monolith")
     p.add_argument("--api", metavar="URL", help="use a running mccontrol API instead of starting one")
     sub = p.add_subparsers(dest="command")
     sub.add_parser("keygen", help="create the signing key").add_argument(

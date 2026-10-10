@@ -2,8 +2,9 @@
 with `--api <url>`, run it on that running API instead and start none.
 
 An interface is a package under `mccontrol/ui/` with `run(client)` and a one-line
-`DESCRIPTION`. The name used is kept in the configuration and is the default next time; with
-no name given and none kept, or a name that is not there, the interfaces are listed instead.
+`DESCRIPTION`. A name given is kept in the configuration and is the default next time; with
+no name given and none kept, Monolith is started (and nothing is kept). A name that is not
+there lists the interfaces instead and exits 2.
 """
 
 import importlib
@@ -14,6 +15,7 @@ from . import apiclient
 from .api.server import serve, stop
 
 UI = pathlib.Path(__file__).with_name("ui")
+DEFAULT = "Monolith"                    # started when no --ui is given and none is kept
 
 
 def interfaces():
@@ -37,15 +39,14 @@ def run(store, name=None, api=None):
     try:
         client = apiclient.Client(url)
         found = interfaces()
-        asked = name or client.config().get("ui")
+        asked = name or client.config().get("ui") or DEFAULT
         # the name is matched without regard to case (`--ui ibmi`), and the interface's own
         # spelling is what is run and kept
-        chosen = next((n for n in found if asked is not None and n.lower() == asked.lower()), None)
+        chosen = next((n for n in found if n.lower() == asked.lower()), None)
         if chosen is None:
-            print(listing(found), file=sys.stdout if asked is None else sys.stderr)
-            if asked is not None:
-                print(f"mccontrol: no interface named {asked!r}", file=sys.stderr)
-            return 0 if asked is None else 2
+            print(listing(found), file=sys.stderr)
+            print(f"mccontrol: no interface named {asked!r}", file=sys.stderr)
+            return 2
         if name:
             client.set_config(ui=chosen)
         return importlib.import_module(f"mccontrol.ui.{chosen}").run(client)

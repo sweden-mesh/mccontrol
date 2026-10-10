@@ -642,8 +642,10 @@ def test_the_launcher_lists_monolith_and_starts_it_on_a_live_api(tmp_path, monke
     from mccontrol import cli, launch
     from mccontrol.ui import Monolith
     monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
-    assert cli.main([]) == 0
-    assert launch.interfaces()["Monolith"] == Monolith.DESCRIPTION and Monolith.DESCRIPTION in capsys.readouterr().out
+    assert cli.main(["--ui", "Nothing"]) == 2
+    assert launch.interfaces()["Monolith"] == Monolith.DESCRIPTION and Monolith.DESCRIPTION in capsys.readouterr().err
+    assert cli.main([]) == 2                                    # the default is Monolith: no terminal under pytest
+    assert "Monolith needs a terminal" in capsys.readouterr().err
     assert cli.main(["--ui", "Monolith"]) == 2                  # the real run: no terminal under pytest
     assert "Monolith needs a terminal" in capsys.readouterr().err
     seen = []
