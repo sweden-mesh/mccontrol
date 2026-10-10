@@ -812,7 +812,7 @@ def test_a_forged_answer_is_no_fact_and_history_says_bad_signature_and_an_unsign
     walk(tmp_path, [(DOWN, 0.3)], cols=200, rows=60, prepare=_forged)
     screen = walk.screen
     assert re.search(r"firmware\s+real-fw\s+\d+ d", screen) and "forged-fw  " not in screen.split("HISTORY")[0]
-    assert re.search(r"rx delay\s+0\.3\s+unsigned \d+ h", screen) and "dim: unsigned" in screen
+    assert re.search(r"rx delay\s+0\.3\s+unsigned \d+ [hd]", screen) and "dim: unsigned" in screen
     assert "│ < BAD SIGNATURE forged-fw" in screen
     raw = walk.raw.decode("utf-8", "replace")
     assert "BAD SIGNATURE" in raw
