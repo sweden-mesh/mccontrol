@@ -255,12 +255,23 @@ class Terminal:
                 pass
 
 
+ESCDELAY_MS = 25
+
+
+def escdelay(env=None):
+    """How long curses waits after Esc for the rest of a key's sequence, in ms: 25, ample on a
+    local terminal; MCCONTROL_ESCDELAY (whole ms) sets a longer one for a slow ssh link. An
+    inherited ESCDELAY (often 1000) is not taken: it is what makes Esc feel caught late."""
+    value = (os.environ if env is None else env).get("MCCONTROL_ESCDELAY", "").strip()
+    return int(value) if value.isdigit() else ESCDELAY_MS
+
+
 def start(main):
     """Open the terminal and run `main(term)`; say why when it cannot."""
     if not sys.stdout.isatty():
         print("mccontrol: the screens need a terminal; use the subcommands instead (mccontrol --help)", file=sys.stderr)
         return 2
-    os.environ.setdefault("ESCDELAY", "150")
+    os.environ["ESCDELAY"] = str(escdelay())
 
     def _main(win):
         term = Terminal(win)

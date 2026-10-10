@@ -276,6 +276,17 @@ def is_exit(key):
     return key in EXIT_KEYS
 
 
+ESCDELAY_MS = 25
+
+
+def escdelay(env=None):
+    """How long curses waits after Esc for the rest of a key's sequence, in ms: 25, ample on a
+    local terminal; MCCONTROL_ESCDELAY (whole ms) sets a longer one for a slow ssh link. An
+    inherited ESCDELAY (often 1000) is not taken: it is what makes Esc feel caught late."""
+    value = (os.environ if env is None else env).get("MCCONTROL_ESCDELAY", "").strip()
+    return int(value) if value.isdigit() else ESCDELAY_MS
+
+
 def run(main, client):
     """Open the terminal, run `main(screen, client)`, and say why when it cannot."""
     import sys
@@ -284,7 +295,7 @@ def run(main, client):
         print("mccontrol: the screens need a terminal; use the subcommands instead "
               "(mccontrol --help)", file=sys.stderr)
         return 2
-    os.environ.setdefault("ESCDELAY", "150")
+    os.environ["ESCDELAY"] = str(escdelay())
 
     def _main(win):
         screen = Screen(win)

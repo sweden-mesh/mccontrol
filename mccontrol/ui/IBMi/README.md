@@ -136,5 +136,9 @@ JKG*   | > get name
 A region broadcast is a block of its own (`JKG*`); a reply whose signature failed reads
 `BAD SIGNATURE <reply>`, one from older firmware `(unsigned)`.
 
+Esc is told from the start of a function key's sequence by a 25 ms wait, whatever `ESCDELAY` the
+shell sets (measured 30 ms from Esc to the screen gone, in `tests/test_esc.py`); over a slow ssh
+link `MCCONTROL_ESCDELAY=<ms>` sets a longer one.
+
 Every wait shows its progress and the seconds waited on the message line; F12 or Esc stops
 waiting and keeps what came. Help (F1) explains each screen; F11 in help shows the contents.

@@ -75,6 +75,10 @@ panels.
   takes something away confirmed first -- and the answers, or why nothing was sent, scroll up in
   the right panel. Up and Down recall what was sent; Esc leaves.
 
+Esc closes a dialog at once: a 25 ms wait tells it from the start of a function key's sequence,
+whatever `ESCDELAY` the shell sets (26 ms from Esc to the dialog gone, in `tests/test_esc.py`);
+over a slow ssh link `MCCONTROL_ESCDELAY=<ms>` sets a longer one.
+
 Nothing refreshes by itself: `s`, `r` and `n` ask when you do. Every wait is a box with the
 running count and a bar; Esc stops waiting and keeps what came. What an action came to is a
 window, closed with Enter.
