@@ -17,16 +17,17 @@ KEY_NAMES = ("F1", "F3", "F4", "F5", "F6", "F7", "F9", "F10", "F11", "F12", "F13
              "Enter", "Esc", "Tab", "Shift+Tab", "Up", "Down", "PgUp", "PgDn", "Backspace", "Del", "Space", "Ctrl+L")
 # Every option a list offers, as its legend shows it; tests/test_help.py checks the n=Label
 # the help names against them.
-OPTIONS = ("1=Tag/untag", "2=Change", "4=Forget", "5=Display", "6=Statistics", "7=Commands", "8=Last answers",
+OPTIONS = ("1=Tag/untag", "2=Change", "4=Forget", "5=Display", "6=Statistics", "7=Commands", "8=Facts",
            "9=Send", "10=Regions", "11=Name and version", "1=Read again", "5=Display entry", "1=Select", "1=Add",
            "4=Remove", "9=Run", "1=Show")
 MENU = [("1", "Work with devices"), ("2", "Send a command"), ("3", "Send a command to every node in a region"),
         ("4", "Run a command set"), ("5", "Discover devices"), ("6", "Work with command sets"),
         ("7", "Work with shortcuts"), ("8", "Work with signing key"), ("9", "Change configuration"),
         ("10", "Test the broker connection"), ("11", "Change directory columns"),
-        ("12", "Display broadcast history"), ("13", "Help contents"), ("90", "Sign off")]
+        ("12", "Display command history"), ("13", "Help contents"), ("14", "Command entry"), ("90", "Sign off")]
+HISTORY_PER = 6                          # the commands shown per device on Display Command History
 DEVICE_LEGEND = ["1=Tag/untag  2=Change  4=Forget  5=Display  6=Statistics  7=Commands",
-                 "8=Last answers  9=Send  10=Regions  11=Name and version"]
+                 "8=Facts  9=Send  10=Regions  11=Name and version"]
 DEVICE_KEYS = fmt.fkeys(["F1=Help", "F3=Exit", "F5=Refresh", "F6=Discover", "F7=Batt/Seen", "F9=Send",
                          "F10=Names", "F11=Sort", "F12=Cancel", "F13-F21=Shortcuts"])
 LIST_KEYS = ["F1=Help   F3=Exit   F5=Refresh   F12=Cancel"]
@@ -38,6 +39,7 @@ class App:
         self.t, self.c = term, client
         self.sort = "name"
         self.contexts = None
+        self.log = []                   # Command Entry's lines, (text, attr), kept for the session
         term.on_help = self.help
 
     # -- plumbing ------------------------------------------------------------------------
@@ -122,7 +124,7 @@ class App:
             t.frame("MCCONTROL Main Menu", ["F1=Help   F3=Exit   F5=Refresh   F12=Cancel"])
             t.put(2, 1, "Select one of the following:")
             for i, (n, label) in enumerate(MENU):
-                t.put(4 + i, 6, f"{n:>2}. {label}")
+                t.put(3 + i, 6, f"{n:>2}. {label}")
             cfg, signing, data = self.call(self.c.config) or {}, self.call(self.c.key) or {}, self.devices()
             reg = signing.get("registered")
             info = [("Broker", f"{cfg.get('broker')}:{cfg.get('port')}"),
@@ -152,7 +154,8 @@ class App:
         actions = {"1": self.work_with_devices, "2": lambda: self.send_form(None), "3": self.region_form,
                    "4": lambda: self.run_set_form(None), "5": lambda: self.discover(None), "6": self.work_with_sets,
                    "7": self.shortcuts_form, "8": self.keys_screen, "9": self.config_form, "10": self.test,
-                   "11": self.columns, "12": self.broadcast_history, "13": lambda: self.help(None)}
+                   "11": self.columns, "12": self.command_history, "13": lambda: self.help(None),
+                   "14": lambda: self.command_entry(None)}
         if choice in actions:
             actions[choice]()
         else:
@@ -211,6 +214,10 @@ class App:
                 self.t.message = "Sort by " + ", ".join(sorts) + "."
         elif verb in ("devices", "wrkdev"):
             self.work_with_devices()
+        elif verb in ("cmd", "call", "qcmd"):
+            self.command_entry(targets)
+        elif verb in ("history", "dsphst"):
+            self.command_history()
         else:
             self.t.message = f"Command {line.strip()[:40]} is not valid here."
 
@@ -269,7 +276,7 @@ class App:
             if opt in ("1", "9", "11"):
                 continue
             action = {"2": self.change_device, "4": self.forget, "5": self.display_device, "6": self.statistics,
-                      "7": lambda d: self.commands_for([d]), "8": self.reads,
+                      "7": lambda d: self.commands_for([d]), "8": self.facts,
                       "10": lambda d: self.send([d], None, "region")}.get(opt)
             if action is None:
                 self.t.message = f"Option {opt} is not valid; the options are listed above the column headings."
@@ -325,24 +332,78 @@ class App:
                 show(self.t, "Display History Entry", [f"Sent . . . :  {line.get('at')}", f"Command  . :  {line.get('command')}",
                                                        f"Topic  . . :  {line.get('topic')}", "", fmt.history_out(line)])
 
-    def reads(self, d):
-        """8=Last answers: what the device last answered to each read; 1 reads it again."""
-        lst = OptList(self.t, "Display Last Answers", LIST_KEYS, legend=["1=Read again  5=Display"],
-                      header=f"{'Age':>5}  {'Read':18} Answer", head=[f"Device . . :  {d.get('name') or d['node']}  ({d['node']})"],
+    def facts(self, d):
+        """8=Facts: what is known about the device -- its settings, firmware and regions, each
+        with its age, `unsigned` where older firmware answered -- then the reads the table
+        does not know, raw. 1 reads one again, 5 shows it whole."""
+        lst = OptList(self.t, "Display Device Facts", LIST_KEYS, legend=["1=Read again  5=Display"],
+                      header=f"{'Fact':18} {'Value':34} {'Age':>6}", head=[f"Device . . :  {d.get('name') or d['node']}  ({d['node']})"],
                       prompt=None, context="reads")
         while True:
-            rows = (self.call(self.c.reads, d["node"]) or {}).get("reads", [])
-            lst.set_rows([(f"{r['age']:>5}  {r['command'][:18]:18} {r['reply']}", "normal", r) for r in rows])
+            known = self.call(self.c.facts, d["node"]) or {"facts": [], "raw": []}
+            rows = [(fmt.fact_row(f), "normal" if f["verified"] else "grey", f) for f in known["facts"]]
+            raw = [dict(r, label=r["command"], value=r["reply"], read=r["command"], source=r["command"]) for r in known["raw"]]
+            if raw:
+                rows.append(("-- answers to reads not parsed into facts --", "bright", None))
+                rows += [(fmt.fact_row(r), "normal" if r["verified"] else "grey", r) for r in raw]
+            lst.set_rows(rows)
             key, picks, _c = lst.run()
             if key == fkey(5):
                 continue
             if key not in ENTER:
                 return
-            for opt, r in picks:
+            for opt, f in picks:
                 if opt == "1":
-                    self.send([d], None, r["command"])
+                    self.send([d], None, f["read"])
                 elif opt == "5":
-                    show(self.t, "Display Answer", [f"Read . . . :  {r['command']}", f"Answered . :  {r['at']}", "", r["reply"]])
+                    show(self.t, "Display Fact", [f"Fact . . . :  {f['label']}", f"Learned  . :  {f['at']}  ({f['age']} ago)",
+                                                  f"From . . . :  {f['source']}",
+                                                  f"Signature  :  {'signed by the node' if f['verified'] else 'unsigned (older firmware)'}",
+                                                  "", f["value"]])
+
+    def command_entry(self, targets):
+        """Command Entry, as on a 5250: a command typed on ===> is sent to `targets` (or the
+        tagged devices, asked at each Enter), and what came back scrolls up above the line,
+        kept for the session. Up and Down recall; F3 or F12 leaves."""
+        command, log = "", self.log
+        while True:
+            t = self.t
+            w, h = t.size
+            devices = targets or self.tagged()
+            to, why = fmt.target_line(devices) if devices else ("*TAGGED (nothing is tagged)", None)
+            t.frame("Command Entry", ["F1=Help   F3=Exit   F12=Cancel   Up/Down=Recall"])
+            t.put(2, 1, f"To . . . :  {to or why}"[: w - 2])
+            room = h - 10
+            shown = log[-room:] if room > 0 else []
+            for i, (text, attr) in enumerate(shown):
+                t.put(4 + room - len(shown) + i, 1, text[: w - 2], attr)
+            t.put(h - 6, 1, "Type command, press Enter.")
+            t.put(h - 5, 1, "===>", "bright")
+            key, command = t.edit(h - 5, 6, w - 8, command, recall=self.recall(devices))
+            if key == curses.KEY_RESIZE:
+                continue
+            if key == fkey(1):
+                self.help("send")
+                continue
+            if key in EXIT:
+                t.message = ""
+                return
+            if key not in ENTER or not command.strip():
+                continue
+            line, command = command.strip(), ""
+            log.append((f"> {line}", "bright"))
+            if not devices or why:
+                log.append((f"  {why or 'Nothing is tagged: type 1 on a row in Work with devices.'}", "error"))
+                continue
+            job = self.job(self.c.start_send, line, about=to, confirm=False, devices=[d["node"] for d in devices])
+            if job is None:
+                log.append((f"  {t.message or 'Nothing was sent.'}", "error"))
+                t.message = ""
+                continue
+            result = job.get("result") or {}
+            log.append((f"  {result.get('answered', 0)} of {result.get('asked', 0)} answered.", "normal"))
+            log += [("  " + fmt.outcome_row(o), "error" if o.get("verified") is False else "normal") for o in job["outcomes"]]
+            del log[:-200]
 
     # -- sending -------------------------------------------------------------------------
 
@@ -821,9 +882,24 @@ class App:
         if saved:
             self.t.message = "Columns: " + ", ".join(saved.get("columns", picked)) + "."
 
-    def broadcast_history(self):
-        hist = (self.call(self.c.broadcast_history) or {}).get("history", [])
-        show(self.t, "Display Broadcast History", [fmt.history_row(l) for l in reversed(hist)] or ["(nothing broadcast yet)"])
+    def command_history(self):
+        """12: Display Command History -- per device its last commands and what came back,
+        newest block first; a region broadcast is a block of its own (JKG*)."""
+        blocks = []
+        for d in self.devices()["devices"]:
+            lines = (self.call(self.c.history, d["node"], limit=HISTORY_PER) or {}).get("history", [])
+            if lines:
+                blocks.append((lines[-1]["at"], d["node"][:6].lower(), lines))
+        regions = {}
+        for line in (self.call(self.c.broadcast_history, limit=50) or {}).get("history", []):
+            parts = (line.get("topic") or "").split("/")
+            regions.setdefault(parts[1] if len(parts) > 2 else "?", []).append(line)
+        blocks += [(lines[-1]["at"], f"{region}*", lines[-HISTORY_PER:]) for region, lines in regions.items()]
+        rows = fmt.history_blocks([(i, l) for _at, i, l in sorted(blocks, key=lambda b: b[0], reverse=True)], self.t.size[0] - 4)
+        lst = OptList(self.t, "Display Command History", VIEW_KEYS, header="Device   Sent and answered", prompt=None,
+                      context="history")
+        lst.set_rows([(text, attr, i) for i, (text, attr) in enumerate(rows)] or [("(nothing sent yet)", "normal", None)])
+        lst.run()
 
     # -- help ----------------------------------------------------------------------------
 

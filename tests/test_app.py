@@ -414,14 +414,14 @@ def test_backing_out_of_a_parameter_sends_nothing(tmp_path):
     assert not (home / "history" / "FD700369.jsonl").exists()
 
 
-def test_the_lower_panel_keeps_what_the_device_answered_and_enter_reads_it_again(tmp_path):
+def test_the_stats_panel_shows_what_is_known_and_enter_reads_it_again(tmp_path):
     fake = json.dumps({"FD700369|ver": [0, "> v1.17.1-ar-10"], "4AC61A7F|ver": [0, "> v1.16.0"]})
     # Alt+2 reads ver on Far; cursor down to Gisebo and back; Tab twice to the lower panel; Enter re-reads
     text, home = walk(tmp_path, [(b"\x1b2", 1.5), (b"\r", 0.4), (DOWN, 0.4), (b"\x1bOA", 0.4), (b"\t", 0.2), (b"\t", 0.2), (b"\r", 1.5)],
                       env={"MCCONTROL_FAKE_RESULTS": fake}, seconds=6.0)
-    assert "Last answers" in text
-    assert re.search(r"now ver\s+> v1\.17\.1", text)
-    assert "(nothing read yet)" in text                    # Gisebo, before anything was read from it
+    assert "Stats" in text
+    assert re.search(r"firmware\s+v1\.17\.1-ar-10\s+now\?", text)     # ? : unsigned (the fake broker answers r1)
+    assert re.search(r"regions\s+\* F\s+\d+ d", text)                    # Gisebo: what its history taught
     hist = (home / "history" / "FD700369.jsonl").read_text()
     assert hist.count('"command": "ver"') == 2            # the shortcut, then the re-read from the lower panel
 
@@ -540,3 +540,49 @@ def test_esc_during_a_wait_cancels_the_job_and_keeps_what_came(tmp_path):
                       env={"MCCONTROL_FAKE_RESULTS": fake, "MCCONTROL_FAKE_WAIT": "30"})
     assert "Sending" in text and "Sent: ver" in text and "1 of 1 answered" in text
     assert '"command": "ver"' in (home / "history" / "FD700369.jsonl").read_text()
+
+
+def test_the_command_line_sends_and_the_answers_scroll_up_in_the_right_panel(tmp_path):
+    fake = json.dumps({"4AC61A7F|ver": [0, "> v1.17"]})
+    text, home = walk(tmp_path, [(DOWN, 0.3), (b"\t\t\t", 0.3), (b"ver", 0.3), (b"\r", 1.5), (b"set prv.key 00\r", 1.0),
+                                 (b"\x1bOA\x1bOA", 0.3)], env={"MCCONTROL_FAKE_RESULTS": fake})
+    assert "Tab here or click to type a command" in text and "Command line" in text
+    assert "Gisebo> ver" in text and "1 of 1 answered." in text and "Gisebo       > v1.17" in text
+    assert "Gisebo> set prv.key 00" in text and "Not sent: the node would refuse it" in text
+    assert "Sent: ver" not in text                          # no window: the console says it
+    assert '"command": "ver"' in (home / "history" / "4AC61A7F.jsonl").read_text()
+
+
+UP, DOWN_KEY = __import__("curses").KEY_UP, __import__("curses").KEY_DOWN
+
+
+def test_up_and_down_on_the_command_line_recall_what_was_sent():
+    from mccontrol.ui.MeshcoreCommander.app import App
+
+    class Client:
+        def broadcast_history(self, limit):
+            return {"history": [{"command": "region put se-jkp *"}]}
+
+        def history(self, node, limit):
+            return {"history": [{"command": "region"}, {"command": "ver"}]}
+    app = App.__new__(App)                       # no terminal: only what type_key reads
+    app.client, app.line, app.typed, app.recall = Client(), "", ["get name", "ver"], None
+    app.devices, app.list = [{"node": "4AC61A7F"}], type("L", (), {"selected": [0], "tags": set()})()
+    seen = []
+    for key in (UP, UP, UP, UP, UP, DOWN_KEY, DOWN_KEY, DOWN_KEY):
+        assert app.type_key(key)
+        seen.append(app.line)
+    assert seen == ["ver", "get name", "region", "region put se-jkp *", "region put se-jkp *", "region", "get name", "ver"]
+    app.type_key(DOWN_KEY)
+    assert app.line == ""                         # past the newest: an empty line
+
+
+def test_h_shows_every_devices_command_history_in_blocks(tmp_path):
+    def forged(home):
+        with (home / "history" / "4AC61A7F.jsonl").open("a") as f:
+            f.write(json.dumps({"at": "2026-10-08 11:00:00", "command": "ver", "topic": "t", "code": 0, "code_name": "ok",
+                                "reply": "> forged", "verified": False, "note": ""}) + "\n")
+    text, _ = walk(tmp_path, [(b"h", 0.6)], prepare=forged)
+    assert "Command history" in text
+    assert re.search(r"4ac61a│ > region\s", text) and "│ < * F (unsigned)" in text
+    assert "│ < BAD SIGNATURE forged" in text

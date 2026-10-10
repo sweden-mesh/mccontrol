@@ -155,3 +155,42 @@ def build(text, values):
 def dots(label, width=26):
     """`Name . . . . . :`, the 5250 prompt leader."""
     return (label + " " + ". " * width)[:width - 1].rstrip().ljust(width) + ":"
+
+
+def cut(text, width):
+    """`text` in `width` columns, ending in `~` where it was cut."""
+    text = " ".join(str(text).split())
+    return text if len(text) <= width else (text[:width - 1] + "~" if width > 0 else "")
+
+
+def fact_row(f):
+    """A fact on Display Device Facts: what, its value, its age, and `unsigned` where the
+    answer that taught it was not signed (older firmware)."""
+    signed = "" if f.get("verified") else "unsigned"
+    return f"{cut(f['label'], 18):18} {cut(f['value'], 34):34} {f['age']:>6}  {signed}"
+
+
+def reply_text(line):
+    """The `< ...` of a history line: the reply without the firmware's `> `, BAD SIGNATURE
+    first when the signature failed, `(unsigned)` after an unsigned one."""
+    out = history_out(line)
+    if line.get("code") == 0 and out.startswith(">"):
+        out = out[1:].strip()
+    if line.get("verified") is False:
+        return f"BAD SIGNATURE {out}"
+    return f"{out} (unsigned)" if line.get("code") == 0 and line.get("verified") is None else out
+
+
+def history_blocks(blocks, width=76):
+    """The command history in the operator's form, as `(text, attr)` rows: per block the
+    short id once, then `> command` and `< reply`, `|` between. `blocks` is `[(id, lines)]`,
+    newest first."""
+    rows = []
+    for ident, lines in blocks:
+        for line in lines:
+            rows.append((f"{ident:6} | > {cut(line.get('command') or '', width - 11)}", "normal"))
+            bad = line.get("verified") is False or line.get("code") not in (0, None)
+            unsigned = line.get("code") == 0 and line.get("verified") is None
+            rows.append((f"{'':6} | < {cut(reply_text(line), width - 11)}", "error" if bad else ("grey" if unsigned else "normal")))
+            ident = ""
+    return rows

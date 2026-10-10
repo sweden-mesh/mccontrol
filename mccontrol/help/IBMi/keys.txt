@@ -25,7 +25,7 @@ shows the contents.
 Options, typed in the Opt column of Work with Devices, then Enter:
 
   1=Tag/untag  2=Change  4=Forget  5=Display  6=Statistics  7=Commands
-  8=Last answers  9=Send  10=Regions  11=Name and version
+  8=Facts  9=Send  10=Regions  11=Name and version
 
 Other lists show their own options above the column headings. Space or
 Backspace clears an option; several rows may carry one at once.
@@ -34,14 +34,21 @@ Main menu selections, typed on the ===> line: 1 Work with devices, 2 Send
 a command, 3 to every node in a region, 4 Run a command set, 5 Discover,
 6 Work with command sets, 7 Work with shortcuts, 8 Work with signing key,
 9 Change configuration, 10 Test the broker connection, 11 Change
-directory columns, 12 Display broadcast history, 13 Help contents, 90
-Sign off.
+directory columns, 12 Display command history, 13 Help contents, 14
+Command entry, 90 Sign off.
 
 Commands, typed on any ===> line:
 
   send <device> <command>   all <region> <command>   discover <region>
   run <set> [arg]   alt <n>   names   fleet   tag <region>   untag
-  invert   sort <by>   devices   help [topic]
+  invert   sort <by>   devices   cmd   history   help [topic]
+
+"cmd" (or 14 on the main menu) opens Command Entry: a command typed on its
+===> is sent to the tagged devices -- from Work with Devices, to the rows
+it acts on -- and what came back scrolls up above the line, kept for the
+session; Up and Down recall, F3 leaves. "history" (or 12) is Display
+Command History: per device its last commands, newest first, in the form
+"65c1d1 | > get ver" / "       | < 1.2"; a region broadcast is "JKG*".
 
 On Work with Devices they act on the tagged rows, or the cursor row:
 "send <command>" needs no device there, and "stats [24h|48h|168h]" shows

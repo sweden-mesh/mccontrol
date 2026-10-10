@@ -15,9 +15,13 @@ Keys on the main screen
   s         the cursor device's statistics from Beacon: see [[stats]]
   r         refresh the Batt and Seen columns from Beacon, tagged or all
   n         read name and version from the tagged or cursor devices: [[devices]]
+  h         the command history of every device in the right panel
   Ins Space tag the row and move down;  * invert;  + - tag or untag a region
-  Tab       cycle the three panels (devices, history, last answers);
-            Enter on a last-answers line reads it again;  Esc  close
+  Tab       cycle the three panels (devices, history, stats), then the
+            command line; Enter on a stats line reads it again;  Esc  close
+  On the command line (the prompt above the key bar; Tab or a click):
+            type a command, Enter sends it as F2 would, Up and Down recall,
+            Esc leaves; the answers land in the right panel
   Ctrl+L    redraw the screen
   Mouse     where the terminal has one: a row takes the cursor, a key-bar
             label presses it, a menu title opens it. Never needed.
@@ -27,7 +31,8 @@ The menus (F9, or Alt+ the title's first letter) hold the rest:
   Devices   discover, edit, forget, sort, names and versions, tag a region
   Send      to the tagged or cursor device, to all in a region, read
             regions, Command set (run one: see [[sets]]), the shortcuts
-  View      Statistics, Last 48 hours, Last 7 days, Refresh Batt/Seen
+  View      Statistics, Last 48 hours, Last 7 days, Refresh Batt/Seen,
+            Command history, Command line output
   Keys      Show public key: the provisioning line, Register, Replace
             key, or create or import one when there is none: [[signing]]
   Options   Broker and Test the broker ([[broker]]), Shortcuts (edit the

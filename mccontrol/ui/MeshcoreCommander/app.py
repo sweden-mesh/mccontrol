@@ -23,7 +23,8 @@ KEYS = ["Help", "Send", "Hist", "Edit", "Disco", "Regns", "All", "Del", "Menu", 
 KEY_NAMES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "Shift+F1", "Alt+F1", "Alt+1..9",
              "Alt+D", "Alt+S", "Alt+V", "Alt+K", "Alt+O", "Alt+H", "Ctrl+L", "Enter", "Esc", "Tab", "Shift+Tab",
              "Up", "Down", "Left", "Right", "PgUp", "PgDn", "Ins", "Space", "Backspace",
-             "s", "r", "n", "c", "*", "+", "-")
+             "s", "r", "n", "c", "h", "*", "+", "-")
+HISTORY_PER = 6                         # commands per device in View > Command history
 
 
 class Topic:
@@ -46,16 +47,19 @@ class App:
         self.columns, self.all_columns = [], []
         w, h = screen.size
         split = w // 2
-        total = h - 2                                # the menu bar above, the key bar below
-        lower_h = max(5, total // 3)                 # "Last answers" under the history
+        total = h - 3                                # the menu bar above; the command line, the key bar below
+        lower_h = max(5, total // 3)                 # "Stats" under the history
         self.left = Panel(1, 0, split, total, "Devices")
         self.right = Panel(1, split, w - split, total - lower_h, "History")
-        self.lower = Panel(1 + total - lower_h, split, w - split, lower_h, "Last answers")
+        self.lower = Panel(1 + total - lower_h, split, w - split, lower_h, "Stats")
         self.left.active = True
         self.list = ListView(self.left, header=1)
         self.view = ListView(self.right)
         self.reads_view = ListView(self.lower)
-        self.reads_rows = []                 # (command, reply, at) behind the lower panel
+        self.reads_rows = []                 # (command to read it again, the fact) behind the lower panel
+        self.line, self.typing, self.typed = "", False, []   # the command line above the key bar
+        self.console = []                    # what the command line sent and got, for the right panel
+        self.inline = False                  # while the command line sends: a refusal goes to the console
         self.found = []                      # the last discovery's entries
         self.right_rows = []                 # (line, full_text) pairs behind the right panel
         self.right_mode = "history"          # "history" | "results" | "found" | "regions"
@@ -67,10 +71,12 @@ class App:
                              MenuItem("Forget", "forget", "F8"), MenuItem("Sort by name", "sort:name"),
                              MenuItem("Sort by region", "sort:region"), MenuItem("Sort by last sent", "sort:last sent"),
                              MenuItem("Sort by version", "sort:version"), MenuItem("Names and versions", "names", "n"),
-                             MenuItem("Tag all in region", "tag:+", "+"), MenuItem("Untag region", "tag:-", "-")]),
+                             MenuItem("Tag all in region", "tag:+", "+"), MenuItem("Untag region", "tag:-", "-"),
+                             MenuItem("Clear tags", "untagall")]),
             self.send_menu(),
             Menu("View", [MenuItem("Statistics", "stats:24h:6h", "s"), MenuItem("Last 48 hours", "stats:48h:6h"),
-                          MenuItem("Last 7 days", "stats:168h:24h"), MenuItem("Refresh Batt/Seen", "fleet", "r")]),
+                          MenuItem("Last 7 days", "stats:168h:24h"), MenuItem("Refresh Batt/Seen", "fleet", "r"),
+                          MenuItem("Command history", "blocks", "h"), MenuItem("Command line output", "console")]),
             Menu("Keys", [MenuItem("Show public key", "keys")]),
             Menu("Options", [MenuItem("Broker", "setup"), MenuItem("Test the broker", "test"),
                              MenuItem("Shortcuts", "shortcuts"), MenuItem("Command sets", "sets"),
@@ -165,18 +171,27 @@ class App:
             self.right_rows = [("", ["Nothing has been sent to this device yet."])]
 
     def show_reads(self, device):
-        """The lower right panel: what this device last answered to each read, newest first."""
+        """The lower right panel, Stats: what is known about the device -- its settings,
+        firmware and regions, each with its age and `?` where the answer was unsigned (older
+        firmware) -- then the reads not parsed into facts, raw."""
         self.reads_node = (device or {}).get("node")
-        reads = self.client.reads(device["node"])["reads"] if device else []
-        self.reads_rows = [(r["command"], r["reply"], r["at"]) for r in reads]
+        known = self.client.facts(device["node"]) if device else {"facts": [], "raw": []}
+        entries = known["facts"] + [dict(r, label=r["command"], value=r["reply"], read=r["command"]) for r in known["raw"]]
+        self.reads_rows = [(e["read"], e) for e in entries]
         width = self.lower.inner[2] - 1
+        label_w = min(17, max((len(e["label"]) for e in entries), default=0))
         rows = []
-        for r in reads:
-            rows.append(f"{r['age']:>5} {r['command'][:12]:12} {r['reply']}"[:width])
-        self.reads_view.set_rows(rows or ["(nothing read yet)"], keep=False)
+        for e in entries:
+            age = e["age"] + ("?" if e["verified"] is None else " ")
+            room = max(1, width - label_w - len(age) - 2)
+            value = " ".join(e["value"].split())
+            value = value if len(value) <= room else value[:room - 1] + "…"
+            rows.append(f"{e['label'][:label_w]:{label_w}} {value:{room}} {age}"[:width])
+        self.reads_view.set_rows(rows or ["(nothing known yet)"], keep=False)
+        self.lower.title = "Stats  (? unsigned)" if any(e["verified"] is None for e in entries) else "Stats"
 
     def reread(self):
-        """Enter on a line of the lower panel: send that read again to the cursor device."""
+        """Enter on a line of Stats: send the read that taught it again to the cursor device."""
         if not self.reads_rows or self.reads_view.cursor >= len(self.reads_rows):
             return
         command = self.reads_rows[self.reads_view.cursor][0]
@@ -185,6 +200,48 @@ class App:
     def activate(self, which):
         for panel in (self.left, self.right, self.lower):
             panel.active = panel is which
+
+    def show_console(self):
+        """The right panel as the command line's console: each command and what came back,
+        the newest at the bottom, scrolled to it."""
+        self.right_mode, self.right_node = "console", None
+        self.right.title = "Command line"
+        self.right_rows = [(line, [line]) for line in self.console]
+        self.view.set_rows(self.console or ["(nothing sent from the command line yet)"], keep=False)
+        self.view.cursor = max(0, len(self.view.rows) - 1)
+        self.view._scroll()
+
+    def show_blocks(self):
+        """View > Command history: per device its last commands and what came back, newest
+        block first, the short id once on the left; a region broadcast is a block of its own."""
+        blocks = []
+        for d in self.devices:
+            lines = self.client.history(d["node"], limit=HISTORY_PER)["history"]
+            if lines:
+                blocks.append((lines[-1]["at"], d["node"][:6].lower(), lines))
+        regions = {}
+        for line in self.client.broadcast_history(50)["history"]:
+            parts = (line.get("topic") or "").split("/")
+            regions.setdefault(parts[1] if len(parts) > 2 else "?", []).append(line)
+        blocks += [(lines[-1]["at"], f"{region}*", lines[-HISTORY_PER:]) for region, lines in regions.items()]
+        rows, width = [], self.right.inner[2] - 1
+        for _at, ident, lines in sorted(blocks, key=lambda b: b[0], reverse=True):
+            for line in lines:
+                reply = (line["reply"] or "OK") if line["code"] == 0 else (
+                    f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
+                reply = reply[1:].strip() if line["code"] == 0 and reply.startswith(">") else reply
+                if line.get("verified") is False:
+                    reply = f"BAD SIGNATURE {reply}"
+                elif line["code"] == 0 and line.get("verified") is None:
+                    reply += " (unsigned)"
+                for text in (f"{ident:6}│ > {line['command']}", f"{'':6}│ < {' '.join(reply.split())}"):
+                    rows.append((text if len(text) <= width else text[:width - 1] + "…",
+                                 [f"{line['at']}  {line['command']}", "", reply]))
+                ident = ""
+        self.right_mode, self.right_node = "blocks", None
+        self.right.title = "Command history"
+        self.right_rows = rows or [("", ["Nothing has been sent yet."])]
+        self.view.set_rows([r[0] for r in rows] or ["(nothing sent yet)"], keep=False)
 
     def show_results(self, title, lines, details=None):
         """After a send or a discovery: what came back, until the cursor moves."""
@@ -226,9 +283,78 @@ class App:
         self.list.draw(s)
         self.view.draw(s)
         self.reads_view.draw(s)
+        self.draw_line()
         self.menu.draw(s)
         self.keybar.draw(s)
         s.refresh()
+
+    def target(self):
+        """Who the command line sends to, as its prompt says it."""
+        targets = self.targets
+        if len(targets) > 1:
+            return f"{len(targets)} tagged"
+        return (targets[0].get("name") or targets[0]["node"]) if targets else "no device"
+
+    def draw_line(self):
+        """The command line, as Norton Commander kept a DOS prompt above its key bar."""
+        s = self.screen
+        w, h = s.size
+        prompt = f"{self.target()[:16]}>"
+        s.put(h - 2, 0, " " * (w - 1), s.colors.bar)
+        s.put(h - 2, 0, prompt, s.colors.bar | (curses.A_BOLD if self.typing else 0))
+        room = max(1, w - len(prompt) - 3)
+        shown = self.line[-room:] if (self.line or self.typing) else "Tab here or click to type a command"
+        s.put(h - 2, len(prompt) + 1, shown, s.colors.bar if (self.line or self.typing) else s.colors.bar | curses.A_DIM)
+        s.cursor(self.typing)
+        if self.typing:
+            try:
+                s.win.move(h - 2, len(prompt) + 1 + len(self.line[-room:]))
+            except curses.error:
+                pass
+
+    def type_key(self, key):
+        """A key on the command line; False for one it does not take (F-keys, Tab, the mouse)."""
+        if key == 27:
+            self.typing, self.recall = False, None
+            self.activate(self.left)
+        elif key in KEY_ENTER:
+            command = " ".join(self.line.split())
+            self.line, self.recall = "", None
+            if command:
+                self.typed = [c for c in self.typed if c != command] + [command]
+                self.from_line(command)
+        elif key in (curses.KEY_BACKSPACE, 127, 8):
+            self.line = self.line[:-1]
+        elif key in (curses.KEY_UP, curses.KEY_DOWN):
+            if getattr(self, "recall", None) is None:
+                seen = [l["command"] for l in self.client.broadcast_history(50)["history"]]
+                for d in self.targets[:1]:
+                    seen += [l["command"] for l in self.client.history(d["node"], 50)["history"]]
+                back = list(dict.fromkeys(reversed(seen + self.typed)))[::-1]
+                self.recall = (back, len(back))
+            back, pos = self.recall
+            pos = max(0, pos - 1) if key == curses.KEY_UP else min(len(back), pos + 1)
+            self.recall = (back, pos)
+            if back:
+                self.line = back[pos] if pos < len(back) else ""
+        elif 32 <= key < 127:
+            self.line += chr(key)
+        else:
+            return False
+        return True
+
+    def from_line(self, command):
+        """Enter on the command line: sent as F2 sends it -- the tagged devices or the cursor
+        one, a caution confirmed first -- and the answers land in the right panel's console;
+        a refusal is said there too, not in a window."""
+        self.console.append(f"{self.target()}> {command}")
+        self.inline = True
+        try:
+            self.send(initial=command, immediate=True)
+        finally:
+            self.inline = False
+        del self.console[:-300]
+        self.show_console()
 
     # -- main loop ---------------------------------------------------------------------
 
@@ -242,6 +368,8 @@ class App:
                 return 0
             if key == 12 or key == curses.KEY_RESIZE:        # Ctrl+L, or the terminal changed size
                 self.screen.repaint()
+                continue
+            if self.typing and key != 9 and self.type_key(key):
                 continue
             if key == curses.KEY_F9:                            # the key bar's "9Menu"
                 key = curses.KEY_F10
@@ -275,10 +403,11 @@ class App:
                     self.do("all")
             elif key == curses.KEY_F8:
                 self.do("forget")
-            elif key == 9:                                   # Tab cycles the three panels
+            elif key == 9:                                   # Tab: the three panels, then the command line
                 order = (self.left, self.right, self.lower)
-                current = next((i for i, p in enumerate(order) if p.active), 0)
-                self.activate(order[(current + 1) % 3])
+                current = 3 if self.typing else next((i for i, p in enumerate(order) if p.active), 0)
+                self.typing = current == 2
+                self.activate(None if self.typing else order[(current + 1) % 4])
             elif key in KEY_ENTER and self.lower.active:
                 self.reread()
             elif key == 27 and self.right_mode == "found":
@@ -293,6 +422,8 @@ class App:
                 self.do("fleet")
             elif key == ord("n") and self.left.active:
                 self.do("names")
+            elif key == ord("h") and self.left.active:
+                self.do("blocks")
             elif key == ord("+") or key == ord("-"):
                 self.do("tag:" + chr(key))
             elif key < 0 and chr(-key) in "123456789":          # Alt+digit
@@ -324,7 +455,11 @@ class App:
             n = KeyBar.hit(x, w)
             if n:
                 curses.ungetch(curses.KEY_F0 + n)
+        elif y == h - 2:                                    # the command line
+            self.typing = True
+            self.activate(None)
         elif self.list.click(y, x):
+            self.typing = False
             self.activate(self.left)
             if self.right_mode != "history":
                 self.right_mode = "history"
@@ -344,12 +479,20 @@ class App:
             self.outcome("Sort", f"Sorted by {self.sort}.")
         elif action.startswith("tag:"):
             self.tag_region(action[4:] == "+")
+        elif action == "untagall":
+            self.show_tags(self.client.untag())
         elif action == "help":
             self.help()
         elif action.startswith("help:"):
             self.helpwin.run(self.screen, action[5:], self.draw)
         elif action == "history":
             self.history_window()
+        elif action == "blocks":
+            self.show_blocks()
+            self.activate(self.right)
+        elif action == "console":
+            self.show_console()
+            self.activate(self.right)
         elif action == "commands":
             self.command_list()
         elif action == "send":
@@ -566,7 +709,11 @@ class App:
         notice(self.screen, title, [headline] + ([""] + list(lines) if lines else []), self.draw)
 
     def refuse(self, why, title="Not done"):
-        """Why nothing was done, as a window: a precondition that failed or an error raised."""
+        """Why nothing was done, as a window: a precondition that failed or an error raised;
+        from the command line, a line in its console instead."""
+        if self.inline:
+            self.console.append(f"  {why}")
+            return
         notice(self.screen, title, [why], self.draw)
 
     def job(self, title, line, describe, start, *args, first=None, **kwargs):
@@ -904,6 +1051,9 @@ class App:
             self.refuse(exc.message)
             return
         self.reload()
+        if self.inline:                     # the command line: the console says it, no window
+            self.console += [f"  {answered} of {asked} answered."] + [f"  {line}" for line in lines]
+            return
         self.show_results(f"Results: {command[:30]}", lines)
         self.outcome(f"Sent: {command[:40]}", f"{answered} of {asked} answered.", lines)
 

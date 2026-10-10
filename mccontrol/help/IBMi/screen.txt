@@ -14,8 +14,9 @@ clear the tags, invert them. The count of tags and the sort are at the
 right above the headings.
 
 Type an option by any number of rows and press Enter; each runs in turn.
-5=Display shows the device and its history (see [[history]]), 8=Last
-answers what it last said to each read (see [[reads]]).
+5=Display shows the device and its history (see [[history]]), 8=Facts
+what is known about it: its settings, firmware and regions, each with its
+age, "unsigned" where older firmware answered (see [[reads]]).
 
 The line above the function keys is the message line: the outcome of the
 last thing you did, or why it was refused.

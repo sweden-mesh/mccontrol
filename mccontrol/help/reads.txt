@@ -1,17 +1,24 @@
-Last answers: what a repeater has told you
+Facts: what is known about a repeater
 
-What the current device last answered to each read -- ver, get name,
-region, neighbors, every get -- is kept, one line each: the age of the
-answer, the command, the reply; newest first. It follows the current
-device, so moving onto a device shows at once what is known about it
-without sending anything.
+What a device has told you is parsed into its settings, each with the age
+of the answer that carried it: name and firmware ("get name", "ver"), tx,
+rx and direct tx delay ("get txdelay" ...), autoreply and its hops, mode,
+channel, private, slots or delay ("get autoreply" gives six at once), the
+region map ("region"), and every other "get <setting>" by its name. A
+write teaches as much as a read: "set txdelay 0.7" answered OK makes the
+tx delay 0.7, as of then.
 
-A write (set ...) is not kept there; history has it. A refusal or
-silence stores nothing and clears nothing: the last good answer stays,
-and its age says how old it is. The statistics view leaves a
-"stats (Beacon)" line with the battery, uptime and noise floor.
+The newest answer wins. A refusal or silence teaches nothing and clears
+nothing, so an old value stays with its age showing how old it is. An
+answer whose signature failed (BAD SIGNATURE) teaches nothing at all; an
+unsigned one, from firmware older than ar-11, still counts and is marked
+unsigned. A read that is not parsed (neighbors, board, memory, the
+"stats (Beacon)" line) is listed after the facts, raw, under its command.
 
-Any line can be read again, and is replaced when the answer arrives. On
-the command line, "mccontrol reads <device>" prints the same.
+Nothing is sent to show them: they come from what is kept on this machine,
+the last answer to each read and the history of every command, and they
+change the moment a result lands. Any line can be read again. The API has
+them as "GET /devices/{ref}/facts"; on the command line, "mccontrol reads
+<device>" prints the last answer to each read.
 
 See [[commandlist]], [[history]] and [[stats]].

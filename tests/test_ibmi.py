@@ -260,7 +260,8 @@ def test_3_sends_to_every_node_in_a_region_and_12_shows_the_broadcast(api):
     text = walk(api, [(b"3\r", 0.6), (b"\t", 0.2), (b"region put se-jkp *\r", 1.2), (F[3], 0.4), (b"12\r", 0.6)])
     assert "Send a Command to Every Node in a Region" in text
     assert "EVERY node in JKG" in text and "2 of 2 answered." in text
-    assert "Display Broadcast History" in text and "region put se-jkp *" in text
+    assert "Display Command History" in text and "JKG*   | > region put se-jkp *" in text
+    assert "| < 2 of 2 answered" in text
     assert [l["command"] for l in store.history(None)] == ["region put se-jkp *"]
     assert sent(store, "FD700369") == []                          # Far is in GOT
 
@@ -315,7 +316,7 @@ def test_a_text_parameter_shows_examples_and_f12_backs_out(api):
     assert sent(store, "FD700369") == ["region put se-jkp *"]        # the first prompt sent nothing
 
 
-def test_5_displays_the_device_and_its_history_and_8_its_last_answers(api):
+def test_5_displays_the_device_and_its_history_and_8_its_facts(api):
     _server, _url, store = api
     api[0].ctx.script["FD700369|ver"] = [0, "> v1.17.1-ar-10"]
     text = walk(api, [(b"send Far ver\r", 1.2), (F[3], 0.4), (b"1\r", 0.8), (b"5\r", 0.8), (b"5\r", 0.6), (F[3], 0.4),
@@ -323,7 +324,8 @@ def test_5_displays_the_device_and_its_history_and_8_its_last_answers(api):
     assert "Display Device" in text and "Node . . . . :  FD700369" in text and "Region . . :  GOT" in text
     assert re.search(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d\s+ver\s+> v1\.17\.1-ar-10", text)
     assert "Display History Entry" in text and "Topic  . . :" in text
-    assert "Display Last Answers" in text and "1=Read again" in text and re.search(r"now\s+ver\s+> v1\.17\.1-ar-10", text)
+    assert "Display Device Facts" in text and "1=Read again" in text
+    assert re.search(r"firmware\s+v1\.17\.1-ar-10\s+now\s+unsigned", text)       # the scripted broker answers r1
     assert sent(store, "FD700369") == ["ver", "ver"]                 # the send, then the read again
 
 
@@ -554,3 +556,29 @@ def test_below_80x24_the_screen_waits_for_room_and_comes_back_when_it_grows(api)
         assert "MCCONTROL Main Menu" in back and "Work with Devices" not in back
     finally:
         s.close()
+
+
+def test_command_entry_sends_to_the_tagged_and_what_came_back_scrolls_up(api):
+    _server, _url, store = api
+    text = walk(api, [(b"1\r", 0.8), (DOWN, 0.2), (b"1\r", 0.6), (b"cmd\r", 0.6), (b"ver\r", 1.5),
+                      (b"set prv.key 00\r", 1.0), (UP + UP, 0.3)])
+    assert "Command Entry" in text and "To . . . :  Gisebo  (4AC61A7F, JKG)" in text
+    assert "> ver" in text and "1 of 1 answered." in text and "unverified result > esp32s3" in text
+    assert "> set prv.key 00" in text and "Not sent: the node would refuse" in text
+    assert sent(store, "4AC61A7F") == ["ver"]
+
+
+def test_command_entry_from_the_menu_with_nothing_tagged_says_so(api):
+    text = walk(api, [(b"14\r", 0.6), (b"ver\r", 0.6)])
+    assert "*TAGGED (nothing is tagged)" in text and "Nothing is tagged" in text
+
+
+def test_the_history_blocks_and_a_fact_say_a_forged_and_an_unsigned_answer():
+    good = {"at": "2026-10-09 10:00:00", "command": "ver", "code": 0, "reply": "> 1.2", "verified": True}
+    rows = fmt.history_blocks([("65c1d1", [good, dict(good, reply="> evil", verified=False), dict(good, verified=None)]),
+                               ("JKG*", [{"command": "get name", "code": None, "note": "2 of 2 answered"}])])
+    assert rows == [("65c1d1 | > ver", "normal"), ("       | < 1.2", "normal"), ("       | > ver", "normal"),
+                    ("       | < BAD SIGNATURE evil", "error"), ("       | > ver", "normal"),
+                    ("       | < 1.2 (unsigned)", "grey"), ("JKG*   | > get name", "normal"), ("       | < 2 of 2 answered", "normal")]
+    assert fmt.fact_row({"label": "tx delay", "value": "0.5", "age": "2 d", "verified": None}).endswith("2 d  unsigned")
+    assert fmt.cut("louie-magic-fw-1.2", 10) == "louie-mag~"

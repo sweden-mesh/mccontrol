@@ -13,7 +13,15 @@ the panels; Enter on a history line opens the whole reply.
 
 The top line is the menu bar (F10 or Alt+letter). The bottom line is the
 key bar: the ten function keys and what each does here. The line above it
-is the message line: the outcome of the last thing you did.
+is the command line, a prompt naming where it sends ("Gisebo>", "2
+tagged>"): Tab to it or click it, type a command, Enter sends it to the
+tagged devices or the cursor device, with the same confirm as F2. What
+came back, or why nothing was sent, scrolls up in the right panel.
+
+View > Command history (h) shows, in the right panel, every device's
+last commands and what came back, newest first: the short id once, then
+"> command" and "< reply"; a region broadcast is a block of its own
+("JKG*"), a forged reply says BAD SIGNATURE, an unsigned one (unsigned).
 
 See [[keys]] for the keys, [[send]] for sending, [[discover]] for finding
 repeaters.
@@ -36,8 +44,9 @@ the results. There is no message row: nothing is said where it can be
 missed.
 
 The right side is two panels: the history (or a send's results) above,
-and "Last answers" below -- what the cursor device last said to each read,
-with its age (see [[reads]]).
+and "Stats" below -- what is known about the cursor device: its settings,
+firmware and regions, each with its age, and a question mark after the
+age where older firmware answered unsigned (see [[reads]]).
 
 On an 80-column terminal the directory is 38 wide, so not every column
 fits: Options > Directory columns picks which of Reg, Sent, Batt, Seen,

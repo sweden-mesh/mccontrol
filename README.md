@@ -58,8 +58,11 @@ the control plane or by Beacon — and is a device to look at, not a verdict. No
 itself.
 
 The left panel is your device directory; the upper right panel follows the cursor (history), or
-shows a send's results, or what a discovery found; the lower right keeps what the cursor device
-last answered to each read, with its age. Ins tags rows, `*` inverts, `+`/`-` tag a
+shows a send's results, what a discovery found, the command line's console or every device's
+command history; the lower right, Stats, is what is known about the cursor device (its settings,
+firmware and regions, each with its age, `?` after an unsigned one). Above the key bar is a command
+line, Norton Commander's DOS prompt: `Gisebo> `, Tab to it or click it, type, Enter sends as F2
+does and the answers scroll up in the right panel. Ins tags rows, `*` inverts, `+`/`-` tag a
 region. Dialogs take the one or two values a verb needs; Esc always cancels.
 
 | key | does |
@@ -77,7 +80,8 @@ region. Dialogs take the one or two values a verb needs; Esc always cancels.
 | Options > Broker | the control broker: host, port, TLS on or off, credentials |
 | Alt+1..9 | a command per key to the tagged or cursor device, no dialog: `region`, `ver`, `get name`, `get autoreply`, `get radio`, `get repeat` as shipped; Options > Shortcuts edits them |
 | Ins, Space, `*`, `+`, `-` | tag a row, invert, tag or untag a region |
-| Tab | cycle the three panels: devices, history, last answers (Enter there reads it again) |
+| Tab | cycle the three panels -- devices, history, stats (Enter there reads it again) -- then the command line (Up/Down recall, Esc leaves) |
+| `h` | every device's command history in the right panel, in blocks: `65c1d1│ > get ver` / `│ < 1.2`, newest first |
 | `n` | read `get name` and `ver` from the tagged or cursor devices: an unnamed device takes the fleet's name, the Ver column fills (sortable) |
 | `r` | refresh the directory's Batt and Seen columns from Beacon for the tagged devices, or all; never automatic |
 | `s` | the cursor device's statistics from Beacon (battery, uptime, noise floor, airtime, packets, errors, with the sample's age, and 24 h of history); View menu for 48 h and 7 d |
@@ -96,7 +100,6 @@ The IBM i (AS/400, 5250) green screen: a numbered main menu, lists with an Opt c
  MCCONTROL                    MCCONTROL Main Menu            09/10/26  00:15:58
 
  Select one of the following:
-
        1. Work with devices
        2. Send a command                            Broker       mqtt.louie.se
        3. Send a command to every node in a region  Signing key  present
@@ -108,8 +111,9 @@ The IBM i (AS/400, 5250) green screen: a numbered main menu, lists with an Opt c
        9. Change configuration
       10. Test the broker connection
       11. Change directory columns
-      12. Display broadcast history
+      12. Display command history
       13. Help contents
+      14. Command entry
       90. Sign off
  Selection or command
  ===>
@@ -122,14 +126,19 @@ The IBM i (AS/400, 5250) green screen: a numbered main menu, lists with an Opt c
 - **Selection.** A number on `===>` opens that screen (`9` the broker, its port and TLS on or off);
   `90`, `signoff` or `quit` signs off.
 - **Opt.** On Work with Devices, type an option on a row and press Enter: `1` tag, `2` change,
-  `4` forget, `5` display, `6` statistics, `7` commands, `8` last answers, `9` send, `10`
+  `4` forget, `5` display, `6` statistics, `7` commands, `8` facts, `9` send, `10`
   regions, `11` name and version. Other lists show their own options above the header.
 - **F-keys.** F1 help, F3 exit, F5 refresh, F12 cancel everywhere; on Work with Devices F6
   discover, F7 Batt/Seen from Beacon, F9 send, F10 names, F11 sort, F13-F21 the shortcuts.
 - **`===>` verbs.** `send <device> <command>`, `all <region> <command>`, `discover <region>`,
   `run <set> [arg]`, `alt <n>`, `names`, `fleet`, `tag <region>`, `untag`, `invert`, `sort <by>`,
-  `devices`, `help [topic]`; on Work with Devices they act on the tagged rows or the cursor
-  row, and `stats [24h|48h|168h]` is added.
+  `devices`, `cmd`, `history`, `help [topic]`; on Work with Devices they act on the tagged rows
+  or the cursor row, and `stats [24h|48h|168h]` is added.
+- **Command Entry** (`14` or `cmd`): a command typed on its `===>` goes to the tagged devices (or
+  the rows Work with Devices acts on), and what came back scrolls up above the line for the
+  session; Up/Down recall.
+- **Display Command History** (`12` or `history`): per device its last commands, newest first,
+  `65c1d1 | > get ver` / `       | < 1.2`; a region broadcast is `JKG*`.
 
 ### Monolith
 
