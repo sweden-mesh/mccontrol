@@ -820,3 +820,41 @@ def test_a_value_cut_to_its_tile_ends_in_an_ellipsis(tmp_path):
     assert "< refused not-allo…" in walk.screen
     walk(tmp_path / "ascii", [], cols=120, rows=40, prepare=_histories, env={"LANG": "C", "LC_ALL": "C"})
     assert "< refused not-allo~" in walk.screen
+
+
+def test_after_a_verb_the_history_asks_only_for_the_devices_it_sent_to():
+    from mccontrol.ui.Monolith.board import Board
+    calls = []
+
+    class Client:
+        def history(self, node, limit=None):
+            calls.append(node)
+            note = "broadcast" if node == "N0001" else ""
+            return {"node": node, "history": [{"at": "2026-10-10 10:00:00", "command": "ver", "code": 0, "reply": "> v",
+                                               "verified": True, "note": note}] if node in sent else []}
+
+        def broadcast_history(self, limit=None):
+            calls.append("broadcasts")
+            return {"node": None, "history": []}
+    board = Board.__new__(Board)
+    board.client, board.last_hist, board.hist_cache, board.broadcasts = Client(), 0.0, {}, {}
+    board.devices = [{"node": f"N{i:04}", "last_sent": None, "last_result": None} for i in range(50)]
+    sent = set()
+    board.load_history(force=True)
+    assert len(calls) == 51                                     # the first: every device and the broadcasts
+    calls.clear()
+    board.load_history(force=True)
+    assert calls == []                                          # a verb that sent nothing asks nothing
+    sent.add("N0007")
+    board.devices[7] = dict(board.devices[7], last_sent="2026-10-10 10:00:00", last_result="ok")
+    board.load_history(force=True)
+    assert calls == ["N0007"] and board.blocks[0][0] == "n0007"
+    calls.clear()
+    sent.add("N0001")
+    board.devices[1] = dict(board.devices[1], last_sent="2026-10-10 10:00:01", last_result="ok")
+    board.load_history(force=True)
+    assert calls == ["N0001", "broadcasts"]                     # a broadcast: its region's block too
+    calls.clear()
+    board.last_hist -= 31
+    board.load_history()
+    assert len(calls) == 51                                     # the 30 s cadence: everything again

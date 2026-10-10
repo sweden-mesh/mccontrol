@@ -73,6 +73,7 @@ class Board:
         self.line, self.typed, self.recall = "", [], None     # the command line: text, sent, (list, pos)
         self.notes = []                     # (after job id, text, role): what the command line refused, inline
         self.blocks, self.hist_top, self.last_hist = [], 0, 0.0   # the history tile: (id, lines), newest first
+        self.hist_cache, self.broadcasts = {}, {}   # node: ((last sent, last result), lines); region: lines
         self.jobs, self.cfg, self.key_info = [], {}, {}
         self.stats, self.history, self.shown_node = [], [], None    # stats: (label, value, age, read, verified)
         self.read_cursor = 0
@@ -166,21 +167,31 @@ class Board:
 
     def load_history(self, force=False):
         """The history tile's blocks: per device its last commands, and per region the
-        broadcasts, newest block first. Asked after every verb and every HISTORY_SECS, not on
-        each tick: one request per device."""
-        if not force and time.monotonic() - self.last_hist < HISTORY_SECS:
+        broadcasts, newest block first. Every HISTORY_SECS every device is asked (one request
+        each); after a verb only the devices it sent to -- their last send moved -- and the
+        broadcasts when one of those was a broadcast."""
+        full = time.monotonic() - self.last_hist >= HISTORY_SECS
+        if not force and not full:
             return
-        self.last_hist = time.monotonic()
-        blocks = []
+        if full:
+            self.last_hist = time.monotonic()
+        broadcast = full
+        cache, self.hist_cache = self.hist_cache, {}
         for d in self.devices:
-            lines = self.client.history(d["node"], limit=HISTORY_PER)["history"]
-            if lines:
-                blocks.append((lines[-1]["at"], d["node"][:6].lower(), lines))
-        regions = {}
-        for line in self.client.broadcast_history(50)["history"]:
-            parts = (line.get("topic") or "").split("/")
-            regions.setdefault(parts[1] if len(parts) > 2 else "?", []).append(line)
-        blocks += [(lines[-1]["at"], f"{region}*", lines[-HISTORY_PER:]) for region, lines in regions.items()]
+            mark = (d.get("last_sent"), d.get("last_result"))
+            if full or d["node"] not in cache or cache[d["node"]][0] != mark:
+                lines = self.client.history(d["node"], limit=HISTORY_PER)["history"]
+                broadcast = broadcast or bool(lines and lines[-1].get("note") == "broadcast")
+            else:
+                lines = cache[d["node"]][1]
+            self.hist_cache[d["node"]] = (mark, lines)
+        if broadcast:
+            self.broadcasts = {}
+            for line in self.client.broadcast_history(50)["history"]:
+                parts = (line.get("topic") or "").split("/")
+                self.broadcasts.setdefault(parts[1] if len(parts) > 2 else "?", []).append(line)
+        blocks = [(lines[-1]["at"], node[:6].lower(), lines) for node, (_m, lines) in self.hist_cache.items() if lines]
+        blocks += [(lines[-1]["at"], f"{region}*", lines[-HISTORY_PER:]) for region, lines in self.broadcasts.items()]
         self.blocks = [(ident, lines) for _at, ident, lines in sorted(blocks, key=lambda b: b[0], reverse=True)]
 
     def history_rows(self):
