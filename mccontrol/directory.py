@@ -79,8 +79,34 @@ def row(device, width, now=None, columns=None):
     name = (f"{name[:16]} ?" if stale(device, now) else name[:18]).ljust(18)
     node = device["node"][:8].ljust(8)
     shown = cells(device, now)
+    if _narrow_ver(width, columns):                   # too narrow for the version: the revision alone
+        shown["ver"] = revision(device.get("ver")).ljust(3)
     line = " ".join([name, node] + [shown[c] for c in chosen(columns)])
     return line[: width - 1].ljust(width - 1)
+
+
+WIDTHS = {"reg": 4, "sent": 7, "batt": 5, "seen": 5, "ver": 12}
+
+
+def _narrow_ver(width, columns):
+    """True when the Ver column would be cut below `ar-10`: it is then the AR column, the
+    revision number alone, which is what differs across a fleet. Wider, Ver is cut from the
+    right, so the revision always shows."""
+    picked = chosen(columns)
+    if "ver" not in picked:
+        return False
+    before = 18 + 1 + 8 + sum(WIDTHS[c] + 1 for c in picked[:picked.index("ver")])
+    return width - 1 - (before + 1) < 5
+
+
+def revision(ver):
+    """The auto-reply revision of a firmware string (`11` for `...-ar-11-...`), `-` for a
+    build without one, empty when the version is unknown."""
+    if not ver:
+        return ""
+    import re
+    m = re.search(r"-ar-(\d+)", ver)
+    return m.group(1) if m else "-"
 
 
 def cells(device, now=None):
@@ -105,18 +131,21 @@ def chosen(columns):
 
 def header(width, columns=None):
     heads = {"reg": f"{'Reg':4}", "sent": f"{'Sent':7}", "batt": f"{'Batt':5}", "seen": f"{'Seen':5}",
-             "ver": f"{'Ver':12}", "result": "Result"}
+             "ver": "AR " if _narrow_ver(width, columns) else f"{'Ver':12}", "result": "Result"}
     return " ".join([f"{'Name':18}", f"{'Node':8}"] + [heads[c] for c in chosen(columns)])[: width - 1]
 
 
 def version_short(ver):
-    """`esp32s3-v1.17.1-ar-10-observer-42f48ce9` as `1.17.1-ar-10`: the version and the
-    auto-reply revision, which is what differs across a fleet."""
+    """`esp32s3-v1.17.1-ar-10-observer-42f48ce9` as `ar-10 1.17.1`: the auto-reply revision
+    first, since it is what differs across a fleet and what survives a narrow column, then the
+    version. A build without a revision is its version alone."""
     if not ver:
         return ""
     import re
-    m = re.search(r"v?(\d+\.\d+(?:\.\d+)*(?:-ar-\d+)?)", ver)
-    return m.group(1) if m else ver[:12]
+    m = re.search(r"v?(\d+\.\d+(?:\.\d+)*)(?:-(ar-\d+))?", ver)
+    if not m:
+        return ver[:12]
+    return f"{m.group(2)} {m.group(1)}" if m.group(2) else m.group(1)
 
 
 def tag_footer(tagged, total):

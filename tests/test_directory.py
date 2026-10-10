@@ -52,12 +52,12 @@ def test_the_fleet_columns_show_battery_in_volts_and_the_age_of_the_last_status(
 
 
 def test_the_version_column_is_short_and_sorts():
-    assert directory.version_short("esp32s3-v1.17.1-ar-10-observer-42f48ce9") == "1.17.1-ar-10"
+    assert directory.version_short("esp32s3-v1.17.1-ar-10-observer-42f48ce9") == "ar-10 1.17.1"
     assert directory.version_short("MeshCore v1.16.0.37-observer-9670035") == "1.16.0.37"
     assert directory.version_short(None) == ""
     devs = [dict(_devs()[0], ver="v1.17.1-ar-10"), dict(_devs()[1], ver="v1.16.0"), _devs()[2]]
     assert [d.get("ver") for d in directory.sorted_devices(devs, "version")] == ["v1.16.0", "v1.17.1-ar-10", None]
-    assert "1.17.1-ar-10" in directory.row(devs[0], 100, NOW)
+    assert "ar-10 1.17.1" in directory.row(devs[0], 100, NOW)
 
 
 def test_a_device_not_heard_from_in_seven_days_is_marked_and_one_never_asked_is_not():
@@ -80,7 +80,22 @@ def test_the_chosen_columns_decide_what_a_narrow_row_shows():
     assert directory.chosen(["ver", "sent"]) == ["sent", "ver"]            # COLUMNS order, not the asking order
     assert directory.chosen(["bogus"]) == list(directory.COLUMNS)           # nothing valid: all
     narrow = directory.row(d, 38, NOW, columns=["ver"])
-    assert "1.17.1-ar" in narrow and "GOT" not in narrow       # 37 columns: nine of the version fit
+    assert "ar-10 1.1" in narrow and "GOT" not in narrow       # 37 columns: the revision first, then what fits
     assert directory.header(38, ["ver"]).split() == ["Name", "Node", "Ver"]
     wide = directory.row(d, 100, NOW)
-    assert "JKG" in wide and "1.17.1-ar-10" in wide and wide.rstrip().endswith("ok")
+    assert "JKG" in wide and "ar-10 1.17.1" in wide and wide.rstrip().endswith("ok")
+
+
+def test_two_nodes_on_ar_10_and_ar_11_differ_in_the_ver_column_at_every_width():
+    """Wide enough, Ver is `ar-10 1.17.1`; narrower than that (MeshcoreCommander's directory at
+    120 columns leaves it three), it is the AR column: the revision number alone."""
+    old = {"name": "Old", "node": "AAAA0001", "region": "JKG", "ver": "esp32s3-v1.17.1-ar-10-observer-42f48ce9"}
+    new = dict(old, name="New", ver="esp32s3-v1.17.1-ar-11-observer-90e86c88")
+    plain = dict(old, ver="MeshCore v1.16.0.37-observer-9670035")
+    for width, columns, cell in ((111, None, "ar-1"), (57, None, " 1"), (38, ["ver"], "ar-1"), (44, ["ver"], "ar-1")):
+        a, b = directory.row(old, width, columns=columns), directory.row(new, width, columns=columns)
+        assert a[19:] != b[19:], (width, a, b)                      # the names aside, the rows differ
+        assert (cell + "0") in a and (cell + "1") in b, (width, a, b)
+    assert directory.header(57).rstrip().endswith("AR") and "Ver" in directory.header(111) and "Ver" in directory.header(38, ["ver"])
+    assert directory.row(new, 57).rstrip().endswith("11") and directory.row(plain, 57).rstrip().endswith("-")
+    assert directory.cells(old)["ver"] == "ar-10 1.17.1"

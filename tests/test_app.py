@@ -335,9 +335,10 @@ def test_r_refreshes_batt_and_seen_from_beacon_for_the_tagged_devices(tmp_path):
 
 def test_n_reads_names_and_versions_and_the_directory_shows_the_version(tmp_path):
     fake = json.dumps({"65C1D12C|get name": [0, "> SE-JKG-Vaster-65c1"], "65C1D12C|ver": [0, "> esp32s3-v1.17.1-ar-10-observer-42f48ce9"]})
-    text, home = walk(tmp_path, [(DOWN, 0.3), (DOWN, 0.3), (b"n", 1.5)], env={"MCCONTROL_FAKE_RESULTS": fake}, cols=110)
+    text, home = walk(tmp_path, [(DOWN, 0.3), (DOWN, 0.3), (b"n", 1.5)], env={"MCCONTROL_FAKE_RESULTS": fake}, cols=120)
     assert "1 of 1 gave a version; 1 named" in text
-    assert "SE-JKG-Vaster-65c1" in text and "1.17.1-ar-10" in text
+    assert "SE-JKG-Vaster-65c1" in text and re.search(r"Seen\s+AR\b", text)       # 120 columns: the AR column
+    # the rows themselves are pinned in test_directory.py, at this width (57) among others
     devs = {d["node"]: d for d in json.loads((home / "devices.json").read_text())}
     assert devs["65C1D12C"]["name"] == "SE-JKG-Vaster-65c1"
 
@@ -439,7 +440,7 @@ def test_options_columns_picks_what_an_80_column_directory_shows(tmp_path):
     assert "Columns: ver, result." in text
     last_header = text[text.rindex("Name   "):][:40]
     assert re.match(r"Name\s+Node\s+Ver\s", last_header), last_header      # the last frame: no Reg, Sent
-    assert "4AC61A7F 1.17.1-a" in text     # 37 columns: name, node and what fits of the version
+    assert "4AC61A7F ar-10 1." in text     # 37 columns: name, node, the revision first and what fits of the version
 
 
 def test_a_wait_writes_the_box_once(tmp_path):

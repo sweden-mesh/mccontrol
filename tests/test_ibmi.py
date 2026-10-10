@@ -356,7 +356,7 @@ def test_11_reads_names_and_versions_and_f7_refreshes_the_tagged_from_beacon(api
     text = walk(api, [(b"1\r", 0.8), (DOWN, 0.2), (DOWN, 0.2), (b"11\r", 1.5), (F[3], 0.4), (UP, 0.2), (b"1\r", 0.6),
                       (F[7], 1.0)], cols=100)
     assert "Names and Versions" in text and "1 of 1 gave a version; 1 named." in text
-    assert "SE-JKG-Vaster-65c1" in text and "1.17.1-ar-10" in text
+    assert "SE-JKG-Vaster-65c1" in text and "ar-10 1.17.1" in text
     assert "Refreshed 1 of 1 from Beacon." in text
     devs = {d["node"]: d for d in store.devices()}
     assert devs["65C1D12C"]["name"] == "SE-JKG-Vaster-65c1"
