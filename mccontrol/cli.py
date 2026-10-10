@@ -360,8 +360,15 @@ def _reads(api, args):
         print("nothing read yet")
         return 0
     for r in rows:
-        print(f"{r['age']:>5}  {r['command']:28} {r['reply']}")
+        print(f"{r['age']:>5}  {r['command']:28} {_signed(r['reply'], r['verified'])}")
     return 0
+
+
+def _signed(reply, verified):
+    """A reply as the node's signature leaves it: a forged one says so, an unsigned one too."""
+    if verified is False:
+        return f"BAD SIGNATURE {reply}"
+    return f"{reply} (unsigned)" if verified is None else reply
 
 
 def _commands(api, args):
@@ -449,7 +456,8 @@ def _help(api, args):
 
 def _history(api, args):
     for line in api.history(_device(api, args.device)["node"], limit=args.limit)["history"]:
-        out = line["reply"] if line["code"] == 0 else (f"refused {line['code_name']}" if line["code"] is not None else "no answer")
+        out = (_signed(line["reply"], line["verified"]) if line["code"] == 0 else
+               f"refused {line['code_name']}" if line["code"] is not None else "no answer")
         print(f"{line['at']}  {line['command']:34} {out}")
     return 0
 

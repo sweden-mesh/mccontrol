@@ -248,3 +248,38 @@ def test_config_sets_tls_on_and_off(capsys):
     assert "tls          True" in out and "port         8883" in out
     assert cli.main(["config", "--tls", "off"]) == 0
     assert "tls          False" in capsys.readouterr().out
+
+
+def test_history_and_reads_say_a_forged_reply_and_an_unsigned_one(tmp_path, monkeypatch, capsys):
+    """The QA's three replies through the real send path: genuine (signed by the node), a
+    stranger signing in the node's name, and an r1 from older firmware."""
+    from Crypto.Signature import eddsa
+    from mccontrol import actions, envelope
+    monkeypatch.setenv("MCCONTROL_HOME", str(tmp_path))
+    monkeypatch.delenv("MCCONTROL_FAKE_RESULTS", raising=False)
+    node_seed = "33" * 32
+    key = envelope.public_key_hex(node_seed)
+    topic = f"meshcore/JKG/{key}/res"
+    replies = {"ver": (node_seed, "> v1.17.1-ar-11"), "get name": ("44" * 32, "> Forged"), "get rxdelay": (None, "> 0.3")}
+
+    def fake_send(cfg, seed, t, cmd, nodes_to_hear=(), keys=None, **k):
+        signer, reply = replies[cmd]
+        line = f"{'r2' if signer else 'r1'}|{len(cmd)}|0|{cmd}|{reply}"
+        if signer:
+            sig = eddsa.new(envelope.key_from_seed(signer), "rfc8032").sign(envelope.signed_message(topic, line))
+            line = f"{line}|{sig.hex().upper()}"
+        return "p", {key[:8]: envelope.parse_result(line, key[:8], topic=topic, key_hex=key)}
+    monkeypatch.setattr(actions.transport, "send", fake_send)
+    assert cli.main(["keygen"]) == 0
+    assert cli.main(["add", "New", key, "jkg", ""]) == 0
+    for command in ("ver", "get name", "get rxdelay"):
+        cli.main(["send", "new", *command.split()])
+    capsys.readouterr()
+    assert cli.main(["history", "new"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].endswith("ver                                > v1.17.1-ar-11")
+    assert out[1].endswith("get name                           BAD SIGNATURE > Forged")
+    assert out[2].endswith("get rxdelay                        > 0.3 (unsigned)")
+    assert cli.main(["reads", "new"]) == 0
+    out = capsys.readouterr().out
+    assert "> 0.3 (unsigned)" in out and "> v1.17.1-ar-11\n" in out and "Forged" not in out   # a forgery is never kept

@@ -252,7 +252,7 @@ mccontrol fleet                          # the directory with Batt and Seen refr
 mccontrol refresh [device...]            # get name and ver over the control plane; names the unnamed
 mccontrol reads loutest                  # what it last answered to each read, with the age
 mccontrol commands [device]              # the command table; with a device, what its firmware lacks is marked
-mccontrol history loutest
+mccontrol history loutest                # a forged reply says BAD SIGNATURE, an unsigned one (unsigned)
 mccontrol devices | add | remove | discover | key | keygen | config | test | help
 ```
 

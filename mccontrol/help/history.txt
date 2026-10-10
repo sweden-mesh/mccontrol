@@ -4,6 +4,10 @@ Every command sent to a device is kept with what came back: the time, the
 command, the topic, the result code in words and the reply. A device's
 history is shown newest first, and any line opens the whole reply.
 
+Whether the node signed the reply is kept too: a reply whose signature
+failed is shown as "BAD SIGNATURE <reply>" and teaches nothing; one from
+firmware that does not sign (older than ar-11) is shown "(unsigned)".
+
 Broadcasts are kept once per device asked and once under "all" with how
 many answered.
 

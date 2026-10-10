@@ -162,7 +162,7 @@ class Board:
         self.shown_node = node
         known = self.client.facts(node) if node else {"facts": [], "raw": []}
         self.stats = ([(f["label"], f["value"], f["age"], f["read"], f["verified"]) for f in known["facts"]]
-                      + [(r["command"], r["reply"], r["age"], r["command"], True) for r in known["raw"]])
+                      + [(r["command"], r["reply"], r["age"], r["command"], r["verified"]) for r in known["raw"]])
         self.history = self.client.history(node, limit=50)["history"] if node else []
 
     def load_history(self, force=False):

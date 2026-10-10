@@ -232,7 +232,8 @@ def test_a_send_to_the_tagged_lands_an_outcome_per_device_and_keeps_history(api)
         ("4AC61A7F", True, "> * F"), ("65C1D12C", False, "refused: not-allowed -- " + _help14())]
     assert job["result"]["answered"] == 2 and job["result"]["asked"] == 2
     assert [l["command"] for l in call(url, "GET", "/devices/4AC61A7F/history")[1]["history"]] == ["region"]
-    assert call(url, "GET", "/devices/gisebo/reads")[1]["reads"][0]["reply"] == "> * F"
+    read = call(url, "GET", "/devices/gisebo/reads")[1]["reads"][0]
+    assert read["reply"] == "> * F" and read["verified"] is None                # the scripted broker answers r1
     known = call(url, "GET", "/devices/gisebo/facts")[1]
     assert [(f["key"], f["value"], f["age"], f["source"], f["read"]) for f in known["facts"]] == [
         ("regions", "* F", "now", "region", "region")]

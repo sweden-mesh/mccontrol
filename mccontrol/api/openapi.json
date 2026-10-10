@@ -2225,13 +2225,19 @@
      },
      "age": {
       "type": "string"
+     },
+     "verified": {
+      "type": "boolean",
+      "nullable": true,
+      "description": "true: the node signed the answer; null: unsigned (an r1 from older firmware, Beacon's line, or kept before signatures were). A bad signature is never kept"
      }
     },
     "required": [
      "command",
      "reply",
      "at",
-     "age"
+     "age",
+     "verified"
     ]
    },
    "Reads": {

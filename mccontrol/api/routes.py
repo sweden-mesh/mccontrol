@@ -266,7 +266,9 @@ def broadcast_history(ctx, _p, query, _b):
 
 def reads(ctx, params, _q, _b):
     d = device_of(ctx, params["ref"])
-    return 200, {"node": d["node"], "reads": [{"command": c, "reply": r, "at": at, "age": directory.relative(at)}
+    kept = d.get("reads") or {}
+    return 200, {"node": d["node"], "reads": [{"command": c, "reply": r, "at": at, "age": directory.relative(at),
+                                               "verified": kept[c].get("verified")}
                                               for c, r, at in ctx.store.reads(d)]}
 
 
@@ -279,7 +281,8 @@ def device_facts(ctx, params, _q, _b):
                             "age": directory.relative(v["at"]), "source": v["source"], "read": facts.reader(k),
                             "verified": v["verified"]}
                            for k, v in sorted(known.items(), key=lambda kv: facts.order(kv[0]))],
-                 "raw": [{"command": c, "reply": v["reply"], "at": v["at"], "age": directory.relative(v["at"])}
+                 "raw": [{"command": c, "reply": v["reply"], "at": v["at"], "age": directory.relative(v["at"]),
+                          "verified": v["verified"]}
                          for c, v in sorted(raw.items(), key=lambda kv: kv[1]["at"], reverse=True)]}
 
 
