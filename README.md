@@ -196,7 +196,8 @@ column under a status no taller than its six lines:
 - **Esc closes a window at once** (25 ms, measured key to redraw in `tests/test_monolith.py`): the
   board waits 25 ms after Esc for the rest of a key's sequence, whatever `ESCDELAY` the shell sets,
   and redraws without the window before it asks the API again. Over a slow ssh link an arrow key
-  split across packets can arrive as Esc and the rest.
+  split across packets can arrive as Esc and the rest; `MCCONTROL_ESCDELAY=<ms>` (say 100) sets a
+  longer wait for such a link.
 
 ## Install
 

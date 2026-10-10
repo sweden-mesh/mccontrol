@@ -713,6 +713,15 @@ def test_esc_closes_a_window_at_once(tmp_path):
         times.append(walk.latency)
     print(f"Esc to the overlay gone: {', '.join(f'{t * 1000:.1f}' if t else '-' for t in times)} ms")
     assert all(t is not None and t < 0.250 for t in times) and min(times) < 0.050
+    walk(tmp_path / "slow", [(DOWN, 0.3), (b"h", 0.6)], timed=(ESC, "HISTORY GISEBO"),
+         env={"ESCDELAY": "1000", "MCCONTROL_ESCDELAY": "300"})
+    assert 0.250 < walk.latency < 1.0                       # the escape hatch for a slow link is taken
+
+
+def test_the_esc_delay_is_25_ms_unless_mccontrol_escdelay_says_otherwise():
+    from mccontrol.ui.Monolith import escdelay
+    assert escdelay({}) == 25 and escdelay({"ESCDELAY": "1000"}) == 25
+    assert escdelay({"MCCONTROL_ESCDELAY": "150"}) == 150 and escdelay({"MCCONTROL_ESCDELAY": "fast"}) == 25
 
 
 INPUT = TAB * 3                     # devices -> stats -> results -> the command line

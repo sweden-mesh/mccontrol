@@ -12,6 +12,16 @@ ESCDELAY_MS = 25
 DESCRIPTION = "Monolith: a retro-futuristic board of live tiles, a command palette, phosphor on black"
 
 
+def escdelay(env=None):
+    """How long curses waits after Esc for the rest of a key's sequence, in ms. 25 is ample on
+    a local terminal, where a sequence arrives in one write; over a slow ssh link a sequence
+    split across packets may be read as Esc and the rest, and MCCONTROL_ESCDELAY (a whole
+    number of ms) sets another. An inherited ESCDELAY (often 1000) is not taken: it is what
+    made Esc feel caught late."""
+    value = (os.environ if env is None else env).get("MCCONTROL_ESCDELAY", "").strip()
+    return int(value) if value.isdigit() else ESCDELAY_MS
+
+
 def run(client):
     """The board until q; 2 when there is no terminal to draw it on."""
     import curses
@@ -21,11 +31,7 @@ def run(client):
     if not sys.stdout.isatty():
         print("mccontrol: Monolith needs a terminal; use the subcommands instead (mccontrol --help)", file=sys.stderr)
         return 2
-    # How long curses waits after Esc for the rest of a key's sequence. 25 ms is ample on a
-    # local terminal, where a sequence arrives in one write; over a slow ssh link a sequence
-    # split across packets may be read as Esc and the rest. Set unconditionally: an inherited
-    # ESCDELAY (often 1000) is what made Esc feel caught late.
-    os.environ["ESCDELAY"] = str(ESCDELAY_MS)
+    os.environ["ESCDELAY"] = str(escdelay())
     try:
         return curses.wrapper(lambda win: Board(win, client).run())
     except curses.error as exc:

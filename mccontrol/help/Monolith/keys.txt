@@ -36,7 +36,8 @@ columns", "clear tags", "statistics 48 h" and "statistics 7 d".
 Esc is told from the start of an arrow key's sequence by a 25 ms wait,
 whatever ESCDELAY the shell sets: ample on a local terminal. Over a slow
 ssh link a sequence split across packets can arrive as Esc and the rest;
-Ctrl+L redraws if that happens.
+Ctrl+L redraws if that happens, and MCCONTROL_ESCDELAY=<ms> (say 100)
+sets a longer wait for such a link.
 
 In help: Tab to a link, Enter follows it, Backspace goes back, Esc
 closes. See [[screen]] for the tiles, [[dialogs]] for the overlays.
