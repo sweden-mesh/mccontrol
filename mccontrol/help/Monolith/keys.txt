@@ -15,11 +15,17 @@ Monolith keys
   "k"          the signing key: provision, generate, register
   "S"          setup: the control broker, its port, TLS on or off
   "o" "p"      the next sort;  amber or green phosphor
-  Tab          the next tile (Shift+Tab the one before); Up, Down, PgUp,
-               PgDn, Home and End move in it
+  Tab          the next tile (Shift+Tab the one before), the last stop
+               being the command line under the results; Up, Down,
+               PgUp, PgDn, Home and End move in a tile
+  On the command line: type a command, Enter sends it to the tagged
+               devices or the cursor device, Up and Down recall what was
+               sent, Backspace erases, Esc leaves; every key is text there
+               ("q" too), so F10 quits and Ctrl+P opens the palette
   Mouse        a click focuses a tile, a row takes the cursor, a hint at
                the bottom presses its key; the wheel scrolls
-  Esc          closes an overlay at once, cancels a running job
+  Esc          closes an overlay at once, cancels a running job, leaves
+               the command line
   F1 "?"       this help;  "q" F10  quit;  Ctrl+L  redraw
 
 The rest is in the palette, by name: "test the broker", "run a command

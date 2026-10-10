@@ -15,9 +15,12 @@ statistics as sparklines once read, and what is known about it -- tx
 and rx delay, autoreply and its settings, regions, firmware, name --
 each with its age (see [[reads]]). Enter on a row asks it again.
 
-RESULTS is the feed: each send, set and discovery as it lands, newest
-first, and the running job as a bar. Enter opens the whole result. A
-short note in the corner says how the last thing came out.
+RESULTS is a console: each send, set and discovery as it lands, oldest
+at the top and the newest just above its command line, the running job
+inline as a bar. A long result shows its start. Tab (or a click) on the
+bottom line types a command there; Enter sends it, as "c" would (see
+[[send]]). On the results themselves, Enter opens the whole result. A
+short note at the bottom left says how the last thing came out.
 
 STATUS shows the broker, your key, whether it is registered and whether
 the broker test passed. On a wide terminal a clock is drawn as well. The

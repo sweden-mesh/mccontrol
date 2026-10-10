@@ -153,13 +153,13 @@ bars. At 80x24:
 │                                          ││ autoreply mode    flood      2 d │
 │                                          │╰──── ↵ reads again  s statistics ─╯
 │                                          │╭─ ● RESULTS ──────────────────────╮
-│                                          ││ Nothing run yet. : opens the pal │
+│                                          ││ Nothing run yet: type below.     │
 │                                          ││                                  │
 │                                          ││                                  │
 │                                          ││                                  │
 │                                          ││                                  │
-│                                          ││                                  │
-╰───────────────────── 3 devices  by name ─╯╰──────────────────────────────────╯
+│                                          ││ Gisebo ▶ Tab: type a command     │
+╰───────────────────── 3 devices  by name ─╯╰────────────────────── Tab types ─╯
  : menu ↵ cmds ␣ tag c send a all s stat d find k keys Del forget ? help q quit
 ```
 
@@ -169,6 +169,11 @@ bars. At 80x24:
   command's reply (`set txdelay 0.7` answered OK is a tx delay of 0.7), so it changes the moment
   a result lands. A read it cannot parse is listed raw. Nothing is sent to show it; Enter on a row
   reads it again. The API serves the same as `GET /devices/{ref}/facts`.
+- **The command line** is the bottom row of RESULTS: Tab to it (or click it), type a command,
+  Enter sends it to the tagged devices or the cursor device -- the same target and caution
+  confirm as `c` -- and the replies scroll up above it as they arrive, the running job inline. A
+  refusal is said there, on a line of its own. Up/Down recall, Esc leaves; every key is text
+  there, so F10 quits.
 - **`:` or Ctrl+P** opens the palette: every verb and every command, type to filter.
 - **Single keys.** Enter the command list (or read again, or open a result, by tile), Space or
   Ins tag, `*` invert, `+`/`-` tag or untag a region, `c` send, `a` every node in a region,

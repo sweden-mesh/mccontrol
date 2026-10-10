@@ -24,7 +24,11 @@ HINTS = [(":", "menu"), ("↵", "cmds"), ("␣", "tag"), ("c", "send"), ("a", "a
          ("o", "sort"), ("p", "phosphor"), ("S", "setup")]
 CTRL_P, CTRL_L, TAB, ESC, BACKSPACES = 16, 12, 9, 27, (curses.KEY_BACKSPACE, 127, 8)
 ENTERS = (curses.KEY_ENTER, 10, 13)
-TILES = ("devices", "device", "feed")   # what Tab cycles
+TILES = ("devices", "device", "feed", "input")   # what Tab cycles; "input" is the feed's command line
+INPUT_HINTS = [("↵", "send"), ("↑↓", "recall"), ("Esc", "leave"), ("Tab", "next tile"), ("^P", "palette"),
+               ("F1", "help"), ("F10", "quit")]
+HIT_KEYS = {"↵": 10, "␣": 32, "Del": curses.KEY_DC, "Esc": 27, "Tab": 9, "^P": 16, "↑↓": curses.KEY_UP,
+            "F1": curses.KEY_F1, "F10": curses.KEY_F10}
 
 
 PLAIN = str.maketrans({"↵": "Enter", "␣": "Space", "…": "~", "▞": "/", "▚": "\\", "⌫": "BS", "↑": "^", "↓": "v"})
@@ -63,7 +67,9 @@ class Board:
         self.sort = "name"
         self.devices, self.dir = [], {}
         self.cursor = self.top = 0
-        self.feed, self.feed_cursor = [], 0
+        self.feed, self.feed_cursor, self.feed_top = [], 0, 0
+        self.line, self.typed, self.recall = "", [], None     # the command line: text, sent, (list, pos)
+        self.notes = []                     # (after job id, text, role): what the command line refused, inline
         self.jobs, self.cfg, self.key_info = [], {}, {}
         self.stats, self.history, self.shown_node = [], [], None    # stats: (label, value, age, read)
         self.read_cursor = 0
@@ -170,14 +176,26 @@ class Board:
         return []
 
     def build_feed(self):
-        """The feed tile's rows: per job, newest first, a header and what came back."""
-        rows = []
-        for job in self.jobs[:20]:
+        """The feed tile's rows, oldest first so the newest sit above the command line: per job
+        a header and what came back, and the command line's own refusals after the job that was
+        newest when each was said."""
+        jobs = list(reversed(self.jobs[:20]))
+        shown = {job["id"] for job in jobs}
+        rows = [(text, role, [text]) for after, text, role in self.notes if after not in shown]
+        for job in jobs:
             rows.append((self.job_title(job), "accent", self.job_detail(job)))
             for text, role in self.job_lines(job):
                 rows.append(("  " + text, role, self.job_detail(job)))
+            rows += [(text, role, [text]) for after, text, role in self.notes if after == job["id"]]
+        following = self.feed_cursor >= len(self.feed) - 1
         self.feed = rows
-        self.feed_cursor = max(0, min(self.feed_cursor, len(rows) - 1))
+        self.feed_cursor = len(rows) - 1 if following else max(0, min(self.feed_cursor, len(rows) - 1))
+
+    def note(self, text, role="alert"):
+        """A line in the feed that is no job: what the command line could not send, and why."""
+        self.notes = (self.notes + [(self.jobs[0]["id"] if self.jobs else None, text, role)])[-50:]
+        self.feed_cursor = len(self.feed)               # follow it to the end
+        self.build_feed()
 
     def job_title(self, job):
         result = job.get("result") or {}
@@ -358,22 +376,50 @@ class Board:
         return f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer")
 
     def draw_feed(self, rect):
-        y, x, w, h = self.frame(rect, "Results", self.focus == "feed", "↵ opens" if self.feed else "")
-        if self.running:
+        typing = self.focus == "input"
+        footer = "↵ sends  ↑↓ recall  Esc leaves" if typing else ("↵ opens  Tab types" if self.feed else "Tab types")
+        y, x, w, h = self.frame(rect, "Results", self.focus in ("feed", "input"), footer)
+        rows = [(text, role) for text, role, _d in self.feed]
+        if self.running:                    # the job being waited on, inline at the bottom
             title, job = self.running
             p = job["progress"]
             frac = p["answered"] / p["expected"] if p["expected"] else (p["elapsed"] / p["wait"] if p["wait"] else 0)
-            self.put(y, x, f"{self.g['run']} {title}"[:w], "bright")
-            width = max(4, min(30, w - 2))
-            self.put(y + 1, x, art.bar(frac, width, self.g), "accent")
-            self.put(y + 2, x, f"Esc cancels  {p['text']}"[:w], "base")     # the key first: a long text is cut
-            y, h = y + 3, h - 3
-        top = max(0, min(self.feed_cursor - h + 1, len(self.feed) - h)) if self.feed_cursor >= h else 0
-        for i, (text, role, _detail) in enumerate(self.feed[top:top + h]):
-            focused = self.focus == "feed" and top + i == self.feed_cursor
+            rows += [(f"{self.g['run']} {title}", "bright"), (art.bar(frac, max(4, min(30, w - 2)), self.g), "accent"),
+                     (f"Esc cancels  {p['text']}", "base")]          # the key first: a long text is cut
+            rows += [("  " + text, role) for text, role in self.job_lines(job)]
+        view = h - 1                        # the last row is the command line
+        if self.running or (self.focus != "feed" and self.feed_cursor >= len(self.feed) - 1):
+            # following the end: the newest lines over the command line, but never past the
+            # head of the newest job, so a long result shows its start
+            head = len(self.feed) if self.running else max(
+                (i for i, (text, _r, _d) in enumerate(self.feed) if not text.startswith("  ")), default=0)
+            top = max(0, min(len(rows) - view, head))
+        else:
+            cursor = self.feed_cursor
+            top = max(0, min(cursor - view + 1, len(rows) - view)) if cursor >= view else 0
+        self.feed_top = top
+        for i, (text, role) in enumerate(rows[top:top + view]):
+            focused = self.focus == "feed" and top + i == self.feed_cursor and not self.running
             self.put(y + i, x, text[:w].ljust(w) if focused else text[:w], "cursor" if focused else role)
-        if not self.feed and not self.running:
-            self.put(y, x, "Nothing run yet. : opens the palette."[:w], "dim")
+        if not rows:
+            self.put(y, x, "Nothing run yet: type below."[:w], "dim")
+        self.draw_input(y + h - 1, x, w)
+
+    def target(self):
+        """Who a send goes to, as the command line says it: the tagged, or the cursor device."""
+        if self.tagged:
+            return f"{len(self.tagged)} tagged"
+        return (self.device["name"] or self.device["node"]) if self.device else "no device"
+
+    def draw_input(self, y, x, w):
+        prefix = f"{self.target()[:16]} {self.g['run']} "
+        if self.focus != "input" and not self.line:
+            self.put(y, x, (prefix + "Tab: type a command")[:w], "dim")
+            return
+        self.put(y, x, prefix[:w], "bright" if self.focus == "input" else "dim")
+        room = max(1, w - len(prefix))
+        text = self.line + ("_" if self.focus == "input" else "")
+        self.put(y, x + len(prefix), text[-room:], "cursor" if self.focus == "input" else "base")
 
     def draw_status(self, rect):
         y, x, w, h = self.frame(rect, "Status", False)
@@ -406,7 +452,7 @@ class Board:
         y, x, w, _h = rect
         self.put(y, x, " " * (w - 1), "dim")
         self.hits, col = [], 1
-        for key, label in HINTS:
+        for key, label in (INPUT_HINTS if self.focus == "input" else HINTS):
             shown = self.fold(key)              # measured as drawn: Enter, not the arrow
             if col + len(shown) + len(label) + 1 >= w:
                 break
@@ -416,12 +462,13 @@ class Board:
             col += len(shown) + len(label) + 2
 
     def draw_toasts(self, bottom):
+        """The newest toast on the bottom frame line, from the left: over the directory's
+        foot rather than the command line, which a long one alone may reach."""
         now = time.monotonic()
         self.toasts = [t for t in self.toasts if t[0] > now]
         w, _h = self.size
         for i, (_e, text, role) in enumerate(reversed(self.toasts[-3:])):
-            text = f" {text} "[:w - 4]
-            self.put(bottom - i, w - len(text) - 2, text, "alert" if role == "alert" else "cursor")
+            self.put(bottom - i, 2, f" {text} "[:w - 4], "alert" if role == "alert" else "cursor")
 
     def toast(self, text, role="base"):
         self.toasts.append((time.monotonic() + TOAST_SECS, text, role))
@@ -489,6 +536,10 @@ class Board:
 
     def handle(self, key):
         """Do what `key` means: "quit", "nav" for a key that only moved around, else None."""
+        if self.focus == "input":
+            done = self.typing(key)
+            if done != "pass":
+                return done
         if key in (ord("q"), curses.KEY_F10):
             return "quit"
         if key == curses.KEY_RESIZE:
@@ -524,6 +575,50 @@ class Board:
         elif 32 < key < 127 and chr(key) in KEYS:
             return self.do(KEYS[chr(key)])
 
+    def typing(self, key):
+        """A key on the command line: text, Backspace, Up/Down through what was sent, Enter
+        sends, Esc leaves. "pass" for a key the line does not take (Tab, F-keys, Ctrl+P...)."""
+        if key == ESC:
+            self.focus, self.recall = "devices", None
+            return "nav"
+        if key in ENTERS:
+            return self.submit()
+        if key in BACKSPACES:
+            self.line = self.line[:-1]
+            return "nav"
+        if key in (curses.KEY_UP, curses.KEY_DOWN):
+            if self.recall is None:
+                seen = [line["command"] for line in self.history]
+                seen += [line["command"] for line in self.client.broadcast_history(50)["history"]] + self.typed
+                back = list(dict.fromkeys(reversed(seen)))[::-1]          # each once, where last sent
+                self.recall = (back, len(back))
+            back, pos = self.recall
+            pos = max(0, pos - 1) if key == curses.KEY_UP else min(len(back), pos + 1)
+            self.recall = (back, pos)
+            if back:
+                self.line = back[pos] if pos < len(back) else ""
+            return "nav"
+        if 32 <= key < 127:
+            self.line += chr(key)
+            return "nav"
+        return "pass"
+
+    def submit(self):
+        """Enter on the command line: the line is sent as `c` sends it -- to the tagged devices
+        or the cursor device, a caution asked about first -- and a refusal is said inline."""
+        command = " ".join(self.line.split())
+        if not command:
+            return "nav"
+        self.line, self.recall = "", None
+        self.typed = [c for c in self.typed if c != command] + [command]
+        try:
+            self.send(command)
+        except ApiError as exc:
+            self.note(f"{self.g['bad']} {command}: {exc.message}")
+        except Cancel as exc:
+            self.note(f"- {command}: {exc.args[0] if exc.args else 'not sent'}", "dim")
+        return None
+
     def resize(self):
         """The terminal changed size: take the size it has now, even where LINES and
         COLUMNS in the environment would pin the old one, and lay the tiles out again."""
@@ -540,7 +635,7 @@ class Board:
     def move(self, key):
         step = {curses.KEY_UP: -1, curses.KEY_DOWN: 1, curses.KEY_PPAGE: -10,
                 curses.KEY_NPAGE: 10, curses.KEY_HOME: -10 ** 6, curses.KEY_END: 10 ** 6}[key]
-        if self.focus == "feed":
+        if self.focus in ("feed", "input"):
             self.feed_cursor = max(0, min(len(self.feed) - 1, self.feed_cursor + step))
         elif self.focus == "device":
             self.read_cursor = max(0, min(len(self.stats) - 1, self.read_cursor + step))
@@ -559,7 +654,7 @@ class Board:
             return "nav"
         for y, x0, x1, key in self.hits:
             if my == y and x0 <= mx <= x1:
-                return self.handle({"↵": 10, "␣": 32, "Del": curses.KEY_DC}.get(key) or ord(key))
+                return self.handle(HIT_KEYS.get(key) or ord(key))
         for name in TILES:
             y, x, w, h = tiles.get(name, (0, 0, 0, 0))
             if y <= my < y + h and x <= mx < x + w:
@@ -567,8 +662,10 @@ class Board:
                 if name == "devices" and my - y - 2 >= 0:
                     self.cursor = max(0, min(len(self.devices) - 1, self.top + my - y - 2))
                     self.follow()
+                elif name == "feed" and my == y + h - 2:            # the command line
+                    self.focus = "input"
                 elif name == "feed" and my - y - 1 >= 0:
-                    self.feed_cursor = max(0, min(len(self.feed) - 1, my - y - 1))
+                    self.feed_cursor = max(0, min(len(self.feed) - 1, self.feed_top + my - y - 1))
         return "nav"
 
     # -- overlays ----------------------------------------------------------------------
@@ -761,7 +858,7 @@ class Board:
             self.running = (title, j)
             self.draw()
             key = self.key(timeout=0)
-            if key in (ord("q"), curses.KEY_F10) and not quitting:
+            if key in ((curses.KEY_F10,) if self.focus == "input" else (ord("q"), curses.KEY_F10)) and not quitting:
                 quitting.append(key)
                 self.toast("cancelling the job, then quitting" if j.get("cancellable", True) else
                            f"waiting for the {UNCUT.get(j['verb'], j['verb'])} to finish, then quitting")
@@ -799,12 +896,13 @@ class Board:
         tagged = self.tagged
         if tagged:
             if len({d["region"] for d in tagged}) > 1:
-                self.toast("the tagged devices span more than one region; a send is to one region", "alert")
-                raise Cancel
+                why = "the tagged devices span more than one region; a send is to one region"
+                self.toast(why, "alert")
+                raise Cancel(why)
             return {"tagged": True}, f"{len(tagged)} tagged in {tagged[0]['region']}"
         if not self.device:
             self.toast("no device: d discovers a region's nodes", "alert")
-            raise Cancel
+            raise Cancel("no device: d discovers a region's nodes")
         d = self.device
         return {"devices": [d["node"]]}, d["name"] or d["node"]
 

@@ -6,6 +6,13 @@ earlier commands; Enter sends. Each device gets its own signed publish;
 each answer lands in the results tile as it comes back, and a note says
 how many answered.
 
+The command line at the bottom of the results tile does the same without
+an overlay: Tab to it (or click it), type, Enter. It names its target
+before the arrow ("Gisebo ▶", "2 tagged ▶"); the replies land above it as
+they arrive, and a command it cannot send -- one the node would refuse,
+a caution answered with anything but "y", tags in two regions -- is said
+on a line of its own there instead. Up and Down recall what was sent.
+
 "a" sends to every node in a region instead: it asks for the region,
 then the command, and makes one signed publish to the region's broadcast
 topic, answered by every node there that holds your key. A command that

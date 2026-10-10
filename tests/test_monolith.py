@@ -672,7 +672,7 @@ def test_q_during_a_job_nothing_can_cut_short_says_it_waits():
             return {"status": "done"}
 
     b = _board.Board.__new__(_board.Board)
-    b.client, b.draw, b.key = Client(), lambda: None, lambda timeout: ord("q")
+    b.client, b.draw, b.key, b.focus = Client(), lambda: None, lambda timeout: ord("q"), "devices"
     b.toast = lambda text, role="base": said.append(text)
     try:
         b.wait("test", {"id": "1"})
@@ -708,3 +708,36 @@ def test_esc_closes_a_window_at_once(tmp_path):
         times.append(walk.latency)
     print(f"Esc to the overlay gone: {', '.join(f'{t * 1000:.1f}' if t else '-' for t in times)} ms")
     assert all(t is not None and t < 0.250 for t in times) and min(times) < 0.050
+
+
+INPUT = TAB * 3                     # devices -> stats -> results -> the command line
+
+
+def test_the_command_line_sends_and_the_reply_scrolls_up_above_it(tmp_path):
+    text, home = walk(tmp_path, [(DOWN, 0.3), (INPUT, 0.4), (b"ver", 0.3), (ENTER, 1.5), (b"q?:", 0.3)])
+    assert "Gisebo ▶ Tab: type a command" in text and "Gisebo ▶ ver_" in text
+    screen = walk.screen.splitlines()
+    feed = [line for line in screen if "SEND ver" in line or "> esp32s3" in line or "Gisebo ▶" in line]
+    assert len(feed) == 3 and "SEND ver" in feed[0] and "> esp32s3" in feed[1] and "Gisebo ▶ q?:_" in feed[2]
+    assert screen.index(feed[0]) < screen.index(feed[1]) < screen.index(feed[2])      # oldest up, the line last
+    assert re.search(r"↵ send\s+↑↓ recall\s+Esc leave", screen[-1])                 # its own hints
+    assert _history(home, "4AC61A7F")[-1]["command"] == "ver" and not EXITED[0]      # q was typed, not quit
+
+
+def test_the_command_line_says_a_refusal_inline_asks_before_a_caution_and_recalls(tmp_path):
+    text, home = walk(tmp_path, [(DOWN, 0.3), (INPUT, 0.4), (b"set prv.key 00", 0.3), (ENTER, 1.0),
+                                 (b"region denyf *", 0.3), (ENTER, 0.8), (b"n", 0.8), (UP, 0.3), (UP, 0.3)])
+    assert re.search(r"✗ set prv\.key 00: the node would", walk.screen)
+    assert "CONFIRM" in text and "- region denyf *: not sent" in walk.screen
+    assert "Gisebo ▶ set prv.key 00_" in walk.screen                                 # Up, Up: the one before
+    assert [h["command"] for h in _history(home, "4AC61A7F")] == ["region"]          # nothing sent
+
+
+def test_the_command_line_sends_to_the_tagged_esc_leaves_it_and_a_click_focuses_it(tmp_path):
+    text, home = walk(tmp_path, [(DOWN, 0.3), (b" ", 0.3), (b" ", 0.3), (INPUT, 0.4), (b"get name", 0.3), (ENTER, 2.0),
+                                 (ESC, 0.4)])
+    assert "2 tagged ▶ get name_" in text and "2 of 2 answered" in text
+    assert _history(home, "65C1D12C")[-1]["command"] == "get name"
+    assert re.search(r":\s+menu", walk.screen.splitlines()[-1])                     # the board's hints again
+    walk(tmp_path / "click", [(_click(50, 21), 0.6), (b"ver", 0.3)])
+    assert "Far ▶ ver_" in walk.screen
