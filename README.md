@@ -32,6 +32,14 @@ history; start one with `mccontrol --ui <name>`:
 
 Each page has the interface's screens, every key, its menus or palette, and what each pane shows.
 
+| Monolith | MeshcoreCommander | IBMi |
+|---|---|---|
+| [![Monolith](docs/screenshots/monolith-summary.png)](mccontrol/ui/Monolith/README.md) | [![MeshcoreCommander](docs/screenshots/meshcorecommander-summary.png)](mccontrol/ui/MeshcoreCommander/README.md) | [![IBMi](docs/screenshots/ibmi-summary.png)](mccontrol/ui/IBMi/README.md) |
+
+The pictures are an invented fleet; `python scripts/screenshots.py` makes them again from the
+code as it is (a scratch home, the fake broker and Beacon, each interface in a pseudo-terminal,
+headless Chromium for the PNG).
+
 A name given with `--ui` (`ibmi` and `IBMi` are the same) is kept in the configuration, so plain
 `mccontrol` starts the last one asked for; with none asked for yet it starts Monolith (and keeps
 nothing), and a kept name that is gone since starts Monolith, says so and is forgotten. A name
@@ -176,3 +184,8 @@ in `tests/test_envelope.py`; `mccontrol help assurance` is the argument in full.
 `pytest` runs the unit tests, the API against its OpenAPI document, the isolation test, and
 pseudo-terminal walks of each interface against a scripted transport (`MCCONTROL_FAKE_RESULTS`):
 every function key, option and verb pressed once, on an 80x24 and a wider terminal.
+`tests/test_parity.py` holds MeshcoreCommander and IBMi to Monolith's verbs, and
+`tests/test_pages.py` the pages' links and keys to the code.
+
+`python scripts/screenshots.py` remakes `docs/screenshots/` from an invented fleet (it needs
+headless Chromium; `--only <name>` for one picture, `--keep-html` to keep the pages it renders).

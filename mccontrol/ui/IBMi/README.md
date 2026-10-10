@@ -6,6 +6,15 @@ interfaces; [Monolith](../Monolith/README.md) is the default, and this one does 
 (`mccontrol --ui IBMi`, or `ibmi`; the name is then kept, so plain `mccontrol` starts it next
 time). Back to the [main README](../../../README.md).
 
+![Work with Devices at 120x40](../../../docs/screenshots/ibmi-devices.png)
+
+| | |
+|---|---|
+| ![8=Facts: Display Device Facts](../../../docs/screenshots/ibmi-facts.png) | ![14: Command Entry, four tagged devices answering](../../../docs/screenshots/ibmi-command-entry.png) |
+| ![12: Display Command History](../../../docs/screenshots/ibmi-history.png) | ![the main menu at 80x24](../../../docs/screenshots/ibmi-summary.png) |
+
+The pictures are an invented fleet, made by `scripts/screenshots.py`. As text, the main menu:
+
 ```
  MCCONTROL                    MCCONTROL Main Menu            10/10/26  09:00:00
 

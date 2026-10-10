@@ -6,7 +6,14 @@ until another interface is asked for (`mccontrol --ui Monolith` names it). The o
 [MeshcoreCommander](../MeshcoreCommander/README.md) and [IBMi](../IBMi/README.md), do the same
 work in their own idiom. Back to the [main README](../../../README.md).
 
-At 80x24, the minimum:
+![Monolith at 120x40: the directory, STATS with sparklines, the results of a statistics read, the clock, status and HISTORY](../../../docs/screenshots/monolith-board.png)
+
+| | |
+|---|---|
+| ![the command list on Enter](../../../docs/screenshots/monolith-commands.png) | ![a send in progress, its bar inline in RESULTS](../../../docs/screenshots/monolith-sending.png) |
+| ![two commands typed on the command line, their replies above it](../../../docs/screenshots/monolith-command-line.png) | ![the board at 80x24](../../../docs/screenshots/monolith-summary.png) |
+
+The pictures are an invented fleet, made by `scripts/screenshots.py`. As text, at 80x24, the minimum:
 
 ```
  ▞▚ M O N O L I T H ▚▞  mccontrol  amber                              00:15:57

@@ -6,6 +6,15 @@ bar. One of mccontrol's three interfaces; [Monolith](../Monolith/README.md) is t
 this one does the same work (`mccontrol --ui MeshcoreCommander`; the name is then kept, so plain
 `mccontrol` starts it next time). Back to the [main README](../../../README.md).
 
+![MeshcoreCommander at 120x40: the directory, a command sent from the command line, Stats](../../../docs/screenshots/meshcorecommander-board.png)
+
+| | |
+|---|---|
+| ![the command list on Enter](../../../docs/screenshots/meshcorecommander-commands.png) | ![h: every device's command history in blocks](../../../docs/screenshots/meshcorecommander-history.png) |
+| ![a send in progress](../../../docs/screenshots/meshcorecommander-sending.png) | ![the screen at 80x24](../../../docs/screenshots/meshcorecommander-summary.png) |
+
+The pictures are an invented fleet, made by `scripts/screenshots.py`. As text, at 80x24:
+
 ```
    Devices   Send   View   Keys   Options   Help
 ╔══════════════ Devices ═══════════════╗╔════════════ Command line ════════════
