@@ -140,15 +140,18 @@ def roles(color_pair=None):
 # -- the grid ----------------------------------------------------------------------------
 
 MIN_W, MIN_H = 80, 24
+STATUS_ROWS = 6                         # the status tile's lines: broker, key, reg, link, sign-in, jobs
 
 
 def layout(w, h):
     """The tiles for a `w` x `h` terminal, as `{name: (y, x, width, height)}`.
 
-    Every size gets a header, the hint bar and four tiles: devices, device, feed, status.
-    Under 120 columns two columns: the directory on the left, status, device and feed
-    stacked right. From 120 columns three: directory, then device over feed, then the
-    clock over status. From 40 rows the header grows to the block-letter title."""
+    Every size gets a header, the hint bar and five tiles: devices, device (stats), feed,
+    status, history. Under 120 columns two columns: the directory over the history on the
+    left, status, stats and feed stacked right; the status keeps four of its lines (sign-in
+    and jobs give way). From 120 columns three: directory, then stats over feed, then the
+    clock, the status at the height of its lines, and the history under it. From 40 rows the
+    header grows to the block-letter title."""
     if w < MIN_W or h < MIN_H:
         return {}
     head = 3 if h >= 40 and w >= 100 else 1
@@ -160,8 +163,10 @@ def layout(w, h):
         c2 = w - c1 - c3
         dev = body // 2
         clock_h = 7 if body >= 24 else 0
+        status = STATUS_ROWS + 2
         tiles.update(devices=(top, 0, c1, body), device=(top, c1, c2, dev), feed=(top + dev, c1, c2, body - dev),
-                     status=(top + clock_h, c1 + c2, c3, body - clock_h))
+                     status=(top + clock_h, c1 + c2, c3, status),
+                     history=(top + clock_h + status, c1 + c2, c3, body - clock_h - status))
         if clock_h:
             tiles["clock"] = (top, c1 + c2, c3, clock_h)
         return tiles
@@ -169,7 +174,9 @@ def layout(w, h):
     c2 = w - c1
     status = 6
     dev = (body - status) // 2
-    tiles.update(devices=(top, 0, c1, body), status=(top, c1, c2, status), device=(top + status, c1, c2, dev),
+    hist = body * 2 // 5
+    tiles.update(devices=(top, 0, c1, body - hist), history=(top + body - hist, 0, c1, hist),
+                 status=(top, c1, c2, status), device=(top + status, c1, c2, dev),
                  feed=(top + status + dev, c1, c2, body - status - dev))
     return tiles
 

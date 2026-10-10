@@ -133,8 +133,10 @@ The IBM i (AS/400, 5250) green screen: a numbered main menu, lists with an Opt c
 ### Monolith
 
 The fleet as a board of tiles in phosphor on black (amber or green): the directory, STATS for
-the device under the cursor, a feed of results, the broker and key, a clock. Jobs are drawn as
-bars. At 80x24:
+the device under the cursor, the results with a command line under them, the broker and key, a
+HISTORY of what was sent, a clock. Jobs are drawn as bars. At 80x24 the history sits under the
+directory and the status keeps four of its lines; from 120 columns the history is in the third
+column under a status no taller than its six lines:
 
 ```
  ▞▚ M O N O L I T H ▚▞  mccontrol  amber                              00:15:57
@@ -151,15 +153,15 @@ bars. At 80x24:
 │                                          ││ autoreply         on         2 d │
 │                                          ││ autoreply hops    8          2 d │
 │                                          ││ autoreply mode    flood      2 d │
-│                                          │╰──── ↵ reads again  s statistics ─╯
-│                                          │╭─ ● RESULTS ──────────────────────╮
-│                                          ││ Nothing run yet: type below.     │
-│                                          ││                                  │
-│                                          ││                                  │
-│                                          ││                                  │
-│                                          ││                                  │
-│                                          ││ Gisebo ▶ Tab: type a command     │
-╰───────────────────── 3 devices  by name ─╯╰────────────────────── Tab types ─╯
+╰───────────────────── 3 devices  by name ─╯╰──── ↵ reads again  s statistics ─╯
+╭─ ● HISTORY ──────────────────────────────╮╭─ ● RESULTS ──────────────────────╮
+│ 65c1d1 │ > get ver                       ││ Nothing run yet: type below.     │
+│        │ < louie-magic-fw-1.2            ││                                  │
+│        │ > get tx.delay                  ││                                  │
+│        │ < 0.5                           ││                                  │
+│ 4ac61a │ > region                        ││                                  │
+│        │ < * F                           ││ Gisebo ▶ Tab: type a command     │
+╰──────────────────────────────────────────╯╰────────────────────── Tab types ─╯
  : menu ↵ cmds ␣ tag c send a all s stat d find k keys Del forget ? help q quit
 ```
 
@@ -174,6 +176,15 @@ bars. At 80x24:
   confirm as `c` -- and the replies scroll up above it as they arrive, the running job inline. A
   refusal is said there, on a line of its own. Up/Down recall, Esc leaves; every key is text
   there, so F10 quits.
+- **HISTORY** is one block per device, newest first, in the form
+  ```
+  65c1d1 │ > get ver
+         │ < louie-magic-fw-1.2
+         │ > get tx.delay
+         │ < 0.5
+  ```
+  the short id once, then each of its last commands and what came back; a region broadcast is a
+  block of its own (`JKG*`). It scrolls when Tab reaches it.
 - **`:` or Ctrl+P** opens the palette: every verb and every command, type to filter.
 - **Single keys.** Enter the command list (or read again, or open a result, by tile), Space or
   Ins tag, `*` invert, `+`/`-` tag or untag a region, `c` send, `a` every node in a region,

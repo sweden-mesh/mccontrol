@@ -15,8 +15,8 @@ Monolith keys
   "k"          the signing key: provision, generate, register
   "S"          setup: the control broker, its port, TLS on or off
   "o" "p"      the next sort;  amber or green phosphor
-  Tab          the next tile (Shift+Tab the one before), the last stop
-               being the command line under the results; Up, Down,
+  Tab          the next tile (Shift+Tab the one before): devices, stats,
+               results, the command line under them, history; Up, Down,
                PgUp, PgDn, Home and End move in a tile
   On the command line: type a command, Enter sends it to the tagged
                devices or the cursor device, Up and Down recall what was

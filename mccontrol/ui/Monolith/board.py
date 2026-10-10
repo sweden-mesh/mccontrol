@@ -24,7 +24,9 @@ HINTS = [(":", "menu"), ("↵", "cmds"), ("␣", "tag"), ("c", "send"), ("a", "a
          ("o", "sort"), ("p", "phosphor"), ("S", "setup")]
 CTRL_P, CTRL_L, TAB, ESC, BACKSPACES = 16, 12, 9, 27, (curses.KEY_BACKSPACE, 127, 8)
 ENTERS = (curses.KEY_ENTER, 10, 13)
-TILES = ("devices", "device", "feed", "input")   # what Tab cycles; "input" is the feed's command line
+TILES = ("devices", "device", "feed", "input", "history")   # what Tab cycles; "input" is the feed's command line
+HISTORY_SECS = 30.0                     # how often the history tile asks again unasked; a verb asks at once
+HISTORY_PER = 6                         # the commands kept in each device's block
 INPUT_HINTS = [("↵", "send"), ("↑↓", "recall"), ("Esc", "leave"), ("Tab", "next tile"), ("^P", "palette"),
                ("F1", "help"), ("F10", "quit")]
 HIT_KEYS = {"↵": 10, "␣": 32, "Del": curses.KEY_DC, "Esc": 27, "Tab": 9, "^P": 16, "↑↓": curses.KEY_UP,
@@ -70,6 +72,7 @@ class Board:
         self.feed, self.feed_cursor, self.feed_top = [], 0, 0
         self.line, self.typed, self.recall = "", [], None     # the command line: text, sent, (list, pos)
         self.notes = []                     # (after job id, text, role): what the command line refused, inline
+        self.blocks, self.hist_top, self.last_hist = [], 0, 0.0   # the history tile: (id, lines), newest first
         self.jobs, self.cfg, self.key_info = [], {}, {}
         self.stats, self.history, self.shown_node = [], [], None    # stats: (label, value, age, read)
         self.read_cursor = 0
@@ -143,6 +146,7 @@ class Board:
             self.cfg, self.key_info = self.client.config(), self.client.key()
             self.follow(force=True)
             self.build_feed()
+            self.load_history(force)
         except ApiError as exc:
             self.toast(exc.message, "alert")
 
@@ -159,6 +163,38 @@ class Board:
         self.stats = ([(f["label"], f["value"], f["age"], f["read"]) for f in known["facts"]]
                       + [(r["command"], r["reply"], r["age"], r["command"]) for r in known["raw"]])
         self.history = self.client.history(node, limit=50)["history"] if node else []
+
+    def load_history(self, force=False):
+        """The history tile's blocks: per device its last commands, and per region the
+        broadcasts, newest block first. Asked after every verb and every HISTORY_SECS, not on
+        each tick: one request per device."""
+        if not force and time.monotonic() - self.last_hist < HISTORY_SECS:
+            return
+        self.last_hist = time.monotonic()
+        blocks = []
+        for d in self.devices:
+            lines = self.client.history(d["node"], limit=HISTORY_PER)["history"]
+            if lines:
+                blocks.append((lines[-1]["at"], d["node"][:6].lower(), lines))
+        regions = {}
+        for line in self.client.broadcast_history(50)["history"]:
+            parts = (line.get("topic") or "").split("/")
+            regions.setdefault(parts[1] if len(parts) > 2 else "?", []).append(line)
+        blocks += [(lines[-1]["at"], f"{region}*", lines[-HISTORY_PER:]) for region, lines in regions.items()]
+        self.blocks = [(ident, lines) for _at, ident, lines in sorted(blocks, key=lambda b: b[0], reverse=True)]
+
+    def history_rows(self):
+        """`(id, text, role)` for each line of the history tile: `> command` and `< reply`,
+        the block's id on its first line only."""
+        rows = []
+        for ident, lines in self.blocks:
+            for line in lines:
+                reply = self.history_out(line)
+                reply = reply[1:].strip() if line["code"] == 0 and reply.startswith(">") else reply
+                rows.append((ident, f"> {line['command']}", "bright"))
+                rows.append(("", "< " + " ".join(reply.split()), "base" if line["code"] in (0, None) else "alert"))
+                ident = ""
+        return rows
 
     @property
     def device(self):
@@ -285,6 +321,7 @@ class Board:
         self.draw_device(tiles["device"])
         self.draw_feed(tiles["feed"])
         self.draw_status(tiles["status"])
+        self.draw_history(tiles["history"])
         if "clock" in tiles:
             self.draw_clock(tiles["clock"])
         self.draw_hints(tiles["hints"])
@@ -441,6 +478,19 @@ class Board:
             self.put(y + i, x, f"{label:8}", "dim")
             self.put(y + i, x + 8, value[:w - 8], role)
 
+    def draw_history(self, rect):
+        """The operator's format: the short id once, then `> sent` and `< answered`."""
+        y, x, w, h = self.frame(rect, "History", self.focus == "history", "↑↓ scrolls" if self.focus == "history" else "")
+        rows = self.history_rows()
+        self.hist_top = max(0, min(self.hist_top, len(rows) - h))
+        for i, (ident, text, role) in enumerate(rows[self.hist_top:self.hist_top + h]):
+            if i == 0 and not ident:                    # scrolled into a block: say whose it is
+                ident = next(r[0] for r in reversed(rows[:self.hist_top + 1]) if r[0])
+            self.put(y + i, x, f"{ident:6} {self.g['v']}", "accent" if ident else "dim")
+            self.put(y + i, x + 9, text[:w - 9], role)
+        if not rows:
+            self.put(y, x, "Nothing sent yet."[:w], "dim")
+
     def draw_clock(self, rect):
         y, x, w, h = self.frame(rect, "Clock", False)
         for i, row in enumerate(art.bigtext(art.clock(), self.g)):
@@ -462,13 +512,14 @@ class Board:
             col += len(shown) + len(label) + 2
 
     def draw_toasts(self, bottom):
-        """The newest toast on the bottom frame line, from the left: over the directory's
-        foot rather than the command line, which a long one alone may reach."""
+        """The newest toast on the bottom frame line, from the left, where it covers no
+        tile's content: the history and the command line stay readable."""
         now = time.monotonic()
         self.toasts = [t for t in self.toasts if t[0] > now]
         w, _h = self.size
-        for i, (_e, text, role) in enumerate(reversed(self.toasts[-3:])):
-            self.put(bottom - i, 2, f" {text} "[:w - 4], "alert" if role == "alert" else "cursor")
+        if self.toasts:
+            _e, text, role = self.toasts[-1]
+            self.put(bottom, 2, f" {text} "[:w - 4], "alert" if role == "alert" else "cursor")
 
     def toast(self, text, role="base"):
         self.toasts.append((time.monotonic() + TOAST_SECS, text, role))
@@ -637,6 +688,8 @@ class Board:
                 curses.KEY_NPAGE: 10, curses.KEY_HOME: -10 ** 6, curses.KEY_END: 10 ** 6}[key]
         if self.focus in ("feed", "input"):
             self.feed_cursor = max(0, min(len(self.feed) - 1, self.feed_cursor + step))
+        elif self.focus == "history":
+            self.hist_top = max(0, min(self.hist_top + step, len(self.history_rows()) - 1))
         elif self.focus == "device":
             self.read_cursor = max(0, min(len(self.stats) - 1, self.read_cursor + step))
         else:

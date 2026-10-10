@@ -58,7 +58,7 @@ def _overlap(a, b):
 def test_the_grid_reflows_at_80x24_120x40_and_200x60():
     for (w, h), columns, has_clock, head in (((80, 24), 2, False, 1), ((120, 40), 3, True, 3), ((200, 60), 3, True, 3)):
         tiles = art.layout(w, h)
-        assert {"header", "hints", "devices", "device", "feed", "status"} <= set(tiles)
+        assert {"header", "hints", "devices", "device", "feed", "status", "history"} <= set(tiles)
         assert ("clock" in tiles) == has_clock and tiles["header"][3] == head
         names = list(tiles)
         for name in names:
@@ -70,6 +70,11 @@ def test_the_grid_reflows_at_80x24_120x40_and_200x60():
         assert covered == w * h, (w, h, covered)                  # the grid uses what it gets
         assert len({tiles[n][1] for n in ("devices", "device", "status")}) == columns
         assert tiles["devices"][2] >= 44 and tiles["device"][3] >= 7 and tiles["feed"][3] >= 7
+        assert tiles["history"][3] >= 8 and tiles["devices"][3] >= 14
+        if columns == 3:                                          # the status no taller than its lines
+            assert tiles["status"][3] == art.STATUS_ROWS + 2 and tiles["history"][1] == tiles["status"][1]
+        else:                                                     # 80x24: the history under the directory
+            assert tiles["history"][1] == tiles["devices"][1] == 0 and tiles["status"][3] == 6
     assert art.layout(79, 24) == {} and art.layout(80, 23) == {}
 
 
@@ -741,3 +746,43 @@ def test_the_command_line_sends_to_the_tagged_esc_leaves_it_and_a_click_focuses_
     assert re.search(r":\s+menu", walk.screen.splitlines()[-1])                     # the board's hints again
     walk(tmp_path / "click", [(_click(50, 21), 0.6), (b"ver", 0.3)])
     assert "Far ▶ ver_" in walk.screen
+
+
+def _sent(home, node, at, command, reply, code=0):
+    with (home / "history" / f"{node or 'all'}.jsonl").open("a") as f:
+        f.write(json.dumps({"at": at, "command": command, "topic": "meshcore/JKG/all/cmd" if node is None else "t",
+                            "code": code, "code_name": "ok" if code == 0 else "not-allowed", "reply": reply,
+                            "note": "" if node else "2 of 2 answered"}) + "\n")
+
+
+def _histories(home):
+    _sent(home, "65C1D12C", "2026-10-08 10:00:00", "get ver", "> louie-magic-fw-1.2")
+    _sent(home, "65C1D12C", "2026-10-08 10:00:01", "get tx.delay", "> 0.5")
+    _sent(home, None, "2026-10-07 12:00:00", "get name", None, code=None)
+    _sent(home, "FD700369", "2026-10-06 09:00:00", "set txdelay 9", None, code=14)
+
+
+def test_the_history_tile_has_a_block_per_device_newest_first_in_the_sketch_format(tmp_path):
+    walk(tmp_path, [], prepare=_histories)
+    screen = walk.screen.splitlines()
+    assert "HISTORY" in screen[15] and "DEVICES" in screen[1]               # 80x24: under the directory
+    rows = [line[2:42].rstrip() for line in screen[16:22]]
+    assert rows == ["65c1d1 │ > get ver", "       │ < louie-magic-fw-1.2", "       │ > get tx.delay",
+                    "       │ < 0.5", "JKG*   │ > get name", "       │ < 2 of 2 answered"]
+    walk(tmp_path / "b", [(DOWN, 0.3), (b"c", 0.5), (b"ver", 0.3), (ENTER, 1.5)], prepare=_histories)
+    rows = [line[2:42].rstrip() for line in walk.screen.splitlines()[16:22]]
+    assert rows[:4] == ["4ac61a │ > region", "       │ < * F", "       │ > ver", "       │ < esp32s3-v1.17.1-ar-11-observe"]
+    walk(tmp_path / "c", [], cols=120, rows=40, prepare=_histories)          # the third column: all of it
+    assert re.search(r"fd7003 │ > set txdelay 9\s+│\n.*│ < refused not-allow", walk.screen)      # a refusal, cut to the tile
+
+
+def test_the_history_tile_scrolls_and_the_status_is_no_taller_than_its_lines(tmp_path):
+    walk(tmp_path, [(TAB * 4, 0.4), (DOWN * 3, 0.4)], prepare=_histories)
+    rows = [line[2:42].rstrip() for line in walk.screen.splitlines()[16:22]]
+    assert "↑↓ scrolls" in walk.screen and "◉ HISTORY" in walk.screen
+    assert rows[:3] == ["65c1d1 │ < 0.5", "JKG*   │ > get name", "       │ < 2 of 2 answered"]   # whose, again
+    walk(tmp_path / "wide", [], cols=120, rows=40, prepare=_histories)
+    screen = walk.screen.splitlines()
+    status = next(i for i, line in enumerate(screen) if "STATUS" in line)
+    assert "JOBS" in screen[status + art.STATUS_ROWS] and "╰" in screen[status + art.STATUS_ROWS + 1]
+    assert "HISTORY" in screen[status + art.STATUS_ROWS + 2]
