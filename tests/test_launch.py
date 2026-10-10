@@ -53,6 +53,18 @@ def test_the_name_is_matched_without_regard_to_case_and_kept_in_its_own_spelling
     assert len(ran) == 1
 
 
+def test_a_stored_name_that_is_gone_starts_monolith_says_so_and_is_forgotten(home, ran, monkeypatch, capsys):
+    from mccontrol.ui import Monolith
+    started = []
+    monkeypatch.setattr(Monolith, "run", lambda client: started.append(client.config()["ui"]) or 0)
+    (home / "config.json").write_text(json.dumps({"ui": "Retired"}))
+    assert cli.main([]) == 0
+    assert started == [""] and ran == []                    # running Monolith, the stored name already cleared
+    assert capsys.readouterr().err == "mccontrol: the stored interface 'Retired' is gone; starting Monolith\n"
+    assert json.loads((home / "config.json").read_text())["ui"] == ""
+    assert cli.main([]) == 0 and capsys.readouterr().err == "" and len(started) == 2      # quietly, next time
+
+
 def test_an_unknown_name_lists_the_interfaces_and_exits_2(home, ran, capsys):
     assert cli.main(["--ui", "Nothing"]) == 2
     err = capsys.readouterr().err

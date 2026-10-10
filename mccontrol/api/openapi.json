@@ -1646,7 +1646,7 @@
      },
      "ui": {
       "type": "string",
-      "description": "the interface `mccontrol --ui` starts when none is named: the last one used"
+      "description": "the interface `mccontrol --ui` starts when none is named: the last one named; empty for none (Monolith then)"
      },
      "ui_settings": {
       "type": "object",

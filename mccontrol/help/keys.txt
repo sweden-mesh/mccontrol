@@ -2,7 +2,8 @@ Keys
 
 Each interface has keys of its own, and its help lists them under this
 topic: "mccontrol --ui <name>", then its help. Plain "mccontrol" starts
-the last one asked for, or Monolith when none has been. Every verb is also on the
-command line, one subcommand each; see [[cli]].
+the last one asked for, or Monolith when none has been or the one kept
+is gone. Every verb is also on the command line, one subcommand each;
+see [[cli]].
 
 Back to [[index]].

@@ -3,8 +3,9 @@ with `--api <url>`, run it on that running API instead and start none.
 
 An interface is a package under `mccontrol/ui/` with `run(client)` and a one-line
 `DESCRIPTION`. A name given is kept in the configuration and is the default next time; with
-no name given and none kept, Monolith is started (and nothing is kept). A name that is not
-there lists the interfaces instead and exits 2.
+no name given and none kept, Monolith is started (and nothing is kept); a kept name that is
+gone starts Monolith too, says so on stderr and is forgotten. A name given that is not there
+lists the interfaces instead and exits 2.
 """
 
 import importlib
@@ -39,10 +40,15 @@ def run(store, name=None, api=None):
     try:
         client = apiclient.Client(url)
         found = interfaces()
-        asked = name or client.config().get("ui") or DEFAULT
+        stored = None if name else client.config().get("ui")
+        asked = name or stored or DEFAULT
         # the name is matched without regard to case (`--ui ibmi`), and the interface's own
         # spelling is what is run and kept
         chosen = next((n for n in found if n.lower() == asked.lower()), None)
+        if chosen is None and stored:       # kept from before and gone since: the default, and forgotten
+            print(f"mccontrol: the stored interface {stored!r} is gone; starting {DEFAULT}", file=sys.stderr)
+            client.set_config(ui="")
+            chosen = DEFAULT
         if chosen is None:
             print(listing(found), file=sys.stderr)
             print(f"mccontrol: no interface named {asked!r}", file=sys.stderr)

@@ -19,7 +19,8 @@ subcommand to a server already running instead of starting one of its own.
 
 `mccontrol --ui <name>` starts one (`ibmi` and `IBMi` are the same name). The name is kept in the configuration, so plain
 `mccontrol` starts the last one asked for; with none asked for yet it starts Monolith (and keeps
-nothing). A name that is not there lists them and exits 2. `--api <url>` runs it on a server
+nothing), and a kept name that is gone since starts Monolith, says so and is forgotten. A name
+given that is not there lists them and exits 2. `--api <url>` runs it on a server
 already running instead of starting one of its own, and that server's configuration keeps the
 name:
 
