@@ -110,7 +110,8 @@ header is the block-letter title:
   Enter sends it to the tagged devices or the cursor device -- the same target and caution
   confirm as `c` -- and the replies scroll up above it as they arrive. A refusal is said there,
   on a line of its own. Up/Down recall, Esc leaves; every key is text there, so F10 quits.
-- **STATUS**: the broker, your key, whether it is registered, whether the broker test passed,
+- **STATUS**: the broker, your key, whether it is registered, whether the broker test passed
+  (this session's, else the last one kept for this broker),
   and from 120 columns how you sign in and the jobs kept -- no taller than those lines. At 80x24
   the last two give way.
 - **HISTORY**: one block per device, newest first, the short id once, then each of its last six

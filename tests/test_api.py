@@ -163,6 +163,8 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
                        ("register", {})]:
         assert run(url, verb, body)["status"] == "done", verb
     assert run(url, "test")["result"]["ok"] is False
+    tested = call(url, "GET", "/config")[1]["tested"]                      # kept, so a screen can say it later
+    assert tested["ok"] is False and tested["broker"] == "127.0.0.1" and tested["at"]
     jobs = call(url, "GET", "/jobs")[1]["jobs"]
     assert jobs[0]["verb"] == "test" and len(jobs) == 8
     assert {j["verb"] for j in jobs if not j["cancellable"]} == {"test", "register"}

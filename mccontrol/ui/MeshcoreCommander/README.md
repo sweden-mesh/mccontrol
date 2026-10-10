@@ -42,6 +42,10 @@ Gisebo> Tab here or click to type a command
  1Help   2Send   3Hist   4Edit   5Disco  6Regns  7All    8Del    9Menu  10Quit
 ```
 
+Right of the menu bar, where Norton Commander kept its clock: the broker, whether your key is
+registered with it, and the last broker test kept for that broker (`test ok`, `test FAILED`,
+`untested`); the broker drops out first on a narrow terminal.
+
 The colours are Turbo Pascal's: a black menu bar and key bar with the hot letters and key
 numbers in red, a blue work area, grey dialogs, green for the open menu. A terminal without
 colour gets bold and reverse video instead. 80x24 is the minimum; a wider terminal gets wider

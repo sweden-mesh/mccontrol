@@ -4,6 +4,15 @@ No curses here, so each is a unit test."""
 import textwrap
 
 
+def tested(cfg):
+    """The last broker test kept for the configured broker: `ok 2026-10-10`, `FAILED ...`,
+    or how to run one."""
+    kept = cfg.get("tested") or {}
+    if not kept or (kept.get("broker"), kept.get("port")) != (cfg.get("broker"), cfg.get("port")):
+        return "no - select 10"
+    return f"{'ok' if kept.get('ok') else 'FAILED'} {(kept.get('at') or '')[:10]}"
+
+
 def history_out(line):
     """What came back for one history line: the reply, the refusal, or the note."""
     if line.get("code") == 0:

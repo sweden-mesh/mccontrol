@@ -76,9 +76,13 @@ def build_home(where):
     home = where / "home"
     st = _store.Store(home)
     st.create_key()
-    st.save_config(broker="127.0.0.1", port=1, beacon_url="http://127.0.0.1:1", wait_secs=4,
+    # a configured install: an invented broker, the key registered with it and a passing broker
+    # test, kept as `register` and `test` keep them; nothing reaches it (the fake broker answers)
+    st.save_config(broker="mqtt.example.org", port=8883, tls=True, beacon_url="http://beacon.example.org", wait_secs=4,
                    sets={"add-scope": ["region put {arg} *", "region allowf {arg}", "region save", "region"],
                          "audit": ["ver", "get txdelay", "get autoreply"]})
+    st.remember_registration("mqtt.example.org")
+    st.remember_test("mqtt.example.org", 8883, True)
     (home / "history").mkdir(exist_ok=True)
     script, nodes, table = {}, [], {}
     for i, (name, region, rev, mv, txdelay, ar) in enumerate(FLEET):

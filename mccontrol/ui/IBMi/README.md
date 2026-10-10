@@ -21,12 +21,12 @@ The pictures are an invented fleet, made by `scripts/screenshots.py`. As text, t
  Select one of the following:
        1. Work with devices
        2. Send a command
-       3. Send a command to every node in a region  Broker       mqtt.louie.se
-       4. Run a command set                         Signing key  present
-       5. Discover devices                          Registered   no - select 8
-       6. Work with command sets                    Devices      3 devices
-       7. Work with shortcuts
-       8. Work with signing key
+       3. Send a command to every node in a region  Broker
+       4. Run a command set                                 mqtt.louie.se:8883
+       5. Discover devices                          Signing key present
+       6. Work with command sets                    Registered  no - select 8
+       7. Work with shortcuts                       Tested      no - select 10
+       8. Work with signing key                     Devices     3 devices
        9. Change configuration
       10. Test the broker connection
       11. Change directory columns
@@ -49,7 +49,8 @@ A number on `===>` opens that screen; `90`, `signoff` or `quit` signs off. `1` W
 with command sets, `7` Work with shortcuts, `8` Work with signing key, `9` Change configuration
 (the broker, its port, TLS on or off, credentials, the Beacon URL), `10` Test the broker
 connection, `11` Change directory columns, `12` Display command history, `13` Help contents, `14`
-Command entry.
+Command entry. At the right: the broker, the signing key, when it was registered, the last broker
+test kept for this broker (`ok 2026-10-10`, or `no - select 10`), the devices.
 
 ## Work with Devices
 

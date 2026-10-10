@@ -39,3 +39,11 @@ def test_the_fleet_is_invented_and_the_board_shows_it(tmp_path):
     text = "\n".join(_text(screen))
     assert "Church-Spire" in text and "10 devices" in text and "HISTORY" in text and "STATS CHURCH-SPIRE" in text
     assert not any(node in text for node in real)
+
+
+def test_the_fleets_home_reads_like_a_configured_install(tmp_path):
+    from mccontrol import store as _store
+    home, _script, _beacon = screenshots.build_home(tmp_path)
+    st = _store.Store(home)
+    assert (st.config()["broker"], st.config()["port"], st.config()["tls"]) == ("mqtt.example.org", 8883, True)
+    assert st.registration()["broker"] == "mqtt.example.org" and st.tested()["ok"] is True

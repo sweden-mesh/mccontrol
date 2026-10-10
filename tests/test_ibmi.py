@@ -181,7 +181,7 @@ def test_the_main_menu_numbers_its_selections_and_takes_a_command(api):
     text = walk(api, [(b"42\r", 0.6)])
     assert "MCCONTROL Main Menu" in text and "Select one of the following:" in text
     assert "1. Work with devices" in text and "90. Sign off" in text and "===>" in text
-    assert "Signing key  present" in text and "3 devices" in text
+    assert "Signing key present" in text and "3 devices" in text and "Tested      no - select 10" in text
     assert "Command 42 is not valid here." in text
     assert "F3=Exit" in text and "F12=Cancel" in text
 

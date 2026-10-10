@@ -413,7 +413,9 @@ def start_test(ctx, _p, _q, _b):
 
     def work(job):
         job.update(text=f"connecting to {store.config()['broker']}")
-        steps = transport.test_connection(store.config(), seed_hex=store.seed() if store.has_key() else None)
+        config = store.config()
+        steps = transport.test_connection(config, seed_hex=store.seed() if store.has_key() else None)
+        store.remember_test(config["broker"], config["port"], all(ok for _s, ok, _d in steps))   # kept: STATUS says it
         return {"steps": [{"step": s, "ok": ok, "detail": detail} for s, ok, detail in steps],
                 "key": store.public_key() if store.has_key() else None, "registered": store.registration(),
                 "ok": all(ok for _s, ok, _d in steps)}

@@ -62,3 +62,18 @@ def test_every_history_view_says_a_forged_reply_and_an_unsigned_one():
     expected = ["> 1.2", "BAD SIGNATURE > evil", "> 1.2 (unsigned)", "refused not-allowed"]
     for said in (board.Board.said, commander.App.said, fmt.said):
         assert [said(line) for line in lines] == expected, said
+
+
+def test_every_status_says_the_registration_and_the_last_broker_test_kept_for_this_broker():
+    from mccontrol.ui.IBMi import fmt
+    cfg = {"broker": "mqtt.example.org", "port": 8883, "registered": {"broker": "mqtt.example.org", "at": "2026-10-09 10:00:00"},
+           "tested": {"broker": "mqtt.example.org", "port": 8883, "ok": True, "at": "2026-10-09 10:01:00"}}
+    other = dict(cfg, broker="mqtt.elsewhere.net")                         # a test of another broker says nothing
+    assert board.Board.link(None, cfg) == ("LINK", "ok 2026-10-09", "base")
+    assert board.Board.link(None, other)[1] == "untested  :test"
+    assert fmt.tested(cfg) == "ok 2026-10-09" and fmt.tested(other) == "no - select 10"
+    app = commander.App.__new__(commander.App)
+    app.cfg = cfg
+    assert app.status()[0] == "mqtt.example.org:8883  registered  test ok"
+    app.cfg = dict(other, registered=None)
+    assert app.status()[0] == "mqtt.elsewhere.net:8883  not registered  untested"

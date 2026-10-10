@@ -496,8 +496,7 @@ class Board:
             ("KEY", (key["public"][:8] + "…") if key.get("public") else "NONE  :generate key",
              "base" if key.get("public") else "alert"),
             ("REG", f"{reg['at'][:10]}" if reg else "no  :register", "base" if reg else "accent"),
-            ("LINK", ("ok " if (test["result"] or {}).get("ok") else "FAIL ") + test["started"][11:16] if test else "untested  :test",
-             "base" if test and (test["result"] or {}).get("ok") else "accent"),
+            self.link(test, cfg),
             ("SIGN-IN", (f"{cfg['username']}, password {'set' if cfg.get('password_set') else 'not set'}"
                          if cfg.get("username") else "by key"), "base"),
             ("JOBS", f"{sum(j['status'] == 'running' for j in self.jobs)} running, {len(self.jobs)} kept", "base"),
@@ -518,6 +517,17 @@ class Board:
             self.put(y + i, x + 9, art.cut(text, w - 9), role)
         if not rows:
             self.put(y, x, "Nothing sent yet."[:w], "dim")
+
+    @staticmethod
+    def link(test, cfg):
+        """The LINK line: this session's broker test, else the last one kept for this broker."""
+        if test:
+            ok = (test["result"] or {}).get("ok")
+            return "LINK", ("ok " if ok else "FAIL ") + test["started"][11:16], "base" if ok else "accent"
+        kept = cfg.get("tested") or {}
+        if kept and (kept.get("broker"), kept.get("port")) == (cfg.get("broker"), cfg.get("port")):
+            return "LINK", ("ok " if kept["ok"] else "FAIL ") + kept["at"][:10], "base" if kept["ok"] else "accent"
+        return "LINK", "untested  :test", "accent"
 
     def draw_clock(self, rect):
         y, x, w, h = self.frame(rect, "Clock", False)

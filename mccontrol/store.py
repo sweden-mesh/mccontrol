@@ -164,6 +164,13 @@ class Store:
     def remember_registration(self, broker):
         self.save_config(registered={"broker": broker, "at": _now()})
 
+    def tested(self):
+        """`{broker, port, ok, at}` of the last connection test, else None."""
+        return self.config().get("tested") or None
+
+    def remember_test(self, broker, port, ok):
+        self.save_config(tested={"broker": broker, "port": port, "ok": bool(ok), "at": _now()})
+
     def shortcuts(self):
         """Nine slots, Alt+1 first; an empty string is an unused slot."""
         slots = list(self.config().get("shortcuts", DEFAULT_SHORTCUTS))

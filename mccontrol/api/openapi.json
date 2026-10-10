@@ -1644,6 +1644,31 @@
        }
       ]
      },
+     "tested": {
+      "nullable": true,
+      "type": "object",
+      "description": "the last connection test (POST /jobs/test): to which broker and port, whether every step passed, when",
+      "properties": {
+       "broker": {
+        "type": "string"
+       },
+       "port": {
+        "type": "integer"
+       },
+       "ok": {
+        "type": "boolean"
+       },
+       "at": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "broker",
+       "port",
+       "ok",
+       "at"
+      ]
+     },
      "ui": {
       "type": "string",
       "description": "the interface `mccontrol --ui` starts when none is named: the last one named; empty for none (Monolith then)"

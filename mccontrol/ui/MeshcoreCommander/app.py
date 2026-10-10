@@ -121,6 +121,7 @@ class App:
         cursor_node = self.devices[self.list.cursor]["node"] if self.devices and self.list.cursor < len(self.devices) else None
         width = self.left.inner[2]
         listing = self.client.devices(sort=self.sort, width=width)
+        self.cfg = self.client.config()
         self.devices = listing["devices"]
         self.header, self.columns, self.all_columns = listing["header"], listing["columns"], listing["all_columns"]
         # a row laid out for the width is cut one short of it: the tag mark takes a column
@@ -294,8 +295,23 @@ class App:
         self.reads_view.draw(s)
         self.draw_line()
         self.menu.draw(s)
+        end = self.menu.positions[-1] + len(self.menu.menus[-1].title) + 3 if self.menu.positions else 0
+        for status in self.status():                         # the longest that fits right of them
+            if s.size[0] - len(status) - 2 > end:
+                s.put(0, s.size[0] - len(status) - 2, status, s.colors.bar)
+                break
         self.keybar.draw(s)
         s.refresh()
+
+    def status(self):
+        """Right of the menu bar, as Norton Commander kept its clock there: the broker, whether
+        the key is registered, and the last broker test kept for this broker."""
+        cfg = getattr(self, "cfg", None) or {}
+        kept = cfg.get("tested") or {}
+        same = (kept.get("broker"), kept.get("port")) == (cfg.get("broker"), cfg.get("port"))
+        test = ("test ok" if kept.get("ok") else "test FAILED") if kept and same else "untested"
+        reg = "registered" if cfg.get("registered") else "not registered"
+        return [f"{cfg.get('broker', '?')}:{cfg.get('port', '?')}  {reg}  {test}", f"{reg}  {test}", test]
 
     def target(self):
         """Who the command line sends to, as its prompt says it."""

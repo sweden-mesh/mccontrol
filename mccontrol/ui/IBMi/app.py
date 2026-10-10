@@ -130,9 +130,15 @@ class App:
             info = [("Broker", f"{cfg.get('broker')}:{cfg.get('port')}"),
                     ("Signing key", "present" if signing.get("exists") else "NONE - select 8"),
                     ("Registered", reg["at"][:10] if reg else "no - select 8"),
+                    ("Tested", fmt.tested(cfg)),
                     ("Devices", data.get("footer", ""))]
+            broker = info.pop(0)[1]
+            if len(broker) > w - 54 - 12:       # at 80 columns: the broker on a line of its own under its label
+                info[:0] = [("Broker", ""), ("", "  " + broker)]
+            else:
+                info.insert(0, ("Broker", broker))
             for i, (label, value) in enumerate(info):
-                t.put(5 + i, 52, f"{label:12} {value}"[: w - 54])
+                t.put(5 + i, 52, (f"{label:11} {value}" if label else value.strip().rjust(w - 54))[: w - 54])
             t.put(h - 6, 1, "Selection or command")
             t.put(h - 5, 1, "===>", "bright")
             key, command = t.edit(h - 5, 6, w - 8, command)
