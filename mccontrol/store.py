@@ -281,7 +281,7 @@ class Store:
                 lines.append(json.loads(raw))
             except ValueError:
                 continue
-        return lines[-limit:]
+        return lines[-limit:] if limit else lines          # None: every line
 
     # -- files -------------------------------------------------------------------------
 

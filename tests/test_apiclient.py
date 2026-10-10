@@ -31,7 +31,7 @@ def test_the_client_round_trips_against_the_live_server(api):
     assert c.adopt("B2B2B2B2", "JKG")["notes"] == "found by discovery"
     assert [d["node"] for d in c.devices(sort="version", width=80)["devices"]][0] == "FD700369"
     assert c.history("gisebo")["history"] == [] and c.broadcast_history(limit=3)["history"] == []
-    assert c.reads("gisebo")["reads"] == []
+    assert c.reads("gisebo")["reads"] == [] and c.facts("gisebo") == {"node": "4AC61A7F", "facts": [], "raw": []}
     assert c.device_commands("gisebo")["groups"] and c.commands()["groups"]
     assert c.check_command("region denyf *")["caution"]
     assert c.build_command("ver", [])["command"] == "ver"

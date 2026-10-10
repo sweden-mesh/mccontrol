@@ -4,7 +4,7 @@ waits on the broker or Beacon is a job (`jobs.py`)."""
 
 import pathlib
 
-from .. import actions, commands, denylist, directory, envelope, firmware, helptext, store as _store
+from .. import actions, commands, denylist, directory, envelope, facts, firmware, helptext, store as _store
 from .errors import ApiError, bad, not_found
 
 SPEC = pathlib.Path(__file__).with_name("openapi.json")
@@ -270,6 +270,17 @@ def reads(ctx, params, _q, _b):
                                               for c, r, at in ctx.store.reads(d)]}
 
 
+def device_facts(ctx, params, _q, _b):
+    d = device_of(ctx, params["ref"])
+    known, raw = facts.derive(ctx.store.reads(d), ctx.store.history(d["node"], limit=None))
+    return 200, {"node": d["node"],
+                 "facts": [{"key": k, "label": facts.LABELS.get(k, k), "value": v["value"], "at": v["at"],
+                            "age": directory.relative(v["at"]), "source": v["source"], "read": facts.reader(k)}
+                           for k, v in sorted(known.items(), key=lambda kv: facts.order(kv[0]))],
+                 "raw": [{"command": c, "reply": v["reply"], "at": v["at"], "age": directory.relative(v["at"])}
+                         for c, v in sorted(raw.items(), key=lambda kv: kv[1]["at"], reverse=True)]}
+
+
 def device_commands(ctx, params, _q, _b):
     return 200, command_list(device_of(ctx, params["ref"]))
 
@@ -437,6 +448,7 @@ TABLE = [
     ("DELETE", "/devices/{ref}", forget),
     ("GET", "/devices/{ref}/history", history),
     ("GET", "/devices/{ref}/reads", reads),
+    ("GET", "/devices/{ref}/facts", device_facts),
     ("GET", "/devices/{ref}/commands", device_commands),
     ("GET", "/history", broadcast_history),
     ("GET", "/commands", table),

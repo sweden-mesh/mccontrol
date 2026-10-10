@@ -115,6 +115,8 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert call(url, "GET", "/devices/gisebo/history")[1]["history"] == []
     assert call(url, "GET", "/history?limit=5")[1]["node"] is None
     assert call(url, "GET", "/devices/gisebo/reads")[1]["reads"] == []
+    assert call(url, "GET", "/devices/gisebo/facts")[1] == {"node": "4AC61A7F", "facts": [], "raw": []}
+    assert call(url, "GET", "/devices/nobody/facts")[0] == 404
     table = call(url, "GET", "/devices/gisebo/commands")[1]
     assert table["firmware"] == "ar-10" and table["greyed"] > 0 and table["revision"] is None   # no version read yet: the oldest
     _store.update_device("FD700369", ver="esp32s3-v1.17.1-ar-11-observer-2c079ed7")
@@ -231,6 +233,29 @@ def test_a_send_to_the_tagged_lands_an_outcome_per_device_and_keeps_history(api)
     assert job["result"]["answered"] == 2 and job["result"]["asked"] == 2
     assert [l["command"] for l in call(url, "GET", "/devices/4AC61A7F/history")[1]["history"]] == ["region"]
     assert call(url, "GET", "/devices/gisebo/reads")[1]["reads"][0]["reply"] == "> * F"
+    known = call(url, "GET", "/devices/gisebo/facts")[1]
+    assert [(f["key"], f["value"], f["age"], f["source"], f["read"]) for f in known["facts"]] == [
+        ("regions", "* F", "now", "region", "region")]
+    assert call(url, "GET", "/devices/65C1D12C/facts")[1]["facts"] == []       # a refusal teaches nothing
+
+
+def test_facts_land_with_the_reply_that_carries_them(api):
+    from conftest import SCRIPT
+    from mccontrol.api.server import serve, stop
+    _server, _url, store = api
+    server, url = serve(store, transport=dict(SCRIPT, **{"4AC61A7F|set txdelay 0.7": [0, "OK"],
+                                                         "4AC61A7F|get rxdelay": [0, "> 0.3"]}))
+    try:
+        store.remember_read("4AC61A7F", "neighbors", "> 0 neighbours")
+        for command in ("set txdelay 0.7", "get rxdelay", "ver"):
+            assert run(url, "send", {"command": command, "devices": ["gisebo"]})["status"] == "done"
+        known = call(url, "GET", "/devices/gisebo/facts")[1]
+    finally:
+        stop(server)
+    assert [(f["key"], f["value"], f["source"]) for f in known["facts"]] == [   # the fixed order, not the order learned
+        ("version", "esp32s3-v1.17.1-ar-11-observer-90e86c88", "ver"), ("txdelay", "0.7", "set txdelay 0.7"),
+        ("rxdelay", "0.3", "get rxdelay")]
+    assert [(r["command"], r["reply"]) for r in known["raw"]] == [("neighbors", "> 0 neighbours")]
 
 
 def _help14():

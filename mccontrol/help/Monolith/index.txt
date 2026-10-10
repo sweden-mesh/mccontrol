@@ -17,7 +17,7 @@ Doing things
   [[discover]]    find the repeaters that accept your key
   [[devices]]     add, edit, forget; names and regions
   [[history]]     what was sent and what came back
-  [[reads]]       the device tile: what the device last answered to each read
+  [[reads]]       the stats tile: what is known about the device, with its age
   [[stats]]       a device's statistics: battery, airtime, noise floor, from Beacon
 
 Reference

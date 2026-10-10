@@ -65,7 +65,7 @@ class Board:
         self.cursor = self.top = 0
         self.feed, self.feed_cursor = [], 0
         self.jobs, self.cfg, self.key_info = [], {}, {}
-        self.reads, self.history, self.shown_node = [], [], None
+        self.stats, self.history, self.shown_node = [], [], None    # stats: (label, value, age, read)
         self.read_cursor = 0
         self.toasts = []
         self.running = None                 # (title, job) while a job is waited on
@@ -141,7 +141,7 @@ class Board:
             self.toast(exc.message, "alert")
 
     def follow(self, force=False):
-        """The device tile follows the cursor: its reads and history."""
+        """The stats tile follows the cursor: what is known about the device, and its history."""
         d = self.device
         node = d["node"] if d else None
         if node == self.shown_node and not force:
@@ -149,7 +149,9 @@ class Board:
         if node != self.shown_node:
             self.read_cursor = 0
         self.shown_node = node
-        self.reads = self.client.reads(node)["reads"] if node else []
+        known = self.client.facts(node) if node else {"facts": [], "raw": []}
+        self.stats = ([(f["label"], f["value"], f["age"], f["read"]) for f in known["facts"]]
+                      + [(r["command"], r["reply"], r["age"], r["command"]) for r in known["raw"]])
         self.history = self.client.history(node, limit=50)["history"] if node else []
 
     @property
@@ -305,8 +307,8 @@ class Board:
 
     def draw_device(self, rect):
         d = self.device
-        y, x, w, h = self.frame(rect, f"Device {(d['name'] or d['node']) if d else '-'}"[:30], self.focus == "device",
-                                "s stats  h history")
+        y, x, w, h = self.frame(rect, f"Stats {(d['name'] or d['node']) if d else '-'}"[:30], self.focus == "device",
+                                "↵ reads again  s statistics")
         if not d:
             return
         fleet = d.get("fleet") or {}
@@ -327,24 +329,27 @@ class Board:
             self.put(row, x + 7, art.sparkline(values, w - 8 - len(tail), self.g), "accent")
             self.put(row, x + w - len(tail), tail, "base")
             row += 1
-        if not pts and row < y + h:
-            self.put(row, x, "no telemetry yet: s reads the statistics"[:w], "dim")
-            row += 1
         if row < y + h:
             self.put(row, x, self.g["scan"] * w, "dim")
             row += 1
-        for i, r in enumerate(self.reads):
-            if row >= y + h:
-                break
-            line = f"{r['age']:>5} {r['command'][:14]:14} {r['reply']}"[:w]
-            here = self.focus == "device" and i == self.read_cursor
-            self.put(row, x, line.ljust(w) if here else line, "cursor" if here else "base")
-            row += 1
-        for line in reversed(self.history):
-            if row >= y + h:
-                break
-            self.put(row, x, f"{line['at'][5:16]} {line['command'][:14]:14} {self.history_out(line)}"[:w], "dim")
-            row += 1
+        if not self.stats:
+            if row < y + h:
+                self.put(row, x, "nothing known yet: n reads name and version"[:w], "dim")
+            return
+        rows = y + h - row
+        top = max(0, self.read_cursor - rows + 1)
+        label_w = min(17, max(len(s[0]) for s in self.stats))
+        for i, (label, value, age, _read) in enumerate(self.stats[top:top + rows]):
+            here = self.focus == "device" and top + i == self.read_cursor
+            value = " ".join(value.split())
+            room = w - label_w - 1 - len(age) - 1
+            line = f"{label[:label_w]:{label_w}} {value[:max(0, room)]:{max(0, room)}} {age}"[:w]
+            if here:
+                self.put(row + i, x, line.ljust(w), "cursor")
+            else:
+                self.put(row + i, x, line[:label_w], "dim")
+                self.put(row + i, x + label_w + 1, line[label_w + 1:w - len(age)], "base")
+                self.put(row + i, x + w - len(age), age, "dim")
 
     @staticmethod
     def history_out(line):
@@ -361,7 +366,7 @@ class Board:
             self.put(y, x, f"{self.g['run']} {title}"[:w], "bright")
             width = max(4, min(30, w - 2))
             self.put(y + 1, x, art.bar(frac, width, self.g), "accent")
-            self.put(y + 2, x, f"{p['text']}  Esc cancels"[:w], "base")
+            self.put(y + 2, x, f"Esc cancels  {p['text']}"[:w], "base")     # the key first: a long text is cut
             y, h = y + 3, h - 3
         top = max(0, min(self.feed_cursor - h + 1, len(self.feed) - h)) if self.feed_cursor >= h else 0
         for i, (text, role, _detail) in enumerate(self.feed[top:top + h]):
@@ -538,7 +543,7 @@ class Board:
         if self.focus == "feed":
             self.feed_cursor = max(0, min(len(self.feed) - 1, self.feed_cursor + step))
         elif self.focus == "device":
-            self.read_cursor = max(0, min(len(self.reads) - 1, self.read_cursor + step))
+            self.read_cursor = max(0, min(len(self.stats) - 1, self.read_cursor + step))
         else:
             self.cursor = max(0, min(len(self.devices) - 1, self.cursor + step))
             self.follow()
@@ -1016,10 +1021,10 @@ class Board:
         self.sheet(f"History {d['name'] or d['node']}", lines or ["Nothing sent yet."])
 
     def v_reread(self, _arg):
-        """Enter on a read in the device tile: ask the device again."""
-        if not self.reads:
+        """Enter on a row of the stats tile: ask the device again what it said."""
+        if not self.stats:
             raise Cancel
-        command = self.reads[min(self.read_cursor, len(self.reads) - 1)]["command"]
+        command = self.stats[min(self.read_cursor, len(self.stats) - 1)][3]
         if command.startswith("stats"):
             return self.v_stats(None)
         target = {"devices": [self.device["node"]]}

@@ -1,0 +1,29 @@
+Stats: what is known about a repeater
+
+The STATS tile follows the cursor and shows what the device has told you,
+parsed into settings, each with the age of the answer that carried it:
+
+  name, firmware            "get name", "ver"
+  tx delay, rx delay,       "get txdelay", "get rxdelay",
+  direct tx delay           "get direct.txdelay"
+  autoreply, its hops,      "get autoreply" (one answer, six facts), or
+  mode, channel, ...        each "get autoreply.<setting>"
+  autoreply slots, slot,    on firmware that has them; "autoreply delay"
+  window                    on older firmware
+  regions                   "region": the region map
+  anything else             every "get <setting>" is a fact by its name
+
+A write teaches as much as a read: "set txdelay 0.7" answered OK makes
+the tx delay 0.7, as of then. The newest answer wins; a refusal or
+silence teaches nothing and clears nothing, so an old value stays with
+its age showing how old it is. A read the tile does not know how to parse
+(neighbors, board, memory, the "stats (Beacon)" line) is listed after the
+facts, raw, under its command.
+
+Nothing is sent to show it: it comes from what is kept on this machine,
+the last answer to each read and the history of every command, and it
+changes the moment a result lands. Enter on a row reads it again (Tab to
+the tile first); Up and Down move.
+
+The same list is "GET /devices/{ref}/facts" on the API. See
+[[commandlist]], [[history]] and [[stats]].

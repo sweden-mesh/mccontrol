@@ -10,9 +10,10 @@ cursor is the current device; Space or Ins tags it, "*" inverts the tags,
 "+" and "-" tag or untag a whole region. The tile's bottom edge counts
 the tags and says the sort.
 
-DEVICE follows the cursor: the node, its region and version, its
-statistics as sparklines once read, and what it last answered to each
-read, with its age (see [[reads]]). Enter on a read asks it again.
+STATS follows the cursor: the node, its region and version, its
+statistics as sparklines once read, and what is known about it -- tx
+and rx delay, autoreply and its settings, regions, firmware, name --
+each with its age (see [[reads]]). Enter on a row asks it again.
 
 RESULTS is the feed: each send, set and discovery as it lands, newest
 first, and the running job as a bar. Enter opens the whole result. A

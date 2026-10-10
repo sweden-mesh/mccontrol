@@ -492,6 +492,42 @@
     ]
    }
   },
+  "/devices/{ref}/facts": {
+   "get": {
+    "operationId": "facts",
+    "summary": "What is known about the device: its settings and facts, each with its age",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Facts"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/BadRequest"
+     },
+     "404": {
+      "$ref": "#/components/responses/NotFound"
+     }
+    },
+    "parameters": [
+     {
+      "name": "ref",
+      "in": "path",
+      "required": true,
+      "description": "a device's name, node id, whole key, or a unique prefix of either",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "description": "Parsed from what the device answered: the last answer to each read and every command's reply in its history, newest winning. `get <key>` answered `> value` is the fact `key`; `set <key> <value>` answered OK is the same fact; `ver` is `version`, `region` is `regions`, `get autoreply` gives `autoreply`, `autoreply.hops`, `autoreply.mode`, `autoreply.direct.flood`, `autoreply.private` and `autoreply.channel`. A read the table does not know is listed under `raw`."
+   }
+  },
   "/devices/{ref}/commands": {
    "get": {
     "operationId": "device_commands",
@@ -2208,6 +2244,74 @@
     "required": [
      "node",
      "reads"
+    ]
+   },
+   "Fact": {
+    "type": "object",
+    "properties": {
+     "key": {
+      "type": "string",
+      "description": "the setting, as the firmware names it (txdelay, autoreply.hops), or version, regions"
+     },
+     "label": {
+      "type": "string",
+      "description": "the key as a person reads it"
+     },
+     "value": {
+      "type": "string"
+     },
+     "at": {
+      "type": "string",
+      "description": "when it was learned, local time"
+     },
+     "age": {
+      "type": "string",
+      "description": "how long ago, short: now, 5 min, 2 h, 3 d"
+     },
+     "source": {
+      "type": "string",
+      "description": "the command whose answer carried it"
+     },
+     "read": {
+      "type": "string",
+      "description": "the command that reads it again"
+     }
+    },
+    "required": [
+     "key",
+     "label",
+     "value",
+     "at",
+     "age",
+     "source",
+     "read"
+    ]
+   },
+   "Facts": {
+    "type": "object",
+    "properties": {
+     "node": {
+      "type": "string"
+     },
+     "facts": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Fact"
+      },
+      "description": "known settings first, in a fixed order, then the rest by key"
+     },
+     "raw": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Read"
+      },
+      "description": "reads the fact table does not know, newest first"
+     }
+    },
+    "required": [
+     "node",
+     "facts",
+     "raw"
     ]
    },
    "Command": {

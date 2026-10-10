@@ -119,7 +119,7 @@ def _options():
 
 # The topics that are how an interface works; every interface has its own text for each.
 MECHANICS = {"index", "keys", "screen", "dialogs", "commandlist", "devices", "send"}
-EXTRA = {}          # an interface's own text for a topic outside MECHANICS, by interface, when one is earned
+EXTRA = {"Monolith": {"reads"}}   # an interface's own text for a topic outside MECHANICS, when one is earned: the STATS tile
 
 
 def test_every_key_an_interfaces_help_names_is_a_key_it_has():

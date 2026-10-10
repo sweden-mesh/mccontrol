@@ -108,6 +108,9 @@ class Client:
     def reads(self, ref):
         return self.call("GET", f"/devices/{_q(ref)}/reads")
 
+    def facts(self, ref):
+        return self.call("GET", f"/devices/{_q(ref)}/facts")
+
     def device_commands(self, ref):
         return self.call("GET", f"/devices/{_q(ref)}/commands")
 

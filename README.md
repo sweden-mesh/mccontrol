@@ -132,9 +132,9 @@ The IBM i (AS/400, 5250) green screen: a numbered main menu, lists with an Opt c
 
 ### Monolith
 
-The fleet as a board of tiles in phosphor on black (amber or green): the directory, the device
-under the cursor with its reads and a statistics sparkline, a feed of results, the broker and
-key, a clock. Jobs are drawn as bars. At 80x24:
+The fleet as a board of tiles in phosphor on black (amber or green): the directory, STATS for
+the device under the cursor, a feed of results, the broker and key, a clock. Jobs are drawn as
+bars. At 80x24:
 
 ```
  ▞▚ M O N O L I T H ▚▞  mccontrol  amber                              00:15:57
@@ -144,14 +144,14 @@ key, a clock. Jobs are drawn as bars. At 80x24:
 │   Gisebo             4AC61A7F JKG  -     ││ REG     no  :register            │
 │   (unnamed)          65C1D12C JKG  -     ││ LINK    untested  :test          │
 │                                          │╰──────────────────────────────────╯
-│                                          │╭─ ● DEVICE FAR ───────────────────╮
-│                                          ││ FD700369  GOT  ver ?             │
-│                                          ││ no telemetry yet: s reads the st │
+│                                          │╭─ ● STATS GISEBO ─────────────────╮
+│                                          ││ 4AC61A7F  JKG  ver ?             │
 │                                          ││ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │
-│                                          ││                                  │
-│                                          ││                                  │
-│                                          ││                                  │
-│                                          │╰───────────── s stats  h history ─╯
+│                                          ││ tx delay          0.7        2 d │
+│                                          ││ autoreply         on         2 d │
+│                                          ││ autoreply hops    8          2 d │
+│                                          ││ autoreply mode    flood      2 d │
+│                                          │╰──── ↵ reads again  s statistics ─╯
 │                                          │╭─ ● RESULTS ──────────────────────╮
 │                                          ││ Nothing run yet. : opens the pal │
 │                                          ││                                  │
@@ -163,6 +163,12 @@ key, a clock. Jobs are drawn as bars. At 80x24:
  : menu ↵ cmds ␣ tag c send a all s stat d find k keys Del forget ? help q quit
 ```
 
+- **STATS** is what is known about the cursor device, each with its age: tx, rx and direct tx
+  delay, autoreply and its hops, mode, channel, slots or delay, regions, firmware, name, and
+  every other `get` it has answered -- parsed from the last answer to each read and from every
+  command's reply (`set txdelay 0.7` answered OK is a tx delay of 0.7), so it changes the moment
+  a result lands. A read it cannot parse is listed raw. Nothing is sent to show it; Enter on a row
+  reads it again. The API serves the same as `GET /devices/{ref}/facts`.
 - **`:` or Ctrl+P** opens the palette: every verb and every command, type to filter.
 - **Single keys.** Enter the command list (or read again, or open a result, by tile), Space or
   Ins tag, `*` invert, `+`/`-` tag or untag a region, `c` send, `a` every node in a region,

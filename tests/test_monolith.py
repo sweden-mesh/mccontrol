@@ -323,7 +323,7 @@ def test_the_board_at_80x24_shows_the_directory_status_device_results_and_the_hi
     assert "M O N O L I T H" in text and "DEVICES" in text and "STATUS" in text and "RESULTS" in text
     assert "Gisebo" in text and "(unnamed)" in text and "FD700369" in text and "3 devices" in text
     assert "BROKER" in text and "127.0.0.1" in text and "REG" in text and "no  :register" in text
-    assert "DEVICE GISEBO" in text and "region" in text and "> * F" in text      # its history follows the cursor
+    assert "STATS GISEBO" in text and re.search(r"regions\s+\* F\s+\d+ d", text)  # what its history taught follows the cursor
     assert re.search(r":\s+menu", text) and re.search(r"Del\s+forget", text) and re.search(r"q\s+quit", text)
     assert "CLOCK" not in text                                                     # no room at 80x24
 
@@ -562,7 +562,7 @@ def _click(x, y):
 
 def test_a_click_moves_the_cursor_and_presses_a_hint(tmp_path):
     text, _ = walk(tmp_path, [(_click(5, 4), 0.6), (_click(1, 23), 0.8)])
-    assert "DEVICE GISEBO" in text                              # row 4 is the second device
+    assert "STATS GISEBO" in text                               # row 4 is the second device
     assert "PALETTE" in text                                    # the first hint is the palette
 
 
@@ -581,6 +581,32 @@ def test_tab_to_the_device_tile_and_enter_reads_a_read_again(tmp_path):
     assert _history(home, "4AC61A7F")[-1]["command"] == "get autoreply"
 
 
+def _known(home):
+    """A prepare hook: Gisebo has answered get autoreply and a read the table does not know,
+    and was told its tx delay."""
+    devs = json.loads((home / "devices.json").read_text())
+    next(d for d in devs if d["node"] == "4AC61A7F")["reads"] = {
+        "get autoreply": {"reply": "> on #test-jkg 'test' max 8 hops, direct flood, mode flood, private off",
+                          "at": "2026-10-07 11:00:00", "seq": 1},
+        "neighbors": {"reply": "> 2 neighbours", "at": "2026-10-07 11:00:00", "seq": 2}}
+    (home / "devices.json").write_text(json.dumps(devs))
+    with (home / "history" / "4AC61A7F.jsonl").open("a") as f:
+        f.write(json.dumps({"at": "2026-10-08 09:00:00", "command": "set txdelay 0.7", "topic": "t", "code": 0,
+                            "code_name": "ok", "reply": "OK", "note": ""}) + "\n")
+
+
+def test_the_stats_tile_shows_what_is_known_with_its_age_and_a_new_answer_lands_in_it(tmp_path):
+    text, home = walk(tmp_path, [(DOWN, 0.3)], cols=120, rows=40, prepare=_known)
+    screen = walk.screen
+    assert "STATS GISEBO" in screen
+    for label, value in (("tx delay", "0.7"), ("autoreply", "on"), ("autoreply hops", "8"), ("autoreply mode", "flood"),
+                         ("regions", r"\* F"), ("neighbors", "> 2 neighbours")):
+        assert re.search(rf"{label}\s+{value}\s+.*\d+ d", screen), label
+    assert screen.index("tx delay") < screen.index("autoreply hops") < screen.index("regions") < screen.index("neighbors")
+    text, home = walk(tmp_path / "ver", [(DOWN, 0.3), (b"c", 0.5), (b"ver", 0.3), (b"\r", 1.5)], cols=120, rows=40)
+    assert re.search(r"firmware\s+esp32s3-v1\.17\.1-ar-11\S*\s+now", walk.screen)      # the reply lands as a fact
+
+
 def test_q_while_a_job_runs_cancels_it_and_quits(tmp_path):
     text, home = walk(tmp_path, [(b"c", 0.5), (b"ver", 0.3), (b"\r", 1.2), (b"q", 2.0)], wait=6)
     assert "Esc cancels" in text and EXITED == [True]
@@ -592,9 +618,9 @@ class Counting:
     def __init__(self):
         self.calls = []
 
-    def reads(self, node):
-        self.calls.append(("reads", node))
-        return {"node": node, "reads": []}
+    def facts(self, node):
+        self.calls.append(("facts", node))
+        return {"node": node, "facts": [], "raw": []}
 
     def history(self, node, limit=None):
         self.calls.append(("history", node))
@@ -607,7 +633,7 @@ class Counting:
         return call
 
 
-def test_moving_the_cursor_asks_only_for_the_new_devices_reads_and_history():
+def test_moving_the_cursor_asks_only_for_the_new_devices_facts_and_history():
     from mccontrol.ui.Monolith.board import Board
     board = Board.__new__(Board)
     board.client = Counting()
@@ -615,8 +641,8 @@ def test_moving_the_cursor_asks_only_for_the_new_devices_reads_and_history():
     board.cursor, board.focus, board.shown_node, board.read_cursor = 0, "devices", NODES[0][1], 0
     for _ in range(3):
         assert board.step(curses.KEY_DOWN) == "nav"
-    assert board.client.calls == [("reads", NODES[1][1]), ("history", NODES[1][1]),
-                                  ("reads", NODES[2][1]), ("history", NODES[2][1])]   # the third move hits the end
+    assert board.client.calls == [("facts", NODES[1][1]), ("history", NODES[1][1]),
+                                  ("facts", NODES[2][1]), ("history", NODES[2][1])]   # the third move hits the end
 
 
 def test_without_a_utf8_locale_the_board_draws_in_ascii(tmp_path):
