@@ -25,7 +25,7 @@ def test_ar11_is_the_deny_list_and_the_boundary_is_at_eleven():
     assert firmware.admits(AR11, "region put se-jkp *") and firmware.admits(AR11, "ver") and firmware.admits(AR11, "get stats")
     assert not firmware.admits(AR11, "set repeat off") and not firmware.admits(AR11, "erase")
     assert firmware.entry_for(AR10)[0] == "ar-10" and firmware.entry_for(AR11)[0] == "ar-11"
-    assert firmware.entry_for("v1.17.1-ar-12-x")[0] == "ar-11"          # newer than the table: the newest row
+    assert firmware.entry_for("v1.17.1-ar-14-x")[0] == "ar-13"          # newer than the table: the newest row
     assert firmware.entry_for("v1.17.1-ar-9-x")[0] == "ar-10"           # older: the oldest row
 
 

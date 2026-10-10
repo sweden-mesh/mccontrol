@@ -16,9 +16,14 @@ This file is a copy of `panopticon/control.py` in the Meshcore-Panopticon reposi
 step by a test in each that signs a fixed message and compares the bytes.
 """
 
+import base64
+import hashlib
 import secrets
 import time
 
+from Crypto.Cipher import ChaCha20_Poly1305
+from Crypto.Hash import SHA256
+from Crypto.Protocol.KDF import HKDF
 from Crypto.PublicKey import ECC
 from Crypto.Signature import eddsa
 
@@ -346,3 +351,176 @@ def node_from_result_topic(topic):
     if len(leaf) not in (NODE_HEX_LEN, KEY_HEX_LEN) or any(c not in "0123456789ABCDEF" for c in leaf):
         return None
     return leaf
+
+
+# -- v2: the command plane end to end encrypted (ar-13, firmware TODO 17a) -------------------
+#
+#     shared   MeshCore's ed25519_key_exchange: SHA-512(own seed)[0:32], clamped, times the
+#              Montgomery u of the node's Ed25519 public key; raw u, 32 bytes
+#     key      HKDF-SHA256(shared, salt empty, info "mccontrol-v2|" + command topic, 32)
+#     nonce    dir(1) | 00 x 7 | counter (4, big-endian); dir 00 command, 01 result
+#     command  v2|<counter>|<expiry>|<b64url(ChaCha20-Poly1305(command padded to 64 or 160),
+#              AAD "v2|<counter>|<expiry>")>|<128 hex Ed25519 over "<topic>\n" + all before>
+#     result   r3|<counter>|<b64url(seal("<code>|<command>|<reply>" padded to 256 or 512),
+#              AAD "r3|<counter>")>   on the node's /res
+#
+# The outer signature is for the broker, which drops junk before fan-out without reading the
+# command; the node checks the tag. Broadcasts stay v1.
+
+V2_TAG = "v2"
+R3_TAG = "r3"
+V2_INFO = b"mccontrol-v2|"
+V2_COMMAND_PADS = (64, 160)
+TAG_LEN = 16
+DIR_COMMAND, DIR_RESULT = 0x00, 0x01
+
+_P = 2 ** 255 - 19
+_A24 = 121665
+
+
+def x25519(scalar, u):
+    """RFC 7748 X25519 on raw bytes: the scalar clamped, u's top bit masked, the ladder."""
+    k = bytearray(scalar)
+    k[0] &= 248
+    k[31] &= 127
+    k[31] |= 64
+    k = int.from_bytes(k, "little")
+    x1 = int.from_bytes(u, "little") & ((1 << 255) - 1)
+    x2, z2, x3, z3, swap = 1, 0, x1, 1, 0
+    for t in range(254, -1, -1):
+        bit = (k >> t) & 1
+        swap ^= bit
+        if swap:
+            x2, x3, z2, z3 = x3, x2, z3, z2
+        swap = bit
+        a, b = (x2 + z2) % _P, (x2 - z2) % _P
+        aa, bb = a * a % _P, b * b % _P
+        e = (aa - bb) % _P
+        c, d = (x3 + z3) % _P, (x3 - z3) % _P
+        da, cb = d * a % _P, c * b % _P
+        x3, z3 = (da + cb) ** 2 % _P, x1 * (da - cb) ** 2 % _P
+        x2, z2 = aa * bb % _P, e * (aa + _A24 * e) % _P
+    if swap:
+        x2, z2 = x3, z3
+    return (x2 * pow(z2, _P - 2, _P) % _P).to_bytes(32, "little")
+
+
+def montgomery_u(ed_public):
+    """The Montgomery u of an Ed25519 public key, u = (1+y)/(1-y) mod p, as MeshCore's
+    key exchange takes it (the sign bit of x dropped)."""
+    y = int.from_bytes(ed_public, "little") & ((1 << 255) - 1)
+    return ((1 + y) * pow((1 - y) % _P, _P - 2, _P) % _P).to_bytes(32, "little")
+
+
+def shared_secret(seed_hex, node_key_hex):
+    """MeshCore's `ed25519_key_exchange` from our seed and the node's public key."""
+    seed = bytes.fromhex(seed_hex.strip())
+    if len(seed) != 32:
+        raise EnvelopeError(f"the key must be 32 bytes, got {len(seed)}")
+    node = node_key(node_key_hex) if node_key_hex else None
+    if not node:
+        raise EnvelopeError("v2 needs the node's whole public key")
+    # MeshCore's clamp (e[31] &= 63; |= 64) leaves the same bits as RFC 7748's (&= 127; |= 64)
+    scalar = hashlib.sha512(seed).digest()[:32]
+    return x25519(scalar, montgomery_u(bytes.fromhex(node)))
+
+
+def v2_key(seed_hex, node_key_hex, topic):
+    """The command-plane key for one node and one command topic."""
+    return HKDF(shared_secret(seed_hex, node_key_hex), 32, b"", SHA256,
+                context=V2_INFO + topic.encode("utf-8"))
+
+
+def v2_nonce(direction, counter):
+    return bytes([direction]) + bytes(7) + counter.to_bytes(4, "big")
+
+
+def _b64(data):
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _unb64(text):
+    if not text or any(c not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+                       for c in text) or len(text) % 4 == 1:
+        raise ValueError("not base64url")
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def pad(data, sizes):
+    """Zero-padded to the first size that holds it; None when none does."""
+    for size in sizes:
+        if len(data) <= size:
+            return data + bytes(size - len(data))
+    return None
+
+
+def seal(key, direction, counter, aad, plaintext):
+    cipher = ChaCha20_Poly1305.new(key=key, nonce=v2_nonce(direction, counter))
+    cipher.update(aad)
+    body, tag = cipher.encrypt_and_digest(plaintext)
+    return body + tag
+
+
+def open_sealed(key, direction, counter, aad, sealed):
+    """The plaintext, or ValueError when the tag does not verify."""
+    if len(sealed) < TAG_LEN:
+        raise ValueError("too short")
+    cipher = ChaCha20_Poly1305.new(key=key, nonce=v2_nonce(direction, counter))
+    cipher.update(aad)
+    return cipher.decrypt_and_verify(sealed[:-TAG_LEN], sealed[-TAG_LEN:])
+
+
+def build_v2(seed_hex, topic, counter, command, node_key_hex, ttl_secs=DEFAULT_TTL_SECS, now=None):
+    """One encrypted, signed v2 envelope for one node (ar-13 and later), as the payload."""
+    now = int(time.time() if now is None else now)
+    if not 0 < ttl_secs <= MAX_FUTURE_SECS:
+        raise EnvelopeError(f"ttl is 1..{MAX_FUTURE_SECS} seconds")
+    expiry = now + ttl_secs
+    signed_part(counter, expiry, command)          # the same rules for the command as v1
+    head = f"{V2_TAG}{FIELD_SEP}{counter}{FIELD_SEP}{expiry}"
+    plain = pad(command.encode("ascii"), V2_COMMAND_PADS)
+    sealed = seal(v2_key(seed_hex, node_key_hex, topic), DIR_COMMAND, counter, head.encode("ascii"), plain)
+    part = f"{head}{FIELD_SEP}{_b64(sealed)}"
+    signature = eddsa.new(key_from_seed(seed_hex), "rfc8032").sign(signed_message(topic, part))
+    return f"{part}{FIELD_SEP}{signature.hex().upper()}"
+
+
+def command_topic_of(result_topic_):
+    """The command topic a result topic answers for: the key is derived from it."""
+    if not result_topic_ or not result_topic_.endswith("/res"):
+        return None
+    return result_topic_[:-len("res")] + "cmd"
+
+
+def parse_r3(payload, node, seed_hex, node_key_hex, topic):
+    """An r3 line (ar-13) opened with the key for command topic `topic`, as a Result with
+    `verified=True`; a tag that does not verify is a forged or altered line, returned as
+    `verified=False` exactly as a bad r2 is. None for anything that is not an r3."""
+    if isinstance(payload, (bytes, bytearray)):
+        try:
+            payload = payload.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+    parts = (payload or "").split(FIELD_SEP)
+    if len(parts) != 3 or parts[0] != R3_TAG or not parts[1].isdigit():
+        return None
+    counter = int(parts[1])
+    if counter > 0xFFFFFFFF:
+        return None
+    forged = Result(node, counter, None, "", "", False)
+    try:
+        sealed = _unb64(parts[2])
+    except ValueError:
+        return forged
+    try:
+        key = v2_key(seed_hex, node_key_hex, topic)
+    except (EnvelopeError, ValueError):
+        return Result(node, counter, None, "", "", None)     # no key to open it with
+    try:
+        plain = open_sealed(key, DIR_RESULT, counter, f"{R3_TAG}{FIELD_SEP}{counter}".encode("ascii"), sealed)
+    except ValueError:
+        return forged
+    fields = plain.rstrip(b"\0").decode("utf-8", "replace").split(FIELD_SEP, 2)
+    if len(fields) != 3 or not fields[0].isdigit():
+        return forged
+    return Result(node, counter, int(fields[0]), fields[1], fields[2], True)

@@ -13,6 +13,9 @@ The sets are taken from the firmware's own history (`src/helpers/MqttControlLogi
   ar-11   the deny list of 2026-10-08 (621218cb) and `get stats` (2c079ed7): everything
           `denylist.refusal` admits. `region`, `ver` and `get name` arrived between the
           two on the same branch and ship with ar-11.
+  ar-12   ar-11's and `mqtt.cmd ping` (2026-10-10).
+  ar-13   ar-12's, and the encrypted `v2` envelope (firmware TODO 17a): from here a command
+          to one node is sent as v2, below it (and every broadcast) as v1.
 """
 
 from . import denylist
@@ -29,7 +32,15 @@ AR10_FAMILIES = ("set autoreply", "get autoreply", "trigger test", "trigger priv
 ADMITTED = (
     ("ar-10", 10, AR10),
     ("ar-11", 11, None),
+    ("ar-12", 12, None),
+    ("ar-13", 13, None),
 )
+
+# Commands the deny list admits that arrived after ar-11: the revision that admits each.
+ARRIVED = {"mqtt.cmd ping": 12}
+
+# The first revision that opens a v2 envelope.
+V2_FROM = 13
 
 
 def revision(version_text):
@@ -66,12 +77,11 @@ def _boundary(text, prefix):
     return len(text) == len(prefix) or text[len(prefix)] in " ."
 
 
-def admits(version_text, command):
-    """Does a node on `version_text` admit `command`? Unknown versions are the oldest."""
+def _row_admits(row, command):
     text = " ".join((command or "").split())
-    tag, _n, allowed = entry_for(version_text)
+    _tag, n, allowed = row
     if allowed is None:
-        return denylist.refusal(text) is None
+        return denylist.refusal(text) is None and n >= ARRIVED.get(text.lower(), 0)
     low = text.lower()
     for entry in allowed:
         if entry in AR10_FAMILIES:
@@ -82,12 +92,20 @@ def admits(version_text, command):
     return False
 
 
+def admits(version_text, command):
+    """Does a node on `version_text` admit `command`? Unknown versions are the oldest."""
+    return _row_admits(entry_for(version_text), command)
+
+
 def needs(command):
     """The oldest tag that admits `command`, or None when none does."""
-    for tag, _n, allowed in ADMITTED:
-        if allowed is None:
-            if denylist.refusal(command) is None:
-                return tag
-        elif admits(tag, command):
-            return tag
+    for row in ADMITTED:
+        if _row_admits(row, command):
+            return row[0]
     return None
+
+
+def speaks_v2(version_text):
+    """Does a node on `version_text` open the encrypted v2 envelope? Unknown: no."""
+    rev = revision(version_text)
+    return rev is not None and rev >= V2_FROM

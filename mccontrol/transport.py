@@ -103,16 +103,20 @@ def _wait(total, done, answered, progress):
 
 
 def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl_secs=None,
-         counter=None, progress=None, keys=None, script=None):
+         counter=None, progress=None, keys=None, script=None, v2_key=None):
     """Sign `command` for `topic`, publish it, and collect results from `nodes_to_hear`.
+
+    With `v2_key`, the node's whole public key, the command goes encrypted as v2 (ar-13)
+    and its r3 answer is opened with the same key; without, it goes as v1.
 
     Returns `(payload, {node: Result})`. A node missing from the dict did not answer within
     `wait_secs`; that is reported as silence, never as an empty result. `progress` is called
     through the wait as `_wait` describes.
     """
     counter = int(time.time()) if counter is None else counter
-    payload = envelope.build(seed_hex, topic, counter, command,
-                             ttl_secs=ttl_secs or config.get("ttl_secs", envelope.DEFAULT_TTL_SECS))
+    ttl = ttl_secs or config.get("ttl_secs", envelope.DEFAULT_TTL_SECS)
+    payload = (envelope.build_v2(seed_hex, topic, counter, command, v2_key, ttl_secs=ttl) if v2_key
+               else envelope.build(seed_hex, topic, counter, command, ttl_secs=ttl))
     faked = _fake(topic, command, counter, nodes_to_hear, script)
     if faked is not None:
         _wait(FAKE_WAIT_SECS, lambda: False, lambda: list(faked), progress)
@@ -128,7 +132,11 @@ def send(config, seed_hex, topic, command, nodes_to_hear=(), wait_secs=20.0, ttl
         node = leaf[:envelope.NODE_HEX_LEN] if leaf else None
         # the key to verify an r2 with: the topic's own leaf when it is the whole key
         key_hex = leaf if leaf and len(leaf) == envelope.KEY_HEX_LEN else keys.get(node)
-        result = envelope.parse_result(msg.payload, node, topic=msg.topic, key_hex=key_hex)
+        if msg.payload[:3] in (b"r3|", "r3|"):
+            result = envelope.parse_r3(msg.payload, node, seed_hex, key_hex,
+                                       envelope.command_topic_of(msg.topic))
+        else:
+            result = envelope.parse_result(msg.payload, node, topic=msg.topic, key_hex=key_hex)
         if result is None or result.counter != counter:
             return
         with lock:
@@ -185,7 +193,11 @@ def discover(config, seed_hex, region, wait_secs=10.0, client_factory=None, coun
             return
         node = leaf[:envelope.NODE_HEX_LEN]
         key_hex = leaf if len(leaf) == envelope.KEY_HEX_LEN else None
-        result = envelope.parse_result(msg.payload, node, topic=msg.topic, key_hex=key_hex)
+        if msg.payload[:3] in (b"r3|", "r3|"):
+            result = envelope.parse_r3(msg.payload, node, seed_hex, key_hex,
+                                       envelope.command_topic_of(msg.topic))
+        else:
+            result = envelope.parse_result(msg.payload, node, topic=msg.topic, key_hex=key_hex)
         if result is None or result.counter != counter:
             return
         with lock:

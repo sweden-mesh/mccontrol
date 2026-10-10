@@ -66,6 +66,7 @@ VERBS = (
     ("gps", False), ("powersaving", False), ("clock", False),
     ("ver", True), ("reboot", True), ("clkreboot", True), ("neighbors", True),
     ("board", True), ("memory", True), ("clear stats", True), ("ota check", True),
+    ("mqtt.cmd ping", True),            # ar-12: a ping to the broker and back
 )
 
 

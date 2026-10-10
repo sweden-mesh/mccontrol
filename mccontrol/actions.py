@@ -85,11 +85,15 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
     hear = ([d["node"] for d in store.devices() if (d.get("region") or "").upper() == region]
             if broadcast else [device["node"]])
     keys = {d["node"]: d.get("key") for d in store.devices() if d.get("key")}
+    # v2, encrypted, to one node whose firmware opens it and whose whole key is known
+    v2_key = (None if broadcast or not firmware.speaks_v2(device.get("ver"))
+              else envelope.node_key(device.get("key") or ""))
     if dry_run:
-        payload = envelope.build(store.seed(), topic, 0, command)
+        payload = (envelope.build_v2(store.seed(), topic, 0, command, v2_key) if v2_key
+                   else envelope.build(store.seed(), topic, 0, command))
         return topic, payload, {}, [f"would publish to {topic}", payload, "not sent (dry run)"]
     payload, answers = transport.send(dict(config, region=region), store.seed(), topic, command,
-                                      nodes_to_hear=hear, keys=keys,
+                                      nodes_to_hear=hear, keys=keys, v2_key=v2_key,
                                       wait_secs=wait_secs or config.get("wait_secs", 20),
                                       progress=progress, script=script)
     lines = []
