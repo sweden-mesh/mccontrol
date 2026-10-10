@@ -273,14 +273,15 @@ With no username configured, the tool signs in to the broker the way a node does
 username is `v1_` plus its public key, the password a token signed by its key
 (`mccontrol/token.py`, the firmware's own JWT shape byte for byte), renewed each session.
 Nothing is handed out or typed; the key is the identity, and that is how the default broker
-`mqtt.louie.se` knows who publishes. A region running its own broker with a username and
-password sets them, and those are used instead.
+`mqtt.louie.se` knows who publishes. A login from the broker's password file sets its username
+and password, and those are used instead.
 
 ## The configuration is the control broker
 
 The only thing configured is the control broker: host (default `mqtt.louie.se`, the broker a
 node's `mqtt.cmd.slot` points at), port, username, password and how long to wait for answers.
-A region belongs to a device, not to the configuration.
+The full feature set needs the broker to run the mcbroker Mosquitto plugin. A region belongs to
+a device, not to the configuration.
 
 ```
 ~/.config/mccontrol/

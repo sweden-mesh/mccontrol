@@ -419,7 +419,7 @@ def test_a_send_to_the_default_broker_signs_in_with_the_tools_own_key(store, mon
     actions.send(store, "ver", device=store.device("loutest"))
     user, password = _FakeClient.logins[-1]
     assert user == token.username(store.seed()) and token.verify(password, "mqtt.louie.se")[0]
-    store.save_config(username="mcoar", password="pw")              # a region's own broker
+    store.save_config(username="mcoar", password="pw")              # a password-file login
     actions.send(store, "ver", device=store.device("loutest"))
     assert _FakeClient.logins[-1] == ("mcoar", "pw")
 
