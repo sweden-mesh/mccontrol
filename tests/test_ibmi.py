@@ -582,3 +582,10 @@ def test_the_history_blocks_and_a_fact_say_a_forged_and_an_unsigned_answer():
                     ("       | < 1.2 (unsigned)", "grey"), ("JKG*   | > get name", "normal"), ("       | < 2 of 2 answered", "normal")]
     assert fmt.fact_row({"label": "tx delay", "value": "0.5", "age": "2 d", "verified": None}).endswith("2 d  unsigned")
     assert fmt.cut("louie-magic-fw-1.2", 10) == "louie-mag~"
+
+
+def test_a_reply_of_several_lines_stays_on_its_row(api):
+    _server, _url, store = api
+    api[0].ctx.script["FD700369|region"] = [0, "> * F\n se-jkp F"]
+    text = walk(api, [(b"send Far region\r", 1.5)])
+    assert "> * F  se-jkp F" in text                                # the results row: the break is a space

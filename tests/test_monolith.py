@@ -867,3 +867,11 @@ def test_after_a_verb_the_history_asks_only_for_the_devices_it_sent_to():
     board.last_hist -= 31
     board.load_history()
     assert len(calls) == 51                                     # the 30 s cadence: everything again
+
+
+def test_a_reply_of_several_lines_stays_on_its_row(tmp_path):
+    """A region map is several lines; drawn as is, curses would carry it onto the rows below."""
+    script = dict(SCRIPT, **{"4AC61A7F": [0, "> * F\n se-jkp F"]})
+    walk(tmp_path, [(DOWN, 0.3), (b"c", 0.5), (b"region", 0.3), (ENTER, 1.5)], script=script)
+    feed = [line[46:78] for line in walk.screen.splitlines()[16:22]]
+    assert "  Gisebo         > * F  se-jkp F" in feed             # the results row: the break is a space

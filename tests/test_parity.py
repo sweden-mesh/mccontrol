@@ -52,3 +52,13 @@ def test_every_monolith_verb_has_a_counterpart_in_the_other_two():
 def test_the_sprint_12_features_are_in_all_three():
     for feature, (mono, mc, i) in FEATURES.items():
         assert _has(board.Board, mono) and _has(commander.App, mc) and _has(ibmi.App, i), feature
+
+
+def test_every_history_view_says_a_forged_reply_and_an_unsigned_one():
+    from mccontrol.ui.IBMi import fmt
+    good = {"code": 0, "code_name": "ok", "reply": "> 1.2", "note": "", "verified": True}
+    lines = [good, dict(good, reply="> evil", verified=False), dict(good, verified=None),
+             dict(good, code=14, code_name="not-allowed", reply=None, verified=None)]
+    expected = ["> 1.2", "BAD SIGNATURE > evil", "> 1.2 (unsigned)", "refused not-allowed"]
+    for said in (board.Board.said, commander.App.said, fmt.said):
+        assert [said(line) for line in lines] == expected, said

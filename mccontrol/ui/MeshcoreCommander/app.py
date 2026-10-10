@@ -159,8 +159,7 @@ class App:
         self.right.title = f"History: {(device.get('name') or device['node']) if device else '-'}"
         rows = []
         for line in reversed(self.client.history(device["node"], limit=200)["history"]) if device else []:
-            out = (line["reply"] or "OK") if line["code"] == 0 else (
-                f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
+            out = self.said(line)
             short = f"{line['at'][5:16]} {line['command'][:14]:14} {out}"
             full = [f"{line['at']}  {line['command']}", f"topic {line['topic']}", "", out]
             rows.append((short, full))
@@ -169,6 +168,16 @@ class App:
         if not rows:
             self.view.set_rows(["(nothing sent yet)"], keep=False)
             self.right_rows = [("", ["Nothing has been sent to this device yet."])]
+
+    @staticmethod
+    def said(line):
+        """What came back for a history line: the reply, the refusal or the note; BAD
+        SIGNATURE before a forged reply, (unsigned) after one from firmware that does not sign."""
+        out = (line["reply"] or "OK") if line["code"] == 0 else (
+            f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
+        if line.get("verified") is False:
+            return f"BAD SIGNATURE {out}"
+        return f"{out} (unsigned)" if line["code"] == 0 and line.get("verified") is None else out
 
     def show_reads(self, device):
         """The lower right panel, Stats: what is known about the device -- its settings,
@@ -552,8 +561,7 @@ class App:
             return
         lines = []
         for line in reversed(self.client.history(d["node"], limit=200)["history"]):
-            out = (line["reply"] or "OK") if line["code"] == 0 else (
-                f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer"))
+            out = self.said(line)
             lines.append(f"{line['at'][:16]}  {line['command'][:28]:28} {out[:30]}")
         notice(self.screen, f"History: {d.get('name') or d['node']}", lines or ["Nothing sent yet."], self.draw)
 

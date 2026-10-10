@@ -302,7 +302,7 @@ class Board:
 
     def put(self, y, x, text, role="base", attr=0):
         w, h = self.size
-        text = self.fold(text)
+        text = self.fold(text).replace("\r", " ").replace("\n", " ")   # a region map is lines: never a jump
         if not (0 <= y < h) or x >= w or x < 0:
             return
         try:
@@ -430,6 +430,15 @@ class Board:
         if line["code"] == 0:
             return line["reply"] or "OK"
         return f"refused {line['code_name']}" if line["code"] is not None else (line["note"] or "no answer")
+
+    @classmethod
+    def said(cls, line):
+        """What came back, as the node's signature leaves it: BAD SIGNATURE before a forged
+        reply, (unsigned) after one from firmware that does not sign."""
+        out = cls.history_out(line)
+        if line.get("verified") is False:
+            return f"BAD SIGNATURE {out}"
+        return f"{out} (unsigned)" if line["code"] == 0 and line.get("verified") is None else out
 
     def draw_feed(self, rect):
         typing = self.focus == "input"
@@ -1186,7 +1195,7 @@ class Board:
         d = self.device
         if not d:
             raise Cancel
-        lines = [f"{line['at'][:16]}  {line['command'][:28]:28} {self.history_out(line)}"
+        lines = [f"{line['at'][:16]}  {line['command'][:28]:28} {self.said(line)}"
                  for line in reversed(self.client.history(d["node"])["history"])]
         self.sheet(f"History {d['name'] or d['node']}", lines or ["Nothing sent yet."])
 

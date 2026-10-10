@@ -586,3 +586,12 @@ def test_h_shows_every_devices_command_history_in_blocks(tmp_path):
     assert "Command history" in text
     assert re.search(r"4ac61a│ > region\s", text) and "│ < * F (unsigned)" in text
     assert "│ < BAD SIGNATURE forged" in text
+
+
+def test_a_reply_of_several_lines_stays_on_its_row(tmp_path):
+    def multi(home):
+        with (home / "history" / "4AC61A7F.jsonl").open("a") as f:
+            f.write(json.dumps({"at": "2026-10-08 11:00:00", "command": "region", "topic": "t", "code": 0, "code_name": "ok",
+                                "reply": "> * F\n se-jkp F", "note": ""}) + "\n")
+    text, _ = walk(tmp_path, [(DOWN, 0.4)], prepare=multi)
+    assert "> * F  se" in text                                      # the history row: the break is a space

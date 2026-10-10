@@ -13,8 +13,17 @@ def history_out(line):
     return line.get("note") or "no answer"
 
 
+def said(line):
+    """What came back, as the node's signature leaves it: BAD SIGNATURE before a forged
+    reply, (unsigned) after one from firmware that does not sign."""
+    out = history_out(line)
+    if line.get("verified") is False:
+        return f"BAD SIGNATURE {out}"
+    return f"{out} (unsigned)" if line.get("code") == 0 and line.get("verified") is None else out
+
+
 def history_row(line):
-    return f"{(line.get('at') or '')[:16]}  {(line.get('command') or '')[:28]:28}  {history_out(line)}"
+    return f"{(line.get('at') or '')[:16]}  {(line.get('command') or '')[:28]:28}  {said(line)}"
 
 
 def signature(outcome):

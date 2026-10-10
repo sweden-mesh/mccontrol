@@ -162,10 +162,12 @@ class Screen:
     # -- drawing -----------------------------------------------------------------------
 
     def put(self, y, x, text, attr=0):
-        """Write without ever raising: off-screen text is clipped, the last cell is skipped."""
+        """Write without ever raising: off-screen text is clipped, the last cell is skipped; a
+        line break in the text (a region map is several lines) is a space, never a new row."""
         w, h = self.size
         if not (0 <= y < h) or x >= w:
             return
+        text = text.replace("\r", " ").replace("\n", " ")
         if x < 0:
             text, x = text[-x:], 0
         try:

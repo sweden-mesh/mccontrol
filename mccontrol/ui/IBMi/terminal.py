@@ -75,10 +75,12 @@ class Terminal:
         return w, h
 
     def put(self, y, x, text, attr="normal"):
-        """Write without raising: clipped at the edge, the last cell skipped."""
+        """Write without raising: clipped at the edge, the last cell skipped; a line break in
+        the text (a region map is several lines) is a space, never a jump to the next row."""
         w, h = self.size
         if not (0 <= y < h) or x >= w:
             return
+        text = text.replace("\r", " ").replace("\n", " ")
         try:
             self.win.addnstr(y, x, text, max(0, w - x - 1), self.attr.get(attr, attr) if isinstance(attr, str) else attr)
         except curses.error:

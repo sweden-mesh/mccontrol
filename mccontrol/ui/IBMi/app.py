@@ -330,7 +330,7 @@ class App:
                 return
             for _opt, line in picks:
                 show(self.t, "Display History Entry", [f"Sent . . . :  {line.get('at')}", f"Command  . :  {line.get('command')}",
-                                                       f"Topic  . . :  {line.get('topic')}", "", fmt.history_out(line)])
+                                                       f"Topic  . . :  {line.get('topic')}", "", fmt.said(line)])
 
     def facts(self, d):
         """8=Facts: what is known about the device -- its settings, firmware and regions, each
