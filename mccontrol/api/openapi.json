@@ -2413,6 +2413,10 @@
      "caution": {
       "type": "string",
       "nullable": true
+     },
+     "hidden": {
+      "type": "boolean",
+      "description": "the device's image is built without the feature this command belongs to (lou-14: a trigger or an autoreply setting without auto-reply); not offered at all, unlike a greyed entry"
      }
     },
     "required": [
@@ -2465,7 +2469,7 @@
      "revision": {
       "type": "integer",
       "nullable": true,
-      "description": "the ar-N number the version reports; null when it reports none"
+      "description": "the revision the version reports, lou-N from lou-14 and ar-N before it; null when it reports none"
      },
      "greyed": {
       "type": "integer"
@@ -2475,6 +2479,11 @@
       "items": {
        "$ref": "#/components/schemas/CommandGroup"
       }
+     },
+     "features": {
+      "type": "string",
+      "nullable": true,
+      "description": "the features the device's version names: ar, rc, arrc, ...; arrc for every version before lou-14; null without a device"
      }
     },
     "required": [
@@ -2521,6 +2530,11 @@
      "admitted": {
       "type": "boolean",
       "nullable": true
+     },
+     "lacks": {
+      "type": "string",
+      "nullable": true,
+      "description": "ar or rc when the device's image is built without the feature the command needs; null otherwise or without a device"
      }
     },
     "example": {

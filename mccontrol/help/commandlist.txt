@@ -24,6 +24,12 @@ settings, the two triggers and a dozen reads; ar-11 admits everything
 on the deny list's far side (ver, get name, get stats, the region map,
 the tuning writes, reboot...). To make the grey go away, flash.
 
+From lou-14 a version also says which features the image was built
+with (ar auto-reply, rc this command plane): esp32s3-v1.17.1-lou-14-arrc-
+.... A command of a feature the image does not have is not greyed but
+left out: an rc image without auto-reply has no trigger test, trigger
+private or autoreply settings, and no build will give it them.
+
 A command that takes something away still asks first (see [[cautions]]),
 and one the firmware would refuse is stopped before it is signed, with
 the reason (see [[commands]]).

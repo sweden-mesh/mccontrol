@@ -381,6 +381,8 @@ def _commands(api, args):
     for group in listing["groups"]:
         print(f"{group['group']}:")
         for c in group["commands"]:
+            if c.get("hidden"):
+                continue                    # the image has no such feature
             how = {"none": "", "choice": " <" + "|".join(x or "-" for x in c["choices"]) + ">",
                    "multi": " <" + " ".join(c["choices"]) + " ...>",
                    "text": " <" + (c["examples"][0] if c["examples"] else "text") + ">"}[c["kind"]]

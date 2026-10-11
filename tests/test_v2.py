@@ -276,7 +276,7 @@ def test_ar_12_admits_the_ping_and_ar_13_speaks_v2():
     assert firmware.admits("esp32s3-v1.17.1-ar-13-observer-x", "mqtt.cmd ping")
     assert firmware.needs("mqtt.cmd ping") == "ar-12"
     assert firmware.needs("get name") == "ar-11" and firmware.needs("get autoreply") == "ar-10"
-    assert firmware.entry_for("x-ar-13-y")[0] == "ar-13" and firmware.entry_for("x-ar-14-y")[0] == "ar-13"
+    assert firmware.entry_for("x-ar-13-y")[0] == "ar-13" and firmware.entry_for("x-ar-14-y")[0] == "lou-14"   # one counter
     assert [firmware.speaks_v2(v) for v in (None, "", "x-ar-11-y", "x-ar-12-y", "x-ar-13-y", "x-ar-20-y")] == \
         [False, False, False, False, True, True]
 

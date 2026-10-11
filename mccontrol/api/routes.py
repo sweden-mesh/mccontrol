@@ -81,14 +81,16 @@ def command_list(d):
         for c in cs:
             sample = probe(c)
             admitted = firmware.admits(version, sample) if d else None
-            greyed += admitted is False
+            hidden = bool(d) and firmware.lacks(version, sample) is not None
+            greyed += admitted is False and not hidden
             rows.append({"text": c.text, "group": c.group, "kind": c.kind, "choices": list(c.choices),
                          "examples": list(c.examples), "read": c.read, "probe": sample, "admitted": admitted,
                          "needs": firmware.needs(sample), "refusal": denylist.refusal(sample),
-                         "caution": actions.caution(sample)})
+                         "caution": actions.caution(sample), "hidden": hidden})
         groups.append({"group": group, "commands": rows})
     return {"node": d["node"] if d else None, "firmware": firmware.entry_for(version)[0] if d else None,
-            "version": version, "revision": firmware.revision(version) if d else None, "greyed": greyed, "groups": groups}
+            "version": version, "revision": firmware.revision(version) if d else None,
+            "features": firmware.features(version) if d else None, "greyed": greyed, "groups": groups}
 
 
 def public_config(store):
@@ -303,7 +305,8 @@ def check_command(ctx, _p, query, _b):
                  "transmits": envelope.is_transmit(command), "is_read": commands.is_read(command),
                  "needs": firmware.needs(command), "node": d["node"] if d else None,
                  "firmware": firmware.entry_for(d.get("ver"))[0] if d else None,
-                 "admitted": firmware.admits(d.get("ver"), command) if d else None}
+                 "admitted": firmware.admits(d.get("ver"), command) if d else None,
+                 "lacks": firmware.lacks(d.get("ver"), command) if d else None}
 
 
 def build_command(_ctx, _p, _q, body):

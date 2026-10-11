@@ -131,6 +131,7 @@ def test_a_greyed_entry_says_why():
     assert fmt.firmware_note(0, [None]) == ""
     assert fmt.firmware_note(3, [None]) == "3 greyed: need a newer build; this device reports unknown"
     assert fmt.firmware_note(3, [10]).endswith("reports ar-10")
+    assert fmt.firmware_note(3, [14]).endswith("reports lou-14")
 
 
 def test_several_devices_admit_only_what_every_one_admits():

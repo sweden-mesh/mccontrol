@@ -1027,6 +1027,8 @@ class Board:
         entries = []
         for group in listing["groups"]:
             for c in group["commands"]:
+                if c.get("hidden"):
+                    continue            # the image has no such feature (ruling 10)
                 label = c["text"] + {"none": "", "choice": " <" + "|".join(x or "-" for x in c["choices"]) + ">",
                                      "multi": " <...>", "text": " <...>"}[c["kind"]]
                 why = None

@@ -121,6 +121,18 @@ def test_every_route_answers_as_its_schema_says(api, monkeypatch):
     assert table["firmware"] == "ar-10" and table["greyed"] > 0 and table["revision"] is None   # no version read yet: the oldest
     _store.update_device("FD700369", ver="esp32s3-v1.17.1-ar-11-observer-2c079ed7")
     assert call(url, "GET", "/devices/far/commands")[1]["revision"] == 11
+    # lou-14 (ruling 10): an image without auto-reply has no triggers and no autoreply
+    # settings, so they are hidden rather than greyed as waiting for a newer build.
+    _store.update_device("FD700369", ver="esp32s3-v1.17.1-lou-14-rc-observer-1a2b3c4d")
+    rc = call(url, "GET", "/devices/far/commands")[1]
+    assert rc["revision"] == 14 and rc["features"] == "rc" and rc["firmware"] == "lou-14"
+    rows = {c["text"]: c for g in rc["groups"] for c in g["commands"]}
+    assert rows["trigger test"]["hidden"] and not rows["ver"]["hidden"]
+    assert call(url, "GET", "/commands/check?command=trigger+test&device=far")[1]["lacks"] == "ar"
+    _store.update_device("FD700369", ver="esp32s3-v1.17.1-lou-14-arrc-observer-1a2b3c4d")
+    arrc = call(url, "GET", "/devices/far/commands")[1]
+    rows = {c["text"]: c for g in arrc["groups"] for c in g["commands"]}
+    assert not rows["trigger test"]["hidden"] and rows["trigger test"]["admitted"] and arrc["greyed"] == 0
     assert call(url, "GET", "/commands")[1]["node"] is None
     check = call(url, "GET", "/commands/check?command=set+prv.key+00&device=gisebo")[1]
     assert check["refusal"].startswith("denied") and check["admitted"] is False

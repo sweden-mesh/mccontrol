@@ -925,6 +925,8 @@ class App:
         for g, group in enumerate(lists[0]["groups"]):
             rows = []
             for i, c in enumerate(group["commands"]):
+                if any(l["groups"][g]["commands"][i].get("hidden") for l in lists):
+                    continue            # some target's image has no such feature (ruling 10)
                 label = c["text"] + {"none": "", "choice": "  <" + "|".join(x or "-" for x in c["choices"]) + ">",
                                      "multi": "  <...>", "text": "  <...>"}[c["kind"]]
                 if all(l["groups"][g]["commands"][i]["admitted"] for l in lists):
@@ -936,7 +938,9 @@ class App:
             items.append((group["group"], rows))
         box = ListBox(f"Commands  to {target_line[:40]}", items, width=66, height=min(22, self.screen.size[1] - 2))
         if greyed:
-            reported = ", ".join(f"ar-{l['revision']}" if l["revision"] else "unknown" for l in lists[:3])
+            reported = ", ".join("unknown" if l["revision"] is None else
+                                 (f"lou-{l['revision']}" if l["revision"] >= 14 else f"ar-{l['revision']}")
+                                 for l in lists[:3])
             box.note = f"{greyed} greyed: need a newer build; this device reports {reported} (n reads the version)"
         picked = box.run(self.screen, self.draw)
         if picked is None:

@@ -83,11 +83,12 @@ def command_note(c):
 
 
 def firmware_note(greyed, revisions):
-    """The line over the command list when entries are greyed: the `ar-N` the devices
-    report (the API's `revision`), or unknown."""
+    """The line over the command list when entries are greyed: the revision the devices
+    report (the API's `revision`, written ar-N up to 13 and lou-N from 14), or unknown."""
     if not greyed:
         return ""
-    reported = ", ".join("unknown" if r is None else f"ar-{r}" for r in revisions[:3])
+    reported = ", ".join("unknown" if r is None else (f"lou-{r}" if r >= 14 else f"ar-{r}")
+                         for r in revisions[:3])
     return f"{greyed} greyed: need a newer build; this device reports {reported}"
 
 
@@ -103,6 +104,8 @@ def merge_commands(lists):
             others = [l["groups"][gi]["commands"][ci] for l in lists[1:]]
             if any(o.get("admitted") is False for o in others):
                 c["admitted"] = False
+            if c.get("hidden") or any(o.get("hidden") for o in others):
+                continue            # some target's image has no such feature (ruling 10)
             rows.append(c)
         groups.append({"group": group["group"], "commands": rows})
     greyed = sum(1 for g in groups for c in g["commands"] if c.get("admitted") is False)
