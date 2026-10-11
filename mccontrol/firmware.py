@@ -137,6 +137,21 @@ def admits(version_text, command):
     return _row_admits(entry_for(version_text), command)
 
 
+# The sub-type byte of the private test request a node sends for `trigger private` and
+# answers: 0x04 up to ar-13, 0xF0 from lou-14, with no overlap (TODO 22a ruling 20, a hard
+# cut-off). The node builds the request; this only says which byte each side speaks.
+PRIVATE_SUBTYPE_OLD = 0x04
+PRIVATE_SUBTYPE = 0xF0
+PRIVATE_SUBTYPE_FROM = 14
+
+
+def private_subtype(version_text):
+    """The private test sub-type a node on `version_text` sends and answers. Unknown: the
+    oldest, 0x04."""
+    rev = revision(version_text)
+    return PRIVATE_SUBTYPE if rev is not None and rev >= PRIVATE_SUBTYPE_FROM else PRIVATE_SUBTYPE_OLD
+
+
 def lacks(version_text, command):
     """The feature a node's image is built without that `command` belongs to -- "ar" for a
     trigger or an `autoreply` setting on an image without auto-reply, "rc" for anything on

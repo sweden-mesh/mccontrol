@@ -306,7 +306,8 @@ def check_command(ctx, _p, query, _b):
                  "needs": firmware.needs(command), "node": d["node"] if d else None,
                  "firmware": firmware.entry_for(d.get("ver"))[0] if d else None,
                  "admitted": firmware.admits(d.get("ver"), command) if d else None,
-                 "lacks": firmware.lacks(d.get("ver"), command) if d else None}
+                 "lacks": firmware.lacks(d.get("ver"), command) if d else None,
+                 "private_mismatch": actions.private_mismatch(ctx.store, d, command) if d else None}
 
 
 def build_command(_ctx, _p, _q, body):

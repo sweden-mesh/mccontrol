@@ -480,3 +480,26 @@ def test_a_signed_result_is_shown_verified_and_a_forged_one_is_not_kept(store, m
     _t, _p, answers, lines = actions.send(store, "get name", device=store.device("new"))
     assert "BAD SIGNATURE" in lines[0] and not answers[key[:8]].ok
     assert [c for c, _r, _at in store.reads("new")] == ["ver"]    # the forged line was not kept
+
+
+def test_a_private_test_between_sub_types_is_said_to_get_no_answer(store):
+    # 0x04 up to ar-13, 0xF0 from lou-14, no overlap (firmware TODO 22a ruling 20).
+    from mccontrol import firmware
+    assert firmware.private_subtype("esp32s3-v1.17.1-lou-14-arrc-observer-1a2b3c4d") == 0xF0
+    assert firmware.private_subtype("esp32s3-v1.17.1-ar-13-observer-16a05810") == 0x04
+    assert firmware.private_subtype(None) == 0x04
+    target = "C" * 64
+    store.add_device("asker", "A" * 64, "JKG")
+    store.add_device("old", target, "JKG")
+    store.add_device("new", "B" * 64, "JKG")
+    store.update_device("AAAAAAAA", ver="esp32s3-v1.17.1-lou-14-arrc-observer-1a2b3c4d")
+    store.update_device("CCCCCCCC", ver="esp32s3-v1.17.1-ar-13-observer-16a05810")
+    store.update_device("BBBBBBBB", ver="esp32s3-v1.17.1-lou-14-rc-observer-1a2b3c4d")
+    asker = store.device("asker")
+    line = actions.private_mismatch(store, asker, "trigger private " + target)
+    assert "0xF0" in line and "0x04" in line and "no answer" in line
+    assert actions.private_mismatch(store, asker, "trigger private " + "B" * 64) is None   # both lou-14
+    assert actions.private_mismatch(store, asker, "trigger private " + "D" * 64) is None   # unknown target
+    assert actions.private_mismatch(store, asker, "trigger test") is None
+    store.update_device("CCCCCCCC", ver=None)
+    assert actions.private_mismatch(store, asker, "trigger private " + target) is None     # version not read

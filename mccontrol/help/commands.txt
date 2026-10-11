@@ -54,6 +54,10 @@ A region tree line with "|" (region def a|* b|*) cannot travel: "|" is the
 envelope's field separator. Add names one at a time with region put.
 
 "trigger" commands transmit on the air and are refused as a broadcast.
+trigger private is answered only when the asking node and the target speak
+the same private-test sub-type: 0x04 up to ar-13, 0xF0 from lou-14, with
+no overlap. When both versions are known and differ, the tool says before
+the results that no answer will come; flash the older one.
 A node on the ar-10 firmware (the build in the field) admits only the
 auto-reply family, the triggers and a dozen reads, and answers
 not-allowed to the rest; the command list greys those out for it (see

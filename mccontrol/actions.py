@@ -43,6 +43,26 @@ def caution(command):
     return None
 
 
+def private_mismatch(store, device, command):
+    """For `trigger private <key>`: a sentence when the asking node and the target speak
+    different private-test sub-types -- 0xF0 from lou-14, 0x04 before it, no overlap -- so
+    the request would go out and no answer could come back. None when they agree, or when
+    either side's version is not known."""
+    words = command.split()
+    if device is None or len(words) < 3 or [w.lower() for w in words[:2]] != ["trigger", "private"]:
+        return None
+    key = words[2].upper()
+    target = next((d for d in store.devices() if (d.get("key") or "").upper() == key), None)
+    if target is None or not device.get("ver") or not target.get("ver"):
+        return None
+    ours, theirs = firmware.private_subtype(device["ver"]), firmware.private_subtype(target["ver"])
+    if ours == theirs:
+        return None
+    return (f"{device['name'] or device['node']} sends the private test as 0x{ours:02X} and "
+            f"{target['name'] or target['node']} answers only 0x{theirs:02X}: no answer will come "
+            f"(0xF0 from lou-14, 0x04 before; flash the older one)")
+
+
 def outcome_line(result, version=None):
     """One line describing a result, as the screens and the log show it. A not-allowed
     from a node whose firmware the table says admits the command is a finding -- the
@@ -97,6 +117,9 @@ def send(store, command, device=None, region=None, dry_run=False, wait_secs=None
                                       wait_secs=wait_secs or config.get("wait_secs", 20),
                                       progress=progress, script=script)
     lines = []
+    mismatch = private_mismatch(store, device, command)
+    if mismatch:
+        lines.append(mismatch)
     names = {d["node"]: (d["name"] or d["node"]) for d in store.devices()}
     versions = {d["node"]: d.get("ver") for d in store.devices()}
     for node in hear:

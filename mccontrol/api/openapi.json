@@ -2535,6 +2535,11 @@
       "type": "string",
       "nullable": true,
       "description": "ar or rc when the device's image is built without the feature the command needs; null otherwise or without a device"
+     },
+     "private_mismatch": {
+      "type": "string",
+      "nullable": true,
+      "description": "for trigger private <key>: why no answer can come when the asking node and the target speak different private-test sub-types (0xF0 from lou-14, 0x04 before); null when they agree or a version is unknown"
      }
     },
     "example": {
