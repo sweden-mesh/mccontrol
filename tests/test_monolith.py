@@ -586,17 +586,22 @@ def test_tab_to_the_device_tile_and_enter_reads_a_read_again(tmp_path):
     assert _history(home, "4AC61A7F")[-1]["command"] == "get autoreply"
 
 
+def _days_ago(days):
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - days * 86400))
+
+
 def _known(home):
     """A prepare hook: Gisebo has answered get autoreply and a read the table does not know,
-    and was told its tx delay."""
+    and was told its tx delay. The dates are a few days back from today, so the ages the tile
+    shows keep one digit, and the columns their width, whenever the suite runs."""
     devs = json.loads((home / "devices.json").read_text())
     next(d for d in devs if d["node"] == "4AC61A7F")["reads"] = {
         "get autoreply": {"reply": "> on #test-jkg 'test' max 8 hops, direct flood, mode flood, private off",
-                          "at": "2026-10-07 11:00:00", "seq": 1},
-        "neighbors": {"reply": "> 2 neighbours", "at": "2026-10-07 11:00:00", "seq": 2}}
+                          "at": _days_ago(3), "seq": 1},
+        "neighbors": {"reply": "> 2 neighbours", "at": _days_ago(3), "seq": 2}}
     (home / "devices.json").write_text(json.dumps(devs))
     with (home / "history" / "4AC61A7F.jsonl").open("a") as f:
-        f.write(json.dumps({"at": "2026-10-08 09:00:00", "command": "set txdelay 0.7", "topic": "t", "code": 0,
+        f.write(json.dumps({"at": _days_ago(2), "command": "set txdelay 0.7", "topic": "t", "code": 0,
                             "code_name": "ok", "reply": "OK", "note": ""}) + "\n")
 
 

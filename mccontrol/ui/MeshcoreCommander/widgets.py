@@ -2,8 +2,6 @@
 
 import curses
 
-from .screen import KEY_ENTER
-
 
 class Panel:
     """A framed region with a title; the title is highlighted when the panel is active."""

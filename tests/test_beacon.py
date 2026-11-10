@@ -1,7 +1,5 @@
 """The Beacon client against shapes captured from beacon.meshat.se 2.0.3 on 2026-10-07
 (`tests/data/beacon-fake.json`): no network."""
-import json
-import os
 import pathlib
 
 import pytest

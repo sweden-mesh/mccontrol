@@ -36,6 +36,23 @@ Each page has the interface's screens, every key, its menus or palette, and what
 |---|---|---|
 | [![Monolith](docs/screenshots/monolith-summary.png)](mccontrol/ui/Monolith/README.md) | [![MeshcoreCommander](docs/screenshots/meshcorecommander-summary.png)](mccontrol/ui/MeshcoreCommander/README.md) | [![IBMi](docs/screenshots/ibmi-summary.png)](mccontrol/ui/IBMi/README.md) |
 
+### The three styles, full size
+
+**Monolith**, the default: the directory, STATS with sparklines, the results of a statistics read,
+the clock, status and HISTORY.
+
+[![Monolith at 120x40](docs/screenshots/monolith-board.png)](mccontrol/ui/Monolith/README.md)
+
+**MeshcoreCommander**: the directory, a command sent from the command line, Stats.
+
+[![MeshcoreCommander at 120x40](docs/screenshots/meshcorecommander-board.png)](mccontrol/ui/MeshcoreCommander/README.md)
+
+**IBMi**: Work with Devices, with an Opt column and a `===>` line.
+
+[![IBMi at 120x40](docs/screenshots/ibmi-devices.png)](mccontrol/ui/IBMi/README.md)
+
+Each interface's page has more screens: the command list, a send in progress, history.
+
 The pictures are an invented fleet; `python scripts/screenshots.py` makes them again from the
 code as it is (a scratch home, the fake broker and Beacon, each interface in a pseudo-terminal,
 headless Chromium for the PNG).
@@ -60,9 +77,9 @@ its page; a fourth one is a directory more. Without a terminal each says so and 
 ## Install
 
 ```
-pip install .
+pip install git+https://github.com/sweden-mesh/mccontrol   # or `pip install .` in a clone
 mccontrol keygen                                  # once; prints the two serial commands
-mccontrol config --username <user> --password <pass>   # the control broker's credentials
+mccontrol register                                # once; the broker then checks your commands
 mccontrol test                                    # connect, sign in, subscribe, publish, receive
 mccontrol discover JKG --add                      # every node in JKG that accepts your key
 mccontrol                                         # the screens: Monolith, or the last --ui asked for

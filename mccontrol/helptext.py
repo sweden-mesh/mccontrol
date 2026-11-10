@@ -47,7 +47,7 @@ def load(name, ui=None):
     title, body = raw[0], raw[2:] if len(raw) > 1 and raw[1] == "" else raw[1:]
     lines, links = [], []
     for i, line in enumerate(body):
-        shown, offset = "", 0
+        shown = ""
         pos = 0
         for m in LINK.finditer(line):
             shown += line[pos:m.start()]

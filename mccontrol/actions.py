@@ -70,7 +70,7 @@ def outcome_line(result, version=None):
     if result is None:
         return "no answer"
     if result.verified is False:
-        return f"BAD SIGNATURE: the line on this node's result topic was not signed by its key -- forged or altered; reply ignored"
+        return "BAD SIGNATURE: the line on this node's result topic was not signed by its key -- forged or altered; reply ignored"
     tag = " [signed]" if result.verified else ""        # an r1 (older firmware) carries no mark
     if result.ok:
         return (result.reply or "OK") + tag
