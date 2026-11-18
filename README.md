@@ -5,12 +5,13 @@ Ed25519 key that never leaves their machine; the repeater checks the signature, 
 and answers, over MQTT or over the mesh through the owner's own companion radio. The key is set
 on the repeater by cable, and identity, radio and destructive commands are refused remotely.
 
-This repository holds only this page. The tool is in three others:
+This repository holds only this page. The tool is in four others:
 
 | repository | what it is |
 |---|---|
 | [mccontrol-web](https://github.com/sweden-mesh/mccontrol-web) | the tool in the browser, nothing to install: [mccontrol.meshcoresverige.se](https://mccontrol.meshcoresverige.se). Two layouts, the key kept encrypted in the browser, USB and Bluetooth to a companion. |
 | [mccontrol-cli](https://github.com/sweden-mesh/mccontrol-cli) | the same tool in a terminal (Python): a command line, three full-screen interfaces and a local API. The reference implementation. `pip install git+https://github.com/sweden-mesh/mccontrol-cli` |
+| [mccontrol-bridge](https://github.com/sweden-mesh/mccontrol-bridge) | lets the web app reach a companion over your network: a small WebSocket bridge next to a Wi-Fi companion or a mux, passing only the five commands the mesh road needs. |
 | [mccontrol-spec](https://github.com/sweden-mesh/mccontrol-spec) | the wire format, the command table, the deny list and the test vectors both apps are tested against. No code. |
 
 Both apps read the same key backup file, so a key moves between them. The repeater firmware is
