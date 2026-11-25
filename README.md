@@ -1,9 +1,9 @@
 # mccontrol
 
-Remote control for MeshCore Observer repeaters. The owner signs a console command with an
+Remote control for MeshCore repeaters running lou firmware. The owner signs a console command with an
 Ed25519 key that never leaves their machine; the repeater checks the signature, runs the command
-and answers, over MQTT or over the mesh through the owner's own companion radio. The key is set
-on the repeater by cable, and identity, radio and destructive commands are refused remotely.
+and answers, over MQTT or over the mesh through the owner's own companion radio. The first key is set
+by cable or by a remote admin login, and identity, radio and destructive commands are refused remotely.
 
 This repository holds only this page. The tool is in four others:
 
